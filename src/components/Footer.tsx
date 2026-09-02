@@ -1,14 +1,101 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Mail, MapPin, Phone } from 'lucide-react'
 import { BRAND } from '../data/products'
 import { BrandLogo } from './BrandLogo'
+
+const iconBtnClass =
+  'flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/45 hover:bg-white/5'
+
+function InstagramIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${className} fill-none stroke-current`} strokeWidth="1.75">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
 
 export function Footer() {
   return (
     <footer className="mt-auto bg-navy-deep text-white">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8 lg:py-16">
+      {/* Mobile — centered compact layout */}
+      <div className="flex flex-col items-center px-5 py-10 text-center md:hidden">
+        <BrandLogo variant="light" heightClassName="h-9" />
+
+        <div className="mt-6 flex items-center gap-3">
+          <a
+            href={BRAND.facebook}
+            target="_blank"
+            rel="noreferrer"
+            className={iconBtnClass}
+            aria-label="Facebook"
+          >
+            <span className="text-[15px] font-semibold leading-none">f</span>
+          </a>
+          <a
+            href={BRAND.instagram}
+            target="_blank"
+            rel="noreferrer"
+            className={iconBtnClass}
+            aria-label="Instagram"
+          >
+            <InstagramIcon />
+          </a>
+          <a href={`tel:${BRAND.phone}`} className={iconBtnClass} aria-label="Call us">
+            <Phone className="h-4 w-4" strokeWidth={1.75} />
+          </a>
+        </div>
+
+        <nav className="mt-8 flex max-w-xs flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-[13px] text-white/85">
+          <Link to="/shop" className="hover:text-white">
+            Shop
+          </Link>
+          <Link to="/shop?sale=1" className="hover:text-white">
+            Sale
+          </Link>
+          <Link to="/about" className="hover:text-white">
+            Size guide
+          </Link>
+          <Link to="/about" className="hover:text-white">
+            About us
+          </Link>
+          <a
+            href={`https://wa.me/${BRAND.whatsapp.replace('+', '')}`}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-white"
+          >
+            WhatsApp
+          </a>
+        </nav>
+
+        <div className="mt-8 space-y-2.5 text-[13px] text-white/75">
+          <a
+            href={`tel:${BRAND.phone}`}
+            className="flex items-center justify-center gap-2 hover:text-white"
+          >
+            <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            {BRAND.phone}
+          </a>
+          <a
+            href={`mailto:${BRAND.email}`}
+            className="flex items-center justify-center gap-2 hover:text-white"
+          >
+            <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            {BRAND.email}
+          </a>
+          <p className="flex items-center justify-center gap-2">
+            <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            {BRAND.city}
+          </p>
+        </div>
+      </div>
+
+      {/* Desktop — multi-column layout */}
+      <div className="mx-auto hidden max-w-7xl gap-10 px-4 py-14 md:grid md:grid-cols-2 md:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8 lg:py-16">
         <div className="lg:col-span-4">
-          <BrandLogo variant="light" heightClassName="h-9 md:h-10" />
+          <BrandLogo variant="light" heightClassName="h-10" />
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-white/70">
             Casual footwear for Dhaka&apos;s Gen Z. Foam runners, crocs, slides
             and everyday kicks — designed to move with you.
@@ -18,28 +105,24 @@ export function Footer() {
               href={BRAND.instagram}
               target="_blank"
               rel="noreferrer"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 transition hover:border-white/40 hover:bg-white/5"
+              className={iconBtnClass}
               aria-label="Instagram"
             >
-              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.75">
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-              </svg>
+              <InstagramIcon />
             </a>
             <a
               href={BRAND.facebook}
               target="_blank"
               rel="noreferrer"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-[13px] font-semibold transition hover:border-white/40 hover:bg-white/5"
+              className={iconBtnClass}
               aria-label="Facebook"
             >
-              f
+              <span className="text-[15px] font-semibold leading-none">f</span>
             </a>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:col-span-5">
+        <div className="grid grid-cols-3 gap-8 lg:col-span-5">
           <div>
             <h4 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/45">
               Shop
@@ -150,9 +233,12 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-[12px] text-white/45 sm:flex-row sm:items-center sm:justify-between md:px-6 lg:px-8">
-          <p>© {new Date().getFullYear()} Viable. {BRAND.city}</p>
-          <div className="flex gap-5">
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-4 py-4 text-center text-[11px] text-white/45 md:flex-row md:items-center md:justify-between md:px-6 md:text-left md:text-[12px] lg:px-8">
+          <p>
+            © {new Date().getFullYear()} Viable. Shop from Dhaka, deliver
+            across the city.
+          </p>
+          <div className="hidden gap-5 md:flex">
             <span>Terms</span>
             <span>Privacy</span>
           </div>
