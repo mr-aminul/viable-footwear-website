@@ -86,8 +86,8 @@ export const categories: Category[] = [
 export const products: Product[] = [
   {
     id: '1',
-    name: 'Ridge Foam Croc',
-    slug: 'ridge-foam-croc',
+    name: 'Ridge Foam Crocs',
+    slug: 'ridge-foam-crocs',
     category: 'crocs',
     categoryLabel: "Unisex Crocs",
     price: 2890,
@@ -99,7 +99,7 @@ export const products: Product[] = [
     badge: 'Bestseller',
     featured: true,
     description:
-      'Sculptural foam Croc with organic ridge texture. Feather-light for all-day Dhaka walks, rain or shine.',
+      'Sculptural foam Crocs with organic ridge texture. Feather-light for all-day Dhaka walks, rain or shine.',
   },
   {
     id: '2',
@@ -137,21 +137,21 @@ export const products: Product[] = [
   },
   {
     id: '4',
-    name: 'Skyform Croc',
-    slug: 'skyform-croc',
+    name: 'Skyform Crocs',
+    slug: 'skyform-crocs',
     category: 'crocs',
     categoryLabel: "Women's Crocs",
     price: 2690,
     compareAt: 3190,
     rating: 4.6,
     reviews: 61,
-    image: '/images/products/product-croc-blue.png',
+    image: '/images/products/product-crocs-blue.png',
     colors: ['#A8C5D4', '#F5E6D3', '#E8E0D5'],
     sizes: [36, 37, 38, 39, 40, 41, 42],
     badge: 'Sale',
     featured: true,
     description:
-      'Pastel sky foam Croc with breathable sculptural vents. Soft, playful, unmistakably Viable.',
+      'Pastel sky foam Crocs with breathable sculptural vents. Soft, playful, unmistakably Viable.',
   },
   {
     id: '5',

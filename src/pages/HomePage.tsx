@@ -215,7 +215,7 @@ export function HomePage() {
               </Link>
             </div>
             <img
-              src="/images/promos/promo-croc-navy.png"
+              src="/images/promos/promo-crocs-navy.png"
               alt=""
               className="h-full min-h-[180px] w-full object-cover object-center"
             />
