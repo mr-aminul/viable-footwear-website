@@ -1,5 +1,3 @@
-'use client'
-
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
@@ -19,7 +17,7 @@ export function AdminPageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-[14px] text-mute">{description}</p>
+          <div className="mt-2 max-w-2xl text-[14px] text-mute">{description}</div>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -27,22 +25,10 @@ export function AdminPageHeader({
   )
 }
 
-export function AdminButton({
-  href,
-  children,
-  variant = 'primary',
-  type = 'button',
-  disabled,
-  onClick,
-}: {
-  href?: string
-  children: ReactNode
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
-  type?: 'button' | 'submit'
-  disabled?: boolean
-  onClick?: () => void
-}) {
-  const className = [
+const buttonClass = (
+  variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'primary',
+) =>
+  [
     'inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-semibold transition disabled:opacity-50',
     variant === 'primary' && 'bg-navy text-white hover:bg-navy-deep',
     variant === 'secondary' &&
@@ -53,20 +39,26 @@ export function AdminButton({
     .filter(Boolean)
     .join(' ')
 
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {children}
-      </Link>
-    )
-  }
-
+/** Server-safe link styled as an admin button. */
+export function AdminButton({
+  href,
+  children,
+  variant = 'primary',
+  prefetch = true,
+}: {
+  href: string
+  children: ReactNode
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
+  prefetch?: boolean
+}) {
   return (
-    <button type={type} className={className} disabled={disabled} onClick={onClick}>
+    <Link href={href} prefetch={prefetch} className={buttonClass(variant)}>
       {children}
-    </button>
+    </Link>
   )
 }
+
+export { buttonClass as adminButtonClassName }
 
 export function Field({
   label,
@@ -93,6 +85,10 @@ export function Field({
 
 export const inputClassName =
   'w-full rounded-xl border border-cloud bg-white px-3 py-2.5 text-[14px] text-ink outline-none transition focus:border-navy'
+
+/** Soft fill fields (no hard border) — used in the visual product editor. */
+export const softFieldClassName =
+  'w-full rounded-2xl border-0 bg-ink/[0.045] px-3.5 py-3 text-[14px] text-ink outline-none transition placeholder:text-mute focus:bg-ink/[0.07]'
 
 export function StatusPill({ active }: { active: boolean }) {
   return active ? (

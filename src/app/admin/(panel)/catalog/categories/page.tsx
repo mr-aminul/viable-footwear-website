@@ -1,12 +1,10 @@
 import Link from 'next/link'
-import { AdminShell } from '@/components/admin/AdminShell'
 import {
   AdminButton,
   AdminPageHeader,
   EmptyState,
   StatusPill,
 } from '@/components/admin/ui'
-import { requireRole } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -15,7 +13,6 @@ export const metadata = {
 }
 
 export default async function CategoriesListPage() {
-  await requireRole(['admin', 'manager'])
   const supabase = await createClient()
   const { data: categories } = await supabase
     .from('categories')
@@ -24,14 +21,19 @@ export default async function CategoriesListPage() {
     .order('name', { ascending: true })
 
   return (
-    <AdminShell>
+    <>
       <AdminPageHeader
         title="Categories"
         description="Organize the shop. Soft-deactivate instead of deleting."
         actions={
-          <AdminButton href="/admin/catalog/categories/new">
-            New category
-          </AdminButton>
+          <>
+            <AdminButton href="/admin/catalog/categories/new">
+              New category
+            </AdminButton>
+            <AdminButton href="/admin/catalog" variant="ghost">
+              ← Products
+            </AdminButton>
+          </>
         }
       />
 
@@ -84,6 +86,6 @@ export default async function CategoriesListPage() {
           </div>
         )}
       </div>
-    </AdminShell>
+    </>
   )
 }

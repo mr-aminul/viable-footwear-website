@@ -1,10 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, Heart, Star, Truck } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
+import { productBadgeClassName } from '@/lib/catalog/badge'
+import { galleryForColor } from '@/lib/catalog/gallery'
 import type { Product } from '@/lib/catalog/types'
 import { useCart } from '@/context/CartContext'
 import { ProductCard } from '@/components/ProductCard'
@@ -51,7 +53,15 @@ export function ProductPage({
       : product.sizes
   }, [product, selectedColor])
 
-  const gallery = product.images.length > 0 ? product.images : [product.image]
+  const gallery = useMemo(() => {
+    const urls = galleryForColor(product.images, selectedColor?.hex ?? null)
+    return urls.length > 0 ? urls : [product.image]
+  }, [product.images, product.image, selectedColor])
+
+  useEffect(() => {
+    setImageIndex(0)
+  }, [selectedColor?.key])
+
   const wished = isWishlisted(product.id)
 
   const handleAdd = () => {
@@ -101,15 +111,13 @@ export function ProductPage({
         >
           <div className="relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
             <img
-              src={gallery[imageIndex] ?? product.image}
+              src={gallery[Math.min(imageIndex, gallery.length - 1)] ?? product.image}
               alt={product.name}
               className="h-full w-full object-contain"
             />
             {product.badge && (
               <span
-                className={`absolute left-4 top-4 rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white ${
-                  product.badge === 'Sale' ? 'bg-spark' : 'bg-navy'
-                }`}
+                className={`absolute left-4 top-4 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
               >
                 {product.badge}
               </span>
@@ -188,6 +196,7 @@ export function ProductPage({
                     onClick={() => {
                       setColorIndex(i)
                       setSize(null)
+                      setImageIndex(0)
                     }}
                     className={`h-9 w-9 rounded-full border-2 transition ${
                       colorIndex === i
@@ -267,8 +276,8 @@ export function ProductPage({
           <div className="mt-8 flex items-start gap-3 rounded-2xl bg-mist/80 px-4 py-4">
             <Truck className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
             <p className="text-[13px] leading-relaxed text-mute">
-              Delivery across Bangladesh. Exact Pathao pricing at checkout coming
-              soon. WhatsApp us for same-day Dhaka options.
+              Delivery across Bangladesh. 24hrs within Dhaka, 48-72hrs outside
+              Dhaka!
             </p>
           </div>
         </motion.div>

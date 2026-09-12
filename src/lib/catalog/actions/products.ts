@@ -1,10 +1,13 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { revalidateStorefront } from '@/lib/catalog/cache-tags'
+import { normalizeProductBadge } from '@/lib/catalog/badge'
 import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
+import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
-import type { ActionResult } from '@/lib/catalog/types'
+import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
 
 function readString(formData: FormData, key: string): string {
@@ -18,12 +21,11 @@ function readNumber(formData: FormData, key: string): number | null {
   return Number.isFinite(value) ? value : null
 }
 
-function revalidateProductSurfaces(slug?: string) {
+function revalidateProductSurfaces(...slugs: Array<string | null | undefined>) {
   revalidatePath('/admin/catalog')
   revalidatePath('/admin/catalog/products')
-  revalidatePath('/shop')
-  revalidatePath('/')
-  if (slug) revalidatePath(`/product/${slug}`)
+  revalidateStorefront(...slugs)
+  revalidateTag('admin-products')
 }
 
 type VariantInput = {
@@ -58,7 +60,10 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
         id: typeof row.id === 'string' ? row.id : undefined,
         size_eu: size,
         color: typeof row.color === 'string' ? row.color : null,
-        color_hex: typeof row.color_hex === 'string' ? row.color_hex : null,
+        color_hex:
+          typeof row.color_hex === 'string'
+            ? normalizeColorHex(row.color_hex)
+            : null,
         sku: typeof row.sku === 'string' ? row.sku : null,
         stock,
         active: row.active !== false,
@@ -98,13 +103,13 @@ export async function createProduct(
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
   const categoryId = readString(formData, 'category_id') || null
-  const badge = readString(formData, 'badge') || null
+  const badge = normalizeProductBadge(readString(formData, 'badge'))
   const seoTitle = readString(formData, 'seo_title') || null
   const seoDescription = readString(formData, 'seo_description') || null
   const featured =
     formData.get('featured') === 'on' || formData.get('featured') === 'true'
-  // New products start inactive until variants exist — quality gate.
-  const active = false
+  // Products are published by default.
+  const active = true
 
   if (!name) return { ok: false, error: 'Name is required.' }
   if (!isValidSlug(slug)) {
@@ -167,7 +172,7 @@ export async function updateProduct(
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
   const categoryId = readString(formData, 'category_id') || null
-  const badge = readString(formData, 'badge') || null
+  const badge = normalizeProductBadge(readString(formData, 'badge'))
   const seoTitle = readString(formData, 'seo_title') || null
   const seoDescription = readString(formData, 'seo_description') || null
   const featured =
@@ -199,6 +204,12 @@ export async function updateProduct(
     }
   }
 
+  const { data: existing } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('id', productId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('products')
     .update({
@@ -224,7 +235,7 @@ export async function updateProduct(
     return { ok: false, error: error.message }
   }
 
-  revalidateProductSurfaces(slug)
+  revalidateProductSurfaces(slug, existing?.slug)
   revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
 }
@@ -295,28 +306,38 @@ export async function saveProductVariants(
     }
   }
 
-  for (const variant of parsed) {
-    if (variant.id) {
-      const { error } = await supabase
-        .from('product_variants')
-        .update({
-          size_eu: variant.size_eu,
-          color: variant.color,
-          color_hex: variant.color_hex,
-          sku: variant.sku,
-          stock: variant.stock,
-          active: variant.active,
-        })
-        .eq('id', variant.id)
-        .eq('product_id', productId)
-      if (error) {
-        if (error.code === '23505') {
-          return { ok: false, error: 'Duplicate size/color combination.' }
-        }
-        return { ok: false, error: error.message }
+  const toUpdate = parsed.filter((v) => v.id)
+  const toInsert = parsed.filter((v) => !v.id)
+
+  if (toUpdate.length > 0) {
+    const updateResults = await Promise.all(
+      toUpdate.map((variant) =>
+        supabase
+          .from('product_variants')
+          .update({
+            size_eu: variant.size_eu,
+            color: variant.color,
+            color_hex: variant.color_hex,
+            sku: variant.sku,
+            stock: variant.stock,
+            active: variant.active,
+          })
+          .eq('id', variant.id!)
+          .eq('product_id', productId),
+      ),
+    )
+    for (const { error } of updateResults) {
+      if (!error) continue
+      if (error.code === '23505') {
+        return { ok: false, error: 'Duplicate size/color combination.' }
       }
-    } else {
-      const { error } = await supabase.from('product_variants').insert({
+      return { ok: false, error: error.message }
+    }
+  }
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('product_variants').insert(
+      toInsert.map((variant) => ({
         product_id: productId,
         size_eu: variant.size_eu,
         color: variant.color,
@@ -324,13 +345,13 @@ export async function saveProductVariants(
         sku: variant.sku,
         stock: variant.stock,
         active: variant.active,
-      })
-      if (error) {
-        if (error.code === '23505') {
-          return { ok: false, error: 'Duplicate size/color combination.' }
-        }
-        return { ok: false, error: error.message }
+      })),
+    )
+    if (error) {
+      if (error.code === '23505') {
+        return { ok: false, error: 'Duplicate size/color combination.' }
       }
+      return { ok: false, error: error.message }
     }
   }
 
@@ -345,6 +366,31 @@ export async function saveProductVariants(
   revalidateProductSurfaces(product.slug)
   revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
+}
+
+/**
+ * Lightweight product search for You May Also Like picker.
+ * Empty query returns [] — client should not call until the user types.
+ */
+export async function searchRelatedProductOptions(
+  productId: string,
+  query: string,
+): Promise<RelatedProductOption[]> {
+  const safe = query.replace(/[%_,.()]/g, '').trim()
+  if (!safe) return []
+
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, slug, active')
+    .neq('id', productId)
+    .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%`)
+    .order('name', { ascending: true })
+    .limit(8)
+
+  return data ?? []
 }
 
 /**

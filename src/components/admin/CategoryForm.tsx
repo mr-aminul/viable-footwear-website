@@ -9,6 +9,7 @@ import {
   updateCategory,
 } from '@/lib/catalog/actions/categories'
 import { slugify } from '@/lib/catalog/slug'
+import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import {
   AdminButton,
   Field,
@@ -150,18 +151,18 @@ export function CategoryForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <AdminButton type="submit" disabled={pending}>
+        <AdminActionButton type="submit" disabled={pending}>
           {pending ? 'Saving…' : isEdit ? 'Save category' : 'Create category'}
-        </AdminButton>
+        </AdminActionButton>
         {isEdit ? (
-          <AdminButton
+          <AdminActionButton
             type="button"
             variant="secondary"
             disabled={pending}
             onClick={toggleActive}
           >
             {initial?.active ? 'Deactivate' : 'Activate'}
-          </AdminButton>
+          </AdminActionButton>
         ) : null}
         <AdminButton href="/admin/catalog/categories" variant="ghost">
           Back to list

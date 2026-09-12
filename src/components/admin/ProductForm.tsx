@@ -8,6 +8,7 @@ import {
   updateProduct,
 } from '@/lib/catalog/actions/products'
 import { slugify } from '@/lib/catalog/slug'
+import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import {
   AdminButton,
   Field,
@@ -136,10 +137,9 @@ export function ProductForm({
         <Field label="Badge">
           <select
             name="badge"
-            defaultValue={initial?.badge ?? ''}
+            defaultValue={initial?.badge ?? 'New'}
             className={inputClassName}
           >
-            <option value="">None</option>
             <option value="New">New</option>
             <option value="Sale">Sale</option>
             <option value="Bestseller">Bestseller</option>
@@ -186,21 +186,6 @@ export function ProductForm({
             />
             Featured on home
           </label>
-          {isEdit ? (
-            <label className="flex items-center gap-2 text-[14px] text-ink">
-              <input
-                type="checkbox"
-                name="active"
-                defaultChecked={initial?.active ?? false}
-                className="h-4 w-4"
-              />
-              Published (active)
-            </label>
-          ) : (
-            <p className="text-[12px] text-mute">
-              New products start unpublished. Add variants, then publish.
-            </p>
-          )}
         </div>
         <div className="sm:col-span-2">
           <Field label="Description">
@@ -230,21 +215,21 @@ export function ProductForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <AdminButton type="submit" disabled={pending}>
+        <AdminActionButton type="submit" disabled={pending}>
           {pending ? 'Saving…' : isEdit ? 'Save product' : 'Create product'}
-        </AdminButton>
+        </AdminActionButton>
         {isEdit && initial?.active ? (
-          <AdminButton
+          <AdminActionButton
             type="button"
             variant="secondary"
             disabled={pending}
             onClick={deactivate}
           >
             Deactivate
-          </AdminButton>
+          </AdminActionButton>
         ) : null}
-        <AdminButton href="/admin/catalog/products" variant="ghost">
-          Back to list
+        <AdminButton href="/admin/catalog" variant="ghost">
+          Back to products
         </AdminButton>
       </div>
     </form>

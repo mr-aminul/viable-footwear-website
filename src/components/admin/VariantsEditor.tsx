@@ -1,15 +1,9 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { saveProductVariants } from '@/lib/catalog/actions/products'
-import {
-  AdminButton,
-  Field,
-  FormError,
-  FormSuccess,
-  inputClassName,
-} from '@/components/admin/ui'
+import { useRef } from 'react'
+import { Trash2 } from 'lucide-react'
+import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { Field, inputClassName } from '@/components/admin/ui'
 
 export type VariantDraft = {
   key: string
@@ -22,77 +16,58 @@ export type VariantDraft = {
   active: boolean
 }
 
-function newDraft(): VariantDraft {
+export function createEmptyVariantDraft(): VariantDraft {
   return {
     key: crypto.randomUUID(),
     size_eu: '40',
     color: '',
-    color_hex: '',
+    color_hex: '#1A3668',
     sku: '',
     stock: '0',
     active: true,
   }
 }
 
+export function buildVariantsPayload(rows: VariantDraft[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      id: row.id,
+      size_eu: Number(row.size_eu),
+      color: row.color || null,
+      color_hex: row.color_hex || null,
+      sku: row.sku || null,
+      stock: Number(row.stock),
+      active: row.active,
+    })),
+  )
+}
+
+function normalizeHex(value: string): string {
+  const trimmed = value.trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase()
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) return `#${trimmed.toUpperCase()}`
+  return '#1A3668'
+}
+
+/**
+ * Variant table — edits only; parent Save product persists.
+ */
 export function VariantsEditor({
-  productId,
-  initial,
+  rows,
+  onChange,
 }: {
-  productId: string
-  initial: VariantDraft[]
+  rows: VariantDraft[]
+  onChange: (rows: VariantDraft[]) => void
 }) {
-  const router = useRouter()
-  const [rows, setRows] = useState<VariantDraft[]>(
-    initial.length > 0 ? initial : [newDraft()],
-  )
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const payload = useMemo(
-    () =>
-      JSON.stringify(
-        rows.map((row) => ({
-          id: row.id,
-          size_eu: Number(row.size_eu),
-          color: row.color || null,
-          color_hex: row.color_hex || null,
-          sku: row.sku || null,
-          stock: Number(row.stock),
-          active: row.active,
-        })),
-      ),
-    [rows],
-  )
-
-  const save = () => {
-    setError(null)
-    setSuccess(null)
-    const formData = new FormData()
-    formData.set('variants_json', payload)
-    startTransition(async () => {
-      const result = await saveProductVariants(productId, formData)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSuccess('Variants saved.')
-      router.refresh()
-    })
-  }
-
   return (
     <div className="space-y-4">
-      <FormError message={error} />
-      <FormSuccess message={success} />
-
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <table className="w-full min-w-[720px] text-left text-[13px]">
+        <table className="w-full min-w-[680px] text-left text-[13px]">
           <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
             <tr>
               <th className="px-3 py-3">Size EU</th>
               <th className="px-3 py-3">Color</th>
-              <th className="px-3 py-3">Hex</th>
+              <th className="px-3 py-3">Swatch</th>
               <th className="px-3 py-3">SKU</th>
               <th className="px-3 py-3">Stock</th>
               <th className="px-3 py-3">Active</th>
@@ -106,8 +81,8 @@ export function VariantsEditor({
                   <input
                     value={row.size_eu}
                     onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
+                      onChange(
+                        rows.map((r) =>
                           r.key === row.key
                             ? { ...r, size_eu: e.target.value }
                             : r,
@@ -121,8 +96,8 @@ export function VariantsEditor({
                   <input
                     value={row.color}
                     onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
+                      onChange(
+                        rows.map((r) =>
                           r.key === row.key
                             ? { ...r, color: e.target.value }
                             : r,
@@ -134,27 +109,23 @@ export function VariantsEditor({
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <input
+                  <VariantColorSwatch
                     value={row.color_hex}
-                    onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
-                          r.key === row.key
-                            ? { ...r, color_hex: e.target.value }
-                            : r,
+                    onChange={(hex) =>
+                      onChange(
+                        rows.map((r) =>
+                          r.key === row.key ? { ...r, color_hex: hex } : r,
                         ),
                       )
                     }
-                    className={inputClassName}
-                    placeholder="#1A3668"
                   />
                 </td>
                 <td className="px-3 py-2">
                   <input
                     value={row.sku}
                     onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
+                      onChange(
+                        rows.map((r) =>
                           r.key === row.key ? { ...r, sku: e.target.value } : r,
                         ),
                       )
@@ -168,8 +139,8 @@ export function VariantsEditor({
                     min={0}
                     value={row.stock}
                     onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
+                      onChange(
+                        rows.map((r) =>
                           r.key === row.key
                             ? { ...r, stock: e.target.value }
                             : r,
@@ -180,30 +151,43 @@ export function VariantsEditor({
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={row.active}
-                    onChange={(e) =>
-                      setRows((prev) =>
-                        prev.map((r) =>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={row.active}
+                    aria-label={row.active ? 'Active' : 'Inactive'}
+                    onClick={() =>
+                      onChange(
+                        rows.map((r) =>
                           r.key === row.key
-                            ? { ...r, active: e.target.checked }
+                            ? { ...r, active: !r.active }
                             : r,
                         ),
                       )
                     }
-                    className="h-4 w-4"
-                  />
+                    className={[
+                      'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+                      row.active ? 'bg-navy' : 'bg-cloud',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        row.active ? 'translate-x-5' : 'translate-x-0',
+                      ].join(' ')}
+                    />
+                  </button>
                 </td>
                 <td className="px-3 py-2">
                   <button
                     type="button"
-                    className="text-[12px] font-semibold text-spark hover:underline"
+                    aria-label="Delete variant"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
                     onClick={() =>
-                      setRows((prev) => prev.filter((r) => r.key !== row.key))
+                      onChange(rows.filter((r) => r.key !== row.key))
                     }
                   >
-                    Remove
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </td>
               </tr>
@@ -212,25 +196,55 @@ export function VariantsEditor({
         </table>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <AdminButton
-          type="button"
-          variant="secondary"
-          onClick={() => setRows((prev) => [...prev, newDraft()])}
-        >
-          Add variant
-        </AdminButton>
-        <AdminButton type="button" disabled={pending} onClick={save}>
-          {pending ? 'Saving…' : 'Save variants'}
-        </AdminButton>
-      </div>
+      <AdminActionButton
+        type="button"
+        variant="secondary"
+        onClick={() => onChange([...rows, createEmptyVariantDraft()])}
+      >
+        Add variant
+      </AdminActionButton>
 
       <Field
         label="Tip"
-        hint="A product can only be published when at least one variant is active."
+        hint="A product needs at least one active variant to stay published."
       >
         <span />
       </Field>
+    </div>
+  )
+}
+
+function VariantColorSwatch({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (hex: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const hex = normalizeHex(value)
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        aria-label={`Pick color ${hex}`}
+        title={hex}
+        onClick={() => inputRef.current?.click()}
+        className="h-9 w-9 rounded-full border-2 border-navy/20 transition hover:scale-105"
+        style={{
+          backgroundColor: hex,
+          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+        }}
+      />
+      <input
+        ref={inputRef}
+        type="color"
+        value={hex}
+        onChange={(e) => onChange(e.target.value.toUpperCase())}
+        className="pointer-events-none absolute h-0 w-0 opacity-0"
+        tabIndex={-1}
+      />
     </div>
   )
 }

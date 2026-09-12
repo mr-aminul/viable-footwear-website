@@ -1,7 +1,8 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { revalidateStorefront } from '@/lib/catalog/cache-tags'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
@@ -13,8 +14,8 @@ function readString(formData: FormData, key: string): string {
 function revalidateCatalog() {
   revalidatePath('/admin/catalog')
   revalidatePath('/admin/catalog/categories')
-  revalidatePath('/shop')
-  revalidatePath('/')
+  revalidateStorefront()
+  revalidateTag('admin-categories')
 }
 
 /**

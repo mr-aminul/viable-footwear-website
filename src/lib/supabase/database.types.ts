@@ -116,6 +116,7 @@ export interface Database {
           storage_path: string
           alt: string | null
           sort_order: number
+          color_hex: string | null
           created_at: string
         }
         Insert: {
@@ -125,6 +126,7 @@ export interface Database {
           storage_path: string
           alt?: string | null
           sort_order?: number
+          color_hex?: string | null
         }
         Update: Partial<Database['public']['Tables']['product_media']['Insert']>
         Relationships: []

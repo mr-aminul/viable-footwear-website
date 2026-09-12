@@ -1,7 +1,8 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { revalidateStorefront } from '@/lib/catalog/cache-tags'
 import {
   ALLOWED_IMAGE_TYPES,
   ALLOWED_VIDEO_TYPES,
@@ -12,14 +13,16 @@ import {
   PRODUCT_VIDEO_BUCKET,
   VIDEO_MAX_BYTES,
 } from '@/lib/catalog/constants'
+import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import type { ActionResult } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
 
 function revalidateProduct(productId: string, slug?: string) {
   revalidatePath(`/admin/catalog/products/${productId}`)
-  revalidatePath('/shop')
-  revalidatePath('/')
-  if (slug) revalidatePath(`/product/${slug}`)
+  revalidatePath('/admin/catalog')
+  revalidateStorefront(slug)
+  revalidateTag('admin-products')
+  revalidateTag(`admin-product-${productId}`)
 }
 
 function extensionFor(type: string): string {
@@ -89,16 +92,33 @@ export async function uploadProductMedia(
   }
 
   const bucket = isVideo ? PRODUCT_VIDEO_BUCKET : PRODUCT_IMAGE_BUCKET
-  const ext = extensionFor(file.type)
+  const originalBytes = Buffer.from(await file.arrayBuffer())
+
+  let uploadBody: Buffer = originalBytes
+  let contentType = file.type
+  let ext = extensionFor(file.type)
+
+  if (!isVideo) {
+    try {
+      const optimized = await optimizeProductImage(originalBytes, file.type)
+      if (optimized) {
+        uploadBody = optimized.buffer
+        contentType = optimized.contentType
+        ext = optimized.extension
+      }
+    } catch {
+      // Fall back to the original file if decode/encode fails.
+    }
+  }
+
   const storagePath = `${productId}/${crypto.randomUUID()}.${ext}`
-  const bytes = await file.arrayBuffer()
 
   const { error: uploadError } = await supabase.storage
     .from(bucket)
-    .upload(storagePath, bytes, {
-      contentType: file.type,
+    .upload(storagePath, uploadBody, {
+      contentType,
       upsert: false,
-      cacheControl: '3600',
+      cacheControl: '31536000',
     })
 
   if (uploadError) {
@@ -232,6 +252,55 @@ export async function updateMediaAlt(
   const { error } = await supabase
     .from('product_media')
     .update({ alt: alt.trim() || null })
+    .eq('id', mediaId)
+
+  if (error) return { ok: false, error: error.message }
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('id', media.product_id)
+    .maybeSingle()
+
+  revalidateProduct(media.product_id, product?.slug)
+  return { ok: true }
+}
+
+/**
+ * Tag a gallery image with a colorway hex (null = shared across colors).
+ */
+export async function updateMediaColor(
+  mediaId: string,
+  colorHex: string | null,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const { data: media, error: loadError } = await supabase
+    .from('product_media')
+    .select('product_id, media_type')
+    .eq('id', mediaId)
+    .maybeSingle()
+
+  if (loadError || !media) {
+    return { ok: false, error: loadError?.message ?? 'Media not found.' }
+  }
+  if (media.media_type !== 'image') {
+    return { ok: false, error: 'Only images can be tagged with a color.' }
+  }
+
+  let nextColor: string | null = null
+  if (colorHex) {
+    const trimmed = colorHex.trim()
+    if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
+    }
+    nextColor = trimmed.toUpperCase()
+  }
+
+  const { error } = await supabase
+    .from('product_media')
+    .update({ color_hex: nextColor })
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }

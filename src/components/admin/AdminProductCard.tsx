@@ -3,29 +3,20 @@
 import Link from 'next/link'
 import { Heart, ShoppingBag, Star } from 'lucide-react'
 import { motion } from 'framer-motion'
-import type { Product } from '@/lib/catalog/types'
-import { productBadgeClassName } from '@/lib/catalog/badge'
 import { formatPrice } from '@/lib/brand'
-import { useCart } from '@/context/CartContext'
+import { productBadgeClassName } from '@/lib/catalog/badge'
+import type { AdminProductView } from '@/lib/catalog/queries'
 
-interface ProductCardProps {
-  product: Product
+type AdminProductCardProps = {
+  product: AdminProductView
   index?: number
 }
 
 /**
- * Merchandised product tile with wishlist + quick-add.
+ * Storefront-matching product tile for the admin Products grid.
+ * Links into the visual editor instead of the public PDP.
  */
-export function ProductCard({ product, index = 0 }: ProductCardProps) {
-  const { toggleWishlist, isWishlisted, addToCart } = useCart()
-  const wished = isWishlisted(product.id)
-  const defaultSize =
-    product.sizes[Math.floor(product.sizes.length / 2)] ?? product.sizes[0]
-  const defaultVariant =
-    product.variants.find((v) => v.sizeEu === defaultSize && v.stock > 0) ??
-    product.variants.find((v) => v.stock > 0) ??
-    product.variants[0]
-
+export function AdminProductCard({ product, index = 0 }: AdminProductCardProps) {
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -42,7 +33,17 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       }}
       className="group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift"
     >
-      {product.badge && (
+      <Link
+        href={`/admin/catalog/products/${product.id}`}
+        className="absolute inset-0 z-20"
+        aria-label={`Edit ${product.name}`}
+      />
+
+      {!product.active ? (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
+          Draft
+        </span>
+      ) : (
         <span
           className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
         >
@@ -50,37 +51,23 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         </span>
       )}
 
-      <button
-        type="button"
-        aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'}
-        onClick={(e) => {
-          e.preventDefault()
-          toggleWishlist(product.id)
-        }}
-        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-ink shadow-sm transition-colors duration-150 ease-out hover:bg-white"
-      >
-        <Heart
-          className={`h-4 w-4 transition-colors duration-150 ${
-            wished ? 'fill-spark text-spark' : ''
-          }`}
-        />
-      </button>
+      <span className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-ink shadow-sm">
+        <Heart className="h-4 w-4" />
+      </span>
 
-      <Link href={`/product/${product.slug}`} className="block aspect-square overflow-hidden">
+      <div className="aspect-square overflow-hidden">
         <img
           src={product.image}
           alt={product.name}
           className="h-full w-full object-contain transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-[1.06]"
           loading="lazy"
         />
-      </Link>
+      </div>
 
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
-        <Link href={`/product/${product.slug}`}>
-          <h3 className="text-[15px] font-semibold leading-snug text-ink transition-colors duration-150 group-hover:text-navy">
-            {product.name}
-          </h3>
-        </Link>
+        <h3 className="text-[15px] font-semibold leading-snug text-ink transition-colors duration-150 group-hover:text-navy">
+          {product.name}
+        </h3>
         <p className="text-[13px] text-mute">{product.categoryLabel}</p>
 
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
@@ -89,11 +76,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
               <span className="text-[15px] font-semibold text-ink">
                 {formatPrice(product.price)}
               </span>
-              {product.compareAt && (
+              {product.compareAt ? (
                 <span className="text-[13px] text-mute line-through">
                   {formatPrice(product.compareAt)}
                 </span>
-              )}
+              ) : null}
             </div>
             <div className="mt-1 flex items-center gap-1">
               <Star className="h-3.5 w-3.5 fill-gold text-gold" />
@@ -104,18 +91,9 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             </div>
           </div>
 
-          <button
-            type="button"
-            aria-label={`Add ${product.name} to cart`}
-            disabled={!defaultVariant || defaultVariant.stock < 1}
-            onClick={() => {
-              if (!defaultVariant || defaultVariant.stock < 1) return
-              addToCart(product, defaultVariant.sizeEu, 1, defaultVariant.id)
-            }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors duration-150 ease-out hover:bg-navy-deep active:scale-[0.97] disabled:opacity-40"
-          >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white">
             <ShoppingBag className="h-4 w-4" />
-          </button>
+          </span>
         </div>
       </div>
     </motion.article>

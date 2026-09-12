@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Soft-nav revisits reuse the client RSC cache (mutations still router.refresh).
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
 }
 
 export default nextConfig

@@ -1,8 +1,6 @@
 import { notFound } from 'next/navigation'
-import { AdminShell } from '@/components/admin/AdminShell'
 import { CategoryForm } from '@/components/admin/CategoryForm'
 import { AdminPageHeader } from '@/components/admin/ui'
-import { requireRole } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -13,7 +11,6 @@ export const metadata = {
 type Props = { params: Promise<{ id: string }> }
 
 export default async function EditCategoryPage({ params }: Props) {
-  await requireRole(['admin', 'manager'])
   const { id } = await params
   const supabase = await createClient()
   const { data: category } = await supabase
@@ -25,7 +22,7 @@ export default async function EditCategoryPage({ params }: Props) {
   if (!category) notFound()
 
   return (
-    <AdminShell>
+    <>
       <AdminPageHeader
         title={category.name}
         description={`Slug: ${category.slug}`}
@@ -43,6 +40,6 @@ export default async function EditCategoryPage({ params }: Props) {
           }}
         />
       </div>
-    </AdminShell>
+    </>
   )
 }

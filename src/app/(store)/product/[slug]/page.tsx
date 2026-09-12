@@ -18,6 +18,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = product.seoTitle || `${product.name} | ${BRAND.name}`
   const description =
     product.seoDescription || product.description.slice(0, 160)
+  const imageUrls =
+    product.images.length > 0
+      ? product.images.map((img) => img.url)
+      : [product.image]
 
   return {
     title,
@@ -25,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      images: product.images.length > 0 ? product.images : [product.image],
+      images: imageUrls,
       type: 'website',
     },
     twitter: {
@@ -50,7 +54,10 @@ export default async function ProductRoute({ params }: Props) {
     '@type': 'Product',
     name: product.name,
     description: product.description,
-    image: product.images.length > 0 ? product.images : [product.image],
+    image:
+      product.images.length > 0
+        ? product.images.map((img) => img.url)
+        : [product.image],
     sku: product.slug,
     brand: {
       '@type': 'Brand',

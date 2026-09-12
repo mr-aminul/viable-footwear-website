@@ -1,33 +1,30 @@
+'use client'
+
 import Link from 'next/link'
-import { AdminShell } from '@/components/admin/AdminShell'
-import { getStaffSession } from '@/lib/auth/session'
+import { useSearchParams } from 'next/navigation'
+import { useStaffProfile } from '@/components/admin/AdminStaffContext'
 
-export const metadata = {
-  title: 'Admin',
-  robots: { index: false, follow: false },
-}
-
-export default async function AdminDashboard({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>
-}) {
-  const session = await getStaffSession()
-  const params = await searchParams
+/**
+ * Soft navigations skip a server data round-trip; role comes from AdminShell.
+ */
+export default function AdminDashboard() {
+  const profile = useStaffProfile()
+  const searchParams = useSearchParams()
+  const showAdminOnlyError = searchParams.get('error') === 'admin_only'
 
   return (
-    <AdminShell>
-      {params.error === 'admin_only' && (
+    <>
+      {showAdminOnlyError ? (
         <div className="mb-4 rounded-xl border border-spark/30 bg-spark/10 px-4 py-3 text-[13px] text-spark">
           That area is Admin-only.
         </div>
-      )}
+      ) : null}
 
       <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
         Dashboard
       </h1>
       <p className="mt-2 max-w-xl text-[14px] text-mute">
-        Catalog CMS is live. Checkout, Pathao, and analytics land in later
+        Products CMS is live. Checkout, Pathao, and analytics land in later
         phases — see <code className="text-ink">docs/REQUIREMENTS.md</code>.
       </p>
 
@@ -42,7 +39,7 @@ export default async function AdminDashboard({
         <ul className="mt-3 space-y-2 text-[14px] text-mute">
           <li>
             <Link href="/admin/catalog" className="text-navy hover:underline">
-              Catalog CMS
+              Products
             </Link>
           </li>
           <li>
@@ -50,10 +47,13 @@ export default async function AdminDashboard({
               View storefront
             </Link>
           </li>
-          {session?.profile.role === 'admin' && (
+          {profile.role === 'admin' ? (
             <>
               <li>
-                <Link href="/admin/integrations" className="text-navy hover:underline">
+                <Link
+                  href="/admin/integrations"
+                  className="text-navy hover:underline"
+                >
                   Integrations (Admin)
                 </Link>
               </li>
@@ -63,10 +63,10 @@ export default async function AdminDashboard({
                 </Link>
               </li>
             </>
-          )}
+          ) : null}
         </ul>
       </div>
-    </AdminShell>
+    </>
   )
 }
 

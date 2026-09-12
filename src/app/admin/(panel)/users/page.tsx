@@ -1,4 +1,3 @@
-import { AdminShell } from '@/components/admin/AdminShell'
 import { requireRole } from '@/lib/auth/session'
 import { createClient } from '@/lib/supabase/server'
 
@@ -16,7 +15,7 @@ export default async function UsersPage() {
     .order('created_at', { ascending: true })
 
   return (
-    <AdminShell>
+    <>
       <h1 className="font-display text-3xl font-extrabold tracking-tight">
         Staff users
       </h1>
@@ -64,6 +63,6 @@ export default async function UsersPage() {
           </tbody>
         </table>
       </div>
-    </AdminShell>
+    </>
   )
 }

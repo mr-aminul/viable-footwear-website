@@ -1,4 +1,3 @@
-import { AdminShell } from '@/components/admin/AdminShell'
 import { requireRole } from '@/lib/auth/session'
 
 export const metadata = {
@@ -10,7 +9,7 @@ export default async function IntegrationsPage() {
   await requireRole('admin')
 
   return (
-    <AdminShell>
+    <>
       <h1 className="font-display text-3xl font-extrabold tracking-tight">
         Integrations
       </h1>
@@ -43,6 +42,6 @@ export default async function IntegrationsPage() {
           </li>
         ))}
       </ul>
-    </AdminShell>
+    </>
   )
 }

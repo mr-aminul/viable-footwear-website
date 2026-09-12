@@ -1,5 +1,11 @@
 import type { ProductBadge } from '@/lib/catalog/constants'
 
+/** Storefront gallery image; colorHex tags a colorway (null = shared). */
+export type ProductImage = {
+  url: string
+  colorHex: string | null
+}
+
 /** Storefront-facing product (cart + cards + PDP). */
 export type Product = {
   id: string
@@ -12,13 +18,13 @@ export type Product = {
   rating: number
   reviews: number
   image: string
-  images: string[]
+  images: ProductImage[]
   videoUrl?: string
   colors: string[]
   sizes: number[]
   /** Active variants for stock-aware add-to-cart. */
   variants: ProductVariantView[]
-  badge?: ProductBadge
+  badge: ProductBadge
   description: string
   featured?: boolean
   weightKg: number
@@ -48,3 +54,11 @@ export type CategoryView = {
 export type ActionResult<T = undefined> =
   | { ok: true; data?: T }
   | { ok: false; error: string }
+
+/** Admin picker row for You May Also Like. */
+export type RelatedProductOption = {
+  id: string
+  name: string
+  slug: string
+  active: boolean
+}

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "oxlint"
@@ -15,7 +15,8 @@
     "lucide-react": "^1.39.0",
     "next": "^15.5.25",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

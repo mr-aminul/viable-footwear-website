@@ -1,5 +1,3 @@
-'use client'
-
 import Link from 'next/link'
 
 type BrandLogoProps = {
@@ -24,6 +22,7 @@ export function BrandLogo({
       href="/"
       className={`inline-flex items-center ${className}`}
       aria-label="Viable home"
+      prefetch={false}
     >
       <img
         src={src}
@@ -32,6 +31,7 @@ export function BrandLogo({
         width={332}
         height={81}
         decoding="async"
+        fetchPriority="low"
       />
     </Link>
   )
