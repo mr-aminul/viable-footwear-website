@@ -1,3 +1,5 @@
+'use client'
+
 import {
   createContext,
   useCallback,
@@ -6,18 +8,24 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Product } from '../data/products'
+import type { Product } from '@/lib/catalog/types'
 
 export interface CartItem {
   product: Product
   size: number
   quantity: number
+  variantId?: string
 }
 
 interface CartContextValue {
   items: CartItem[]
   wishlist: string[]
-  addToCart: (product: Product, size: number, quantity?: number) => void
+  addToCart: (
+    product: Product,
+    size: number,
+    quantity?: number,
+    variantId?: string,
+  ) => void
   removeFromCart: (productId: string, size: number) => void
   updateQuantity: (productId: string, size: number, quantity: number) => void
   toggleWishlist: (productId: string) => void
@@ -34,19 +42,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [wishlist, setWishlist] = useState<string[]>([])
 
   const addToCart = useCallback(
-    (product: Product, size: number, quantity = 1) => {
+    (
+      product: Product,
+      size: number,
+      quantity = 1,
+      variantId?: string,
+    ) => {
+      const resolvedVariantId =
+        variantId ??
+        product.variants.find((v) => v.sizeEu === size && v.stock > 0)?.id
+
       setItems((prev) => {
         const existing = prev.find(
-          (i) => i.product.id === product.id && i.size === size,
+          (i) =>
+            i.product.id === product.id &&
+            i.size === size &&
+            i.variantId === resolvedVariantId,
         )
         if (existing) {
           return prev.map((i) =>
-            i.product.id === product.id && i.size === size
+            i.product.id === product.id &&
+            i.size === size &&
+            i.variantId === resolvedVariantId
               ? { ...i, quantity: i.quantity + quantity }
               : i,
           )
         }
-        return [...prev, { product, size, quantity }]
+        return [
+          ...prev,
+          { product, size, quantity, variantId: resolvedVariantId },
+        ]
       })
     },
     [],

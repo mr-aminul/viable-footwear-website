@@ -1,7 +1,9 @@
-import { Link } from 'react-router-dom'
+'use client'
+
+import Link from 'next/link'
 import { ArrowRight, Mail, MapPin, Phone } from 'lucide-react'
-import { BRAND } from '../data/products'
-import { BrandLogo } from './BrandLogo'
+import { BRAND } from '@/lib/brand'
+import { BrandLogo } from '@/components/BrandLogo'
 
 const iconBtnClass =
   'flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/45 hover:bg-white/5'
@@ -48,16 +50,16 @@ export function Footer() {
         </div>
 
         <nav className="mt-8 flex max-w-xs flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-[13px] text-white/85">
-          <Link to="/shop" className="hover:text-white">
+          <Link href="/shop" className="hover:text-white">
             Shop
           </Link>
-          <Link to="/shop?sale=1" className="hover:text-white">
+          <Link href="/shop?sale=1" className="hover:text-white">
             Sale
           </Link>
-          <Link to="/about" className="hover:text-white">
+          <Link href="/about" className="hover:text-white">
             Size guide
           </Link>
-          <Link to="/about" className="hover:text-white">
+          <Link href="/about" className="hover:text-white">
             About us
           </Link>
           <a
@@ -129,22 +131,22 @@ export function Footer() {
             </h4>
             <ul className="mt-4 space-y-2.5 text-[14px] text-white/75">
               <li>
-                <Link to="/shop" className="hover:text-white">
+                <Link href="/shop" className="hover:text-white">
                   All Products
                 </Link>
               </li>
               <li>
-                <Link to="/shop?category=crocs" className="hover:text-white">
+                <Link href="/shop?category=crocs" className="hover:text-white">
                   Crocs
                 </Link>
               </li>
               <li>
-                <Link to="/shop?category=foam-runners" className="hover:text-white">
+                <Link href="/shop?category=foam-runners" className="hover:text-white">
                   Foam Runners
                 </Link>
               </li>
               <li>
-                <Link to="/shop?sale=1" className="hover:text-white">
+                <Link href="/shop?sale=1" className="hover:text-white">
                   Sale
                 </Link>
               </li>
@@ -176,7 +178,7 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <Link to="/about" className="hover:text-white">
+                <Link href="/about" className="hover:text-white">
                   Size guide
                 </Link>
               </li>
@@ -188,7 +190,7 @@ export function Footer() {
             </h4>
             <ul className="mt-4 space-y-2.5 text-[14px] text-white/75">
               <li>
-                <Link to="/about" className="hover:text-white">
+                <Link href="/about" className="hover:text-white">
                   About Viable
                 </Link>
               </li>

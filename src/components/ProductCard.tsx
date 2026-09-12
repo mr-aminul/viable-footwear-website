@@ -1,9 +1,11 @@
-import { Link } from 'react-router-dom'
+'use client'
+
+import Link from 'next/link'
 import { Heart, ShoppingBag, Star } from 'lucide-react'
 import { motion } from 'framer-motion'
-import type { Product } from '../data/products'
-import { formatPrice } from '../data/products'
-import { useCart } from '../context/CartContext'
+import type { Product } from '@/lib/catalog/types'
+import { formatPrice } from '@/lib/brand'
+import { useCart } from '@/context/CartContext'
 
 interface ProductCardProps {
   product: Product
@@ -18,6 +20,10 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const wished = isWishlisted(product.id)
   const defaultSize =
     product.sizes[Math.floor(product.sizes.length / 2)] ?? product.sizes[0]
+  const defaultVariant =
+    product.variants.find((v) => v.sizeEu === defaultSize && v.stock > 0) ??
+    product.variants.find((v) => v.stock > 0) ??
+    product.variants[0]
 
   return (
     <motion.article
@@ -65,7 +71,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         />
       </button>
 
-      <Link to={`/product/${product.slug}`} className="block aspect-square overflow-hidden">
+      <Link href={`/product/${product.slug}`} className="block aspect-square overflow-hidden">
         <img
           src={product.image}
           alt={product.name}
@@ -75,7 +81,7 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
       </Link>
 
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
-        <Link to={`/product/${product.slug}`}>
+        <Link href={`/product/${product.slug}`}>
           <h3 className="text-[15px] font-semibold leading-snug text-ink transition-colors duration-150 group-hover:text-navy">
             {product.name}
           </h3>
@@ -106,8 +112,12 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
           <button
             type="button"
             aria-label={`Add ${product.name} to cart`}
-            onClick={() => addToCart(product, defaultSize)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors duration-150 ease-out hover:bg-navy-deep active:scale-[0.97]"
+            disabled={!defaultVariant || defaultVariant.stock < 1}
+            onClick={() => {
+              if (!defaultVariant || defaultVariant.stock < 1) return
+              addToCart(product, defaultVariant.sizeEu, 1, defaultVariant.id)
+            }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors duration-150 ease-out hover:bg-navy-deep active:scale-[0.97] disabled:opacity-40"
           >
             <ShoppingBag className="h-4 w-4" />
           </button>

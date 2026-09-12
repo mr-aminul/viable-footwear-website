@@ -1,5 +1,8 @@
+'use client'
+
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import Link from 'next/link'
+import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Heart,
   Menu,
@@ -9,9 +12,9 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useCart } from '../context/CartContext'
-import { BRAND } from '../data/products'
-import { BrandLogo } from './BrandLogo'
+import { useCart } from '@/context/CartContext'
+import { BRAND } from '@/lib/brand'
+import { BrandLogo } from '@/components/BrandLogo'
 
 const links = [
   { to: '/', label: 'Home' },
@@ -27,11 +30,12 @@ export function Header() {
   const { cartCount, wishlist } = useCart()
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const location = useLocation()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     setOpen(false)
-  }, [location.pathname, location.search])
+  }, [pathname, searchParams])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -65,33 +69,31 @@ export function Header() {
 
           <nav className="hidden items-center gap-7 lg:flex">
             {links.map((link) => (
-              <NavLink
+              <Link
                 key={link.to + link.label}
-                to={link.to}
-                className={({ isActive }) =>
-                  `text-[13px] font-medium tracking-wide transition hover:text-navy ${link.accent
+                href={link.to}
+                className={`text-[13px] font-medium tracking-wide transition hover:text-navy ${link.accent
                     ? 'text-spark hover:text-spark-soft'
-                    : isActive
+                    : (pathname === link.to.split('?')[0] && (link.to.includes('?') ? searchParams.toString().includes(link.to.split('?')[1]) : !searchParams.toString()))
                       ? 'text-navy'
                       : 'text-ink/75'
-                  }`
-                }
+                  }`}
               >
                 {link.label}
-              </NavLink>
+              </Link>
             ))}
           </nav>
 
           <div className="flex items-center gap-0.5 md:gap-1">
             <Link
-              to="/shop"
+              href="/shop"
               className="hidden h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist sm:flex"
               aria-label="Search"
             >
               <Search className="h-[18px] w-[18px]" />
             </Link>
             <Link
-              to="/shop"
+              href="/shop"
               className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
               aria-label="Wishlist"
             >
@@ -103,7 +105,7 @@ export function Header() {
               )}
             </Link>
             <Link
-              to="/cart"
+              href="/cart"
               className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
               aria-label="Cart"
             >
@@ -114,13 +116,13 @@ export function Header() {
                 </span>
               )}
             </Link>
-            <button
-              type="button"
+            <Link
+              href="/admin/login"
               className="hidden h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist md:flex"
-              aria-label="Account"
+              aria-label="Staff account"
             >
               <User className="h-[18px] w-[18px]" />
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -157,7 +159,7 @@ export function Header() {
                 {links.map((link) => (
                   <Link
                     key={link.to + link.label}
-                    to={link.to}
+                    href={link.to}
                     className={`rounded-xl px-4 py-3 text-[15px] font-medium ${link.accent ? 'text-spark' : 'text-ink'
                       }`}
                   >

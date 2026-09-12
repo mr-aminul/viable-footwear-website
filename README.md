@@ -1,32 +1,71 @@
-# React + TypeScript + Vite
+# Viable Footwear
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Next.js storefront + Admin/Manager ops for Viable (Dhaka casual footwear).
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **App:** Next.js 15 (App Router) + TypeScript + Tailwind v4 + Framer Motion  
+- **Host:** GitHub → Vercel → custom domain  
+- **DB / Auth / Storage:** Supabase free tier  
 
-## React Compiler
+Full requirements & task list: [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local setup
 
-## Expanding the Oxlint configuration
+1. Install dependencies:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+2. Copy env and fill Supabase keys:
+
+```bash
+cp .env.example .env.local
+```
+
+3. In Supabase → SQL Editor, run in order:
+
+`supabase/migrations/20260910000000_phase0_foundation.sql`  
+`supabase/migrations/20260913000000_phase1_seed_catalog.sql`
+
+4. Create your first Auth user (Authentication → Users), then promote to admin:
+
+```sql
+update public.profiles
+set role = 'admin', full_name = 'Owner'
+where email = 'you@example.com';
+```
+
+5. Start the app:
+
+```bash
+npm run dev
+```
+
+- Storefront: http://localhost:3000  
+- Staff login: http://localhost:3000/admin/login  
+
+## Deploy (Vercel)
+
+1. Push this repo to GitHub.  
+2. Import the project in Vercel; framework preset **Next.js**.  
+3. Add the same env vars as `.env.example` (including `SUPABASE_SERVICE_ROLE_KEY`).  
+4. Attach your domain under Project → Settings → Domains.  
+5. In Supabase Auth → URL config, set Site URL to your production domain and add `https://your-domain/auth/callback`.
+
+## Phase status
+
+- [x] Next.js migration (storefront routes preserved)  
+- [x] Supabase schema + RLS + storage buckets (SQL migration)  
+- [x] Staff auth + Admin/Manager gate  
+- [x] Admin shell, Integrations (Admin-only placeholder), Users list  
+- [x] Catalog CMS: categories, products, variants, media, related, SEO  
+- [x] Storefront reads live catalog from Supabase  
+- [ ] Checkout, Pathao, payments — Phase 2  
+
+After Phase 0 SQL, also run:
+
+`supabase/migrations/20260913000000_phase1_seed_catalog.sql`
+
+Storefront catalog is DB-backed. Seed SQL loads the starter styles; manage them under `/admin/catalog`.

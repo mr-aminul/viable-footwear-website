@@ -1,0 +1,207 @@
+export type UserRole = 'admin' | 'manager'
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string
+          email: string
+          full_name: string | null
+          role: UserRole
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          full_name?: string | null
+          role?: UserRole
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          full_name?: string | null
+          role?: UserRole
+          active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          image_path: string | null
+          sort_order: number
+          active: boolean
+          seo_title: string | null
+          seo_description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          image_path?: string | null
+          sort_order?: number
+          active?: boolean
+          seo_title?: string | null
+          seo_description?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['categories']['Insert']>
+        Relationships: []
+      }
+      products: {
+        Row: {
+          id: string
+          category_id: string | null
+          name: string
+          slug: string
+          description: string
+          price: number
+          compare_at: number | null
+          weight_kg: number
+          rating: number
+          reviews_count: number
+          badge: string | null
+          featured: boolean
+          active: boolean
+          related_product_ids: string[]
+          seo_title: string | null
+          seo_description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          category_id?: string | null
+          name: string
+          slug: string
+          description?: string
+          price: number
+          compare_at?: number | null
+          weight_kg?: number
+          rating?: number
+          reviews_count?: number
+          badge?: string | null
+          featured?: boolean
+          active?: boolean
+          related_product_ids?: string[]
+          seo_title?: string | null
+          seo_description?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['products']['Insert']>
+        Relationships: []
+      }
+      product_media: {
+        Row: {
+          id: string
+          product_id: string
+          media_type: 'image' | 'video'
+          storage_path: string
+          alt: string | null
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          media_type: 'image' | 'video'
+          storage_path: string
+          alt?: string | null
+          sort_order?: number
+        }
+        Update: Partial<Database['public']['Tables']['product_media']['Insert']>
+        Relationships: []
+      }
+      product_variants: {
+        Row: {
+          id: string
+          product_id: string
+          size_eu: number
+          color: string | null
+          color_hex: string | null
+          sku: string | null
+          stock: number
+          price_override: number | null
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          size_eu: number
+          color?: string | null
+          color_hex?: string | null
+          sku?: string | null
+          stock?: number
+          price_override?: number | null
+          active?: boolean
+        }
+        Update: Partial<Database['public']['Tables']['product_variants']['Insert']>
+        Relationships: []
+      }
+      campaigns: {
+        Row: {
+          id: string
+          name: string
+          priority: number
+          active: boolean
+          starts_at: string | null
+          ends_at: string | null
+          rules: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          priority?: number
+          active?: boolean
+          starts_at?: string | null
+          ends_at?: string | null
+          rules?: Json
+        }
+        Update: Partial<Database['public']['Tables']['campaigns']['Insert']>
+        Relationships: []
+      }
+      integration_settings: {
+        Row: {
+          key: string
+          value: Json
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value?: Json
+          updated_by?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['integration_settings']['Insert']>
+        Relationships: []
+      }
+    }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: {
+      user_role: UserRole
+      media_type: 'image' | 'video'
+    }
+    CompositeTypes: Record<string, never>
+  }
+}

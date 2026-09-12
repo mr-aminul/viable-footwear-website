@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom'
+'use client'
+
+import Link from 'next/link'
 
 type BrandLogoProps = {
   className?: string
@@ -19,7 +21,7 @@ export function BrandLogo({
 
   return (
     <Link
-      to="/"
+      href="/"
       className={`inline-flex items-center ${className}`}
       aria-label="Viable home"
     >
