@@ -48,11 +48,13 @@ npm run dev
 
 ## Deploy (Vercel)
 
-1. Push this repo to GitHub.  
-2. Import the project in Vercel; framework preset **Next.js**.  
-3. Add the same env vars as `.env.example` (including `SUPABASE_SERVICE_ROLE_KEY`).  
-4. Attach your domain under Project → Settings → Domains.  
-5. In Supabase Auth → URL config, set Site URL to your production domain and add `https://your-domain/auth/callback`.
+Production: **https://viable.inventivelab.bd** (also `www` + `viable-footwear.vercel.app`)
+
+GitHub `main` auto-deploys. Env vars are set in the Vercel project.
+
+In Supabase Auth → URL config, set:
+- **Site URL:** `https://viable.inventivelab.bd`
+- **Redirect URLs:** `https://viable.inventivelab.bd/auth/callback` (+ `http://localhost:3000/auth/callback` for local)
 
 ## Phase status
 

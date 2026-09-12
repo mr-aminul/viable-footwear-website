@@ -1,8 +1,8 @@
 # Viable Footwear — Requirements & Task Breakdown
 
-**Status:** Phase 1 in progress (Catalog CMS + storefront wired to Supabase)  
+**Status:** Phase 1 complete for catalog; Phase 0 deploy live on Vercel  
 **Last updated:** 2026-09-13  
-**Current codebase:** Next.js App Router storefront (DB catalog) + Admin Catalog CMS + SQL migrations for Supabase.
+**Current codebase:** Next.js App Router storefront (DB catalog) + Admin Catalog CMS + production on Vercel (`viable.inventivelab.bd`).
 
 ---
 
@@ -174,8 +174,8 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [x] Port public routes: Home, Shop, Product, Cart, About (static data OK temporarily).
 - [x] Port Framer Motion usage without breaking reduced-motion.
 - [x] Configure `vercel.json` / Next defaults; remove SPA-only rewrite if obsolete.
-- [ ] Connect GitHub repo → Vercel project; preview deploys on PR.
-- [ ] Attach custom domain on Vercel; HTTPS verify.
+- [x] Connect GitHub repo → Vercel project; preview deploys on PR.
+- [x] Attach custom domain on Vercel; HTTPS verify.
 
 #### 0.2 Supabase project
 - [x] Create Supabase project (free).
