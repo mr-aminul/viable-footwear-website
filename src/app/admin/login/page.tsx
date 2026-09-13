@@ -68,7 +68,7 @@ export default async function AdminLoginPage({
 function formatError(code?: string): string | null {
   if (!code) return null
   if (code === 'missing_supabase_env') {
-    return 'Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local'
+    return 'Sign-in is temporarily unavailable. Please try again later.'
   }
   if (code === 'unauthorized') {
     return 'This account is not an active Admin or Manager.'

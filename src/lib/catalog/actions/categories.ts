@@ -32,13 +32,21 @@ export async function createCategory(
   const slug = slugInput || slugify(name)
   const seoTitle = readString(formData, 'seo_title') || null
   const seoDescription = readString(formData, 'seo_description') || null
-  const sortOrder = Number(readString(formData, 'sort_order') || '0')
   const active = formData.get('active') === 'on' || formData.get('active') === 'true'
 
   if (!name) return { ok: false, error: 'Name is required.' }
   if (!isValidSlug(slug)) {
     return { ok: false, error: 'Slug must be lowercase letters, numbers, and hyphens.' }
   }
+
+  const { data: last } = await supabase
+    .from('categories')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const nextSort = (last?.sort_order ?? -1) + 1
 
   const { data, error } = await supabase
     .from('categories')
@@ -47,7 +55,7 @@ export async function createCategory(
       slug,
       seo_title: seoTitle,
       seo_description: seoDescription,
-      sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
+      sort_order: nextSort,
       active,
     })
     .select('id')
@@ -78,7 +86,6 @@ export async function updateCategory(
   const slug = readString(formData, 'slug')
   const seoTitle = readString(formData, 'seo_title') || null
   const seoDescription = readString(formData, 'seo_description') || null
-  const sortOrder = Number(readString(formData, 'sort_order') || '0')
   const active = formData.get('active') === 'on' || formData.get('active') === 'true'
 
   if (!name) return { ok: false, error: 'Name is required.' }
@@ -93,7 +100,6 @@ export async function updateCategory(
       slug,
       seo_title: seoTitle,
       seo_description: seoDescription,
-      sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
       active,
     })
     .eq('id', categoryId)
@@ -107,6 +113,27 @@ export async function updateCategory(
 
   revalidateCatalog()
   revalidatePath(`/admin/catalog/categories/${categoryId}`)
+  return { ok: true }
+}
+
+/**
+ * Persist category list order (IDs in desired order).
+ */
+export async function reorderCategories(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const { error } = await supabase
+      .from('categories')
+      .update({ sort_order: index })
+      .eq('id', orderedIds[index])
+    if (error) return { ok: false, error: error.message }
+  }
+
+  revalidateCatalog()
   return { ok: true }
 }
 

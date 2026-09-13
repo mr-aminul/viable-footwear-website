@@ -1,4 +1,13 @@
 export type UserRole = 'admin' | 'manager'
+export type OrderStatus =
+  | 'new'
+  | 'awaiting_fulfillment'
+  | 'packed'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'returned'
+export type PaymentMethod = 'cod' | 'bkash' | 'nagad'
 
 export type Json =
   | string
@@ -141,6 +150,7 @@ export interface Database {
           sku: string | null
           stock: number
           price_override: number | null
+          media_id: string | null
           active: boolean
           created_at: string
         }
@@ -153,6 +163,7 @@ export interface Database {
           sku?: string | null
           stock?: number
           price_override?: number | null
+          media_id?: string | null
           active?: boolean
         }
         Update: Partial<Database['public']['Tables']['product_variants']['Insert']>
@@ -197,12 +208,103 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['integration_settings']['Insert']>
         Relationships: []
       }
+      orders: {
+        Row: {
+          id: string
+          order_number: string
+          status: OrderStatus
+          payment_method: PaymentMethod
+          email: string | null
+          full_name: string
+          phone: string
+          secondary_phone: string | null
+          address: string
+          city_id: number
+          zone_id: number
+          area_id: number | null
+          city_name: string
+          zone_name: string
+          area_name: string
+          subtotal: number
+          shipping: number
+          total: number
+          pathao_delivery_fee: number | null
+          pathao_consignment_id: string | null
+          pathao_error: string | null
+          pathao_cancelled_at: string | null
+          campaign_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          order_number: string
+          status?: OrderStatus
+          payment_method?: PaymentMethod
+          email?: string | null
+          full_name: string
+          phone: string
+          secondary_phone?: string | null
+          address: string
+          city_id: number
+          zone_id: number
+          area_id?: number | null
+          city_name: string
+          zone_name: string
+          area_name?: string
+          subtotal: number
+          shipping: number
+          total: number
+          pathao_delivery_fee?: number | null
+          pathao_consignment_id?: string | null
+          pathao_error?: string | null
+          pathao_cancelled_at?: string | null
+          campaign_id?: string | null
+          notes?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['orders']['Insert']>
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          id: string
+          order_id: string
+          product_id: string | null
+          variant_id: string | null
+          product_name: string
+          size_eu: number | null
+          color: string | null
+          sku: string | null
+          unit_price: number
+          quantity: number
+          weight_kg: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          product_id?: string | null
+          variant_id?: string | null
+          product_name: string
+          size_eu?: number | null
+          color?: string | null
+          sku?: string | null
+          unit_price: number
+          quantity: number
+          weight_kg?: number
+        }
+        Update: Partial<Database['public']['Tables']['order_items']['Insert']>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: {
       user_role: UserRole
       media_type: 'image' | 'video'
+      order_status: OrderStatus
+      payment_method: PaymentMethod
     }
     CompositeTypes: Record<string, never>
   }

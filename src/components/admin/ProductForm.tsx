@@ -166,7 +166,7 @@ export function ProductForm({
             className={inputClassName}
           />
         </Field>
-        <Field label="Weight (kg)" hint="Used later for Pathao quotes.">
+        <Field label="Weight (kg)" hint="Used for delivery cost estimates.">
           <input
             name="weight_kg"
             type="number"

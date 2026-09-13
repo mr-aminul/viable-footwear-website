@@ -42,6 +42,7 @@ export default async function EditProductPage({ params }: Props) {
         storage_path: m.storage_path,
         alt: m.alt,
         sort_order: m.sort_order,
+        color_hex: m.color_hex,
       }))}
       initialVariants={variants.map((v) => ({
         key: v.id,

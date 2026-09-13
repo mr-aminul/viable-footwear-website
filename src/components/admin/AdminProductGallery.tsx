@@ -7,14 +7,13 @@ import {
   useState,
   useTransition,
   type ChangeEvent,
-  type DragEvent,
 } from 'react'
 import { useRouter } from 'next/navigation'
+import { Reorder, useMotionValue, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ImagePlus, Trash2, Upload } from 'lucide-react'
 import {
   deleteProductMedia,
   reorderProductMedia,
-  updateMediaColor,
   uploadProductMedia,
 } from '@/lib/catalog/actions/media'
 import {
@@ -23,7 +22,6 @@ import {
   productBadgeClassName,
 } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
-import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
 import { FormError } from '@/components/admin/ui'
 
@@ -33,15 +31,9 @@ export type GalleryMedia = {
   storage_path: string
   alt: string | null
   sort_order: number
-  color_hex?: string | null
 }
 
-export type GalleryColorOption = {
-  hex: string
-  label: string
-}
-
-type GalleryImage = GalleryMedia & { url: string; colorHex: string | null }
+type GalleryImage = GalleryMedia & { url: string }
 
 type AdminProductGalleryProps = {
   productId: string
@@ -50,13 +42,104 @@ type AdminProductGalleryProps = {
   onBadgeChange?: (badge: ProductBadge) => void
   isDraft?: boolean
   media: GalleryMedia[]
-  /** Colorways from variants — used to tag images. */
-  colorOptions?: GalleryColorOption[]
   /** Fallback when no uploaded images exist yet. */
   placeholderSrc: string
 }
 
 const BADGE_OPTIONS = PRODUCT_BADGE_OPTIONS
+
+function sameOrder(a: GalleryImage[], b: GalleryImage[]) {
+  if (a.length !== b.length) return false
+  return a.every((image, index) => image.id === b[index]?.id)
+}
+
+function GalleryThumb({
+  image,
+  index,
+  isSelected,
+  canDrag,
+  pending,
+  onSelect,
+  onRemove,
+  onDragStart,
+  onDragEnd,
+}: {
+  image: GalleryImage
+  index: number
+  isSelected: boolean
+  canDrag: boolean
+  pending: boolean
+  onSelect: () => void
+  onRemove: () => void
+  onDragStart: () => void
+  onDragEnd: () => void
+}) {
+  const reduceMotion = useReducedMotion()
+  const y = useMotionValue(0)
+
+  return (
+    <Reorder.Item
+      value={image}
+      as="div"
+      drag={canDrag}
+      onDragStart={onDragStart}
+      onDragEnd={() => {
+        y.set(0)
+        onDragEnd()
+      }}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Select image ${index + 1}${canDrag ? ', drag to reorder' : ''}`}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { type: 'spring', stiffness: 420, damping: 32, mass: 0.7 }
+      }
+      // Lock cross-axis so leftover drag translateY can't misalign thumbs.
+      style={{ y }}
+      whileDrag={{
+        scale: 1.08,
+        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.16)',
+        zIndex: 20,
+        cursor: 'grabbing',
+      }}
+      className={[
+        'group/thumb relative h-16 w-16 shrink-0 rounded-xl border bg-white outline-none',
+        canDrag ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-pointer',
+        isSelected ? 'border-navy' : 'border-cloud',
+      ].join(' ')}
+    >
+      <div className="h-full w-full overflow-hidden rounded-[inherit]">
+        <img
+          src={image.url}
+          alt=""
+          draggable={false}
+          className="pointer-events-none h-full w-full object-contain"
+        />
+      </div>
+      <button
+        type="button"
+        disabled={pending}
+        aria-label="Remove image"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRemove()
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-white opacity-0 transition group-hover/thumb:opacity-100"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </Reorder.Item>
+  )
+}
 
 /**
  * Storefront-style gallery with hover-to-upload and drag-to-reorder thumbnails.
@@ -68,7 +151,6 @@ export function AdminProductGallery({
   onBadgeChange,
   isDraft,
   media,
-  colorOptions = [],
   placeholderSrc,
 }: AdminProductGalleryProps) {
   const router = useRouter()
@@ -77,8 +159,6 @@ export function AdminProductGallery({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [badgeOpen, setBadgeOpen] = useState(false)
 
   const sortedFromProps = useMemo(
@@ -89,16 +169,21 @@ export function AdminProductGallery({
         .map((m) => ({
           ...m,
           url: resolveMediaUrl(m.storage_path, 'image'),
-          colorHex: normalizeColorHex(m.color_hex),
         })),
     [media],
   )
 
   const [images, setImages] = useState<GalleryImage[]>(sortedFromProps)
+  const orderBeforeDragRef = useRef(sortedFromProps)
+  const imagesRef = useRef(images)
 
   useEffect(() => {
     setImages(sortedFromProps)
   }, [sortedFromProps])
+
+  useEffect(() => {
+    imagesRef.current = images
+  }, [images])
 
   useEffect(() => {
     if (!badgeOpen) return
@@ -136,9 +221,9 @@ export function AdminProductGallery({
       ? images[selectedIndex] ?? images[0]
       : { id: '', url: placeholderSrc, alt: productName }
   const currentIsReal = Boolean(current?.id)
+  const canDrag = images.length > 1 && !pending
 
   const persistOrder = (next: GalleryImage[]) => {
-    setImages(next)
     setError(null)
     startTransition(async () => {
       const result = await reorderProductMedia(
@@ -147,50 +232,11 @@ export function AdminProductGallery({
       )
       if (!result.ok) {
         setError(result.error)
-        setImages(sortedFromProps)
+        setImages(orderBeforeDragRef.current)
         return
       }
       router.refresh()
     })
-  }
-
-  const moveImage = (fromId: string, toId: string) => {
-    if (fromId === toId) return
-    const from = images.findIndex((img) => img.id === fromId)
-    const to = images.findIndex((img) => img.id === toId)
-    if (from < 0 || to < 0) return
-    const next = [...images]
-    const [item] = next.splice(from, 1)
-    next.splice(to, 0, item)
-    persistOrder(next)
-  }
-
-  const onDragStart = (event: DragEvent<HTMLElement>, id: string) => {
-    if (images.length < 2) return
-    setDragId(id)
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', id)
-  }
-
-  const onDragOver = (event: DragEvent<HTMLElement>, id: string) => {
-    if (!dragId || dragId === id) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setDropTargetId(id)
-  }
-
-  const onDrop = (event: DragEvent<HTMLElement>, id: string) => {
-    event.preventDefault()
-    const fromId = event.dataTransfer.getData('text/plain') || dragId
-    setDragId(null)
-    setDropTargetId(null)
-    if (!fromId) return
-    moveImage(fromId, id)
-  }
-
-  const onDragEnd = () => {
-    setDragId(null)
-    setDropTargetId(null)
   }
 
   const runUpload = (file: File) => {
@@ -227,29 +273,6 @@ export function AdminProductGallery({
       router.refresh()
     })
   }
-
-  const setImageColor = (id: string, colorHex: string | null) => {
-    setError(null)
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === id
-          ? { ...img, colorHex, color_hex: colorHex }
-          : img,
-      ),
-    )
-    startTransition(async () => {
-      const result = await updateMediaColor(id, colorHex)
-      if (!result.ok) {
-        setError(result.error)
-        setImages(sortedFromProps)
-        return
-      }
-      router.refresh()
-    })
-  }
-
-  const selectedImage =
-    images.find((img) => img.id === (selectedId ?? images[0]?.id)) ?? null
 
   return (
     <div className="space-y-3">
@@ -349,11 +372,10 @@ export function AdminProductGallery({
                               onBadgeChange(option)
                               setBadgeOpen(false)
                             }}
-                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition hover:bg-mist ${
-                              selected
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition hover:bg-mist ${selected
                                 ? 'font-semibold text-navy'
                                 : 'font-medium text-ink'
-                            }`}
+                              }`}
                           >
                             <span
                               className={`inline-flex min-w-16 justify-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${productBadgeClassName(option)}`}
@@ -384,71 +406,41 @@ export function AdminProductGallery({
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {images.map((img, i) => {
-          const isSelected = selectedId ? selectedId === img.id : i === 0
-          const isDragging = dragId === img.id
-          const isDropTarget = dropTargetId === img.id && dragId !== img.id
-
-          return (
-            <div
-              key={img.id}
-              role="button"
-              tabIndex={0}
-              draggable={images.length > 1 && !pending}
-              onDragStart={(e) => onDragStart(e, img.id)}
-              onDragOver={(e) => onDragOver(e, img.id)}
-              onDrop={(e) => onDrop(e, img.id)}
-              onDragEnd={onDragEnd}
-              onClick={() => setSelectedId(img.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setSelectedId(img.id)
-                }
-              }}
-              aria-label={`Select image ${i + 1}${images.length > 1 ? ', drag to reorder' : ''}`}
-              className={[
-                'group/thumb relative h-16 w-16 shrink-0 rounded-xl border bg-white transition',
-                images.length > 1
-                  ? 'cursor-grab active:cursor-grabbing'
-                  : 'cursor-pointer',
-                isSelected ? 'border-navy' : 'border-cloud',
-                isDragging ? 'opacity-40' : '',
-                isDropTarget ? 'border-navy ring-2 ring-navy/30' : '',
-              ].join(' ')}
-            >
-              <div className="h-full w-full overflow-hidden rounded-[inherit]">
-                <img
-                  src={img.url}
-                  alt=""
-                  draggable={false}
-                  className="pointer-events-none h-full w-full object-contain"
-                />
-              </div>
-              {img.colorHex ? (
-                <span
-                  aria-hidden
-                  title={`Color ${img.colorHex}`}
-                  className="absolute bottom-1 left-1 h-2.5 w-2.5 rounded-full ring-1 ring-white"
-                  style={{ backgroundColor: img.colorHex }}
-                />
-              ) : null}
-              <button
-                type="button"
-                disabled={pending}
-                aria-label="Remove image"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeMedia(img.id)
+        <Reorder.Group
+          axis="x"
+          values={images}
+          onReorder={(next) => {
+            imagesRef.current = next
+            setImages(next)
+          }}
+          as="div"
+          className="flex gap-2"
+        >
+          {images.map((img, i) => {
+            const isSelected = selectedId ? selectedId === img.id : i === 0
+            return (
+              <GalleryThumb
+                key={img.id}
+                image={img}
+                index={i}
+                isSelected={isSelected}
+                canDrag={canDrag}
+                pending={pending}
+                onSelect={() => setSelectedId(img.id)}
+                onRemove={() => removeMedia(img.id)}
+                onDragStart={() => {
+                  orderBeforeDragRef.current = imagesRef.current
                 }}
-                onMouseDown={(e) => e.stopPropagation()}
-                className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-white opacity-0 transition group-hover/thumb:opacity-100"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          )
-        })}
+                onDragEnd={() => {
+                  const next = imagesRef.current
+                  if (!sameOrder(next, orderBeforeDragRef.current)) {
+                    persistOrder(next)
+                  }
+                }}
+              />
+            )
+          })}
+        </Reorder.Group>
 
         <button
           type="button"
@@ -462,33 +454,10 @@ export function AdminProductGallery({
         </button>
       </div>
 
-      {selectedImage && colorOptions.length > 0 ? (
-        <label className="flex flex-wrap items-center gap-2 text-[12px] text-mute">
-          <span className="font-medium text-ink">Color for selected image</span>
-          <select
-            value={selectedImage.colorHex ?? ''}
-            disabled={pending}
-            onChange={(e) =>
-              setImageColor(selectedImage.id, e.target.value || null)
-            }
-            className="rounded-lg border border-cloud bg-white px-2.5 py-1.5 text-[12px] font-medium text-ink outline-none transition focus:border-navy/40"
-          >
-            <option value="">All colors (shared)</option>
-            {colorOptions.map((option) => (
-              <option key={option.hex} value={option.hex}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
       {images.length > 1 ? (
         <p className="text-[12px] text-mute">
-          Drag thumbnails to set gallery order. First image is primary.
-          {colorOptions.length > 0
-            ? ' Tag an image with a color so the storefront gallery switches with the swatch.'
-            : ''}
+          Drag thumbnails to set gallery order. First image is primary. Assign
+          images to variants in the table below.
         </p>
       ) : null}
 

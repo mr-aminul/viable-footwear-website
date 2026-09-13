@@ -1,5 +1,5 @@
 import { ProductForm } from '@/components/admin/ProductForm'
-import { AdminPageHeader } from '@/components/admin/ui'
+import { AdminButton, AdminPageHeader } from '@/components/admin/ui'
 import { getCategoryOptions } from '@/lib/catalog/queries'
 
 export const metadata = {
@@ -14,7 +14,12 @@ export default async function NewProductPage() {
     <>
       <AdminPageHeader
         title="New product"
-        description="Create the core listing first. Variants and media come next."
+        description="Create the core listing first. Variants and media come next. Need many at once? Use the bulk sheet."
+        actions={
+          <AdminButton href="/admin/catalog/products/bulk" variant="secondary">
+            Bulk sheet
+          </AdminButton>
+        }
       />
       <div className="mt-8">
         <ProductForm categories={categories} />

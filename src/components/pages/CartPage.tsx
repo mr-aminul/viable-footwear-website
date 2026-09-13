@@ -134,23 +134,22 @@ export function CartPage() {
             </div>
             <div className="flex justify-between text-mute">
               <span>Delivery</span>
-              <span className="font-medium text-ink">
-                {cartTotal >= 3000 ? 'Free' : formatPrice(120)}
-              </span>
+              <span className="font-medium text-ink">At checkout</span>
             </div>
             <div className="flex justify-between border-t border-cloud pt-3 text-[16px] font-semibold text-ink">
               <span>Total</span>
-              <span>
-                {formatPrice(cartTotal + (cartTotal >= 3000 ? 0 : 120))}
-              </span>
+              <span>{formatPrice(cartTotal)}</span>
             </div>
           </div>
-          <button
-            type="button"
-            className="mt-6 w-full rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft"
+          <Link
+            href="/checkout"
+            className="mt-6 block w-full rounded-full bg-navy py-3.5 text-center text-[14px] font-semibold text-white transition hover:bg-navy-soft"
           >
-            Checkout via WhatsApp
-          </button>
+            Proceed to checkout
+          </Link>
+          <p className="mt-3 text-center text-[12px] text-mute">
+            Delivery calculated at checkout via Pathao · Cash on delivery
+          </p>
           <Link
             href="/shop"
             className="mt-3 block text-center text-[13px] font-medium text-navy underline-offset-4 hover:underline"

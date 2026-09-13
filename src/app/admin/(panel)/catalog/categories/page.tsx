@@ -1,10 +1,9 @@
-import Link from 'next/link'
 import {
   AdminButton,
   AdminPageHeader,
   EmptyState,
-  StatusPill,
 } from '@/components/admin/ui'
+import { CategoriesTable } from '@/components/admin/CategoriesTable'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -24,16 +23,13 @@ export default async function CategoriesListPage() {
     <>
       <AdminPageHeader
         title="Categories"
-        description="Organize the shop. Soft-deactivate instead of deleting."
+        description="Organize the shop. Drag rows to set storefront order. Deactivate categories you are not using instead of deleting them."
+        backHref="/admin/catalog"
+        backLabel="Back to products"
         actions={
-          <>
-            <AdminButton href="/admin/catalog/categories/new">
-              New category
-            </AdminButton>
-            <AdminButton href="/admin/catalog" variant="ghost">
-              ← Products
-            </AdminButton>
-          </>
+          <AdminButton href="/admin/catalog/categories/new">
+            New category
+          </AdminButton>
         }
       />
 
@@ -49,41 +45,7 @@ export default async function CategoriesListPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-            <table className="w-full min-w-[560px] text-left text-[13px]">
-              <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Slug</th>
-                  <th className="px-4 py-3">Sort</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {(categories ?? []).map((category) => (
-                  <tr key={category.id} className="border-b border-cloud last:border-0">
-                    <td className="px-4 py-3 font-medium text-ink">
-                      {category.name}
-                    </td>
-                    <td className="px-4 py-3 text-mute">{category.slug}</td>
-                    <td className="px-4 py-3 text-mute">{category.sort_order}</td>
-                    <td className="px-4 py-3">
-                      <StatusPill active={category.active} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/admin/catalog/categories/${category.id}`}
-                        className="font-semibold text-navy hover:underline"
-                      >
-                        Edit
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <CategoriesTable categories={categories ?? []} />
         )}
       </div>
     </>

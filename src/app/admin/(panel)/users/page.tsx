@@ -20,10 +20,9 @@ export default async function UsersPage() {
         Staff users
       </h1>
       <p className="mt-2 max-w-2xl text-[14px] text-mute">
-        Create users in the Supabase Auth dashboard, then set{' '}
-        <code className="text-ink">profiles.role</code> to{' '}
-        <code className="text-ink">admin</code> or{' '}
-        <code className="text-ink">manager</code>. Invite UI ships later.
+        People who can manage the store. Admins have full access; Managers can
+        update products and categories. Contact your site administrator to add
+        or remove accounts.
       </p>
 
       <div className="mt-8 overflow-x-auto rounded-2xl border border-cloud bg-white">
@@ -40,8 +39,7 @@ export default async function UsersPage() {
             {(profiles ?? []).length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-mute">
-                  No profiles yet. Apply the SQL migration and create your first
-                  Auth user.
+                  No staff users yet.
                 </td>
               </tr>
             ) : (

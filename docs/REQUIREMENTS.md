@@ -1,8 +1,8 @@
 # Viable Footwear — Requirements & Task Breakdown
 
-**Status:** Phase 1 complete for catalog; Phase 0 deploy live on Vercel  
+**Status:** Phase 2 in progress — COD checkout + Pathao quote/dispatch (Chilirig method); campaigns/bKash/Nagad pending  
 **Last updated:** 2026-09-13  
-**Current codebase:** Next.js App Router storefront (DB catalog) + Admin Catalog CMS + production on Vercel (`viable.inventivelab.bd`).
+**Current codebase:** Next.js App Router storefront (DB catalog) + Admin Catalog CMS + COD checkout/Pathao + production on Vercel (`viable.inventivelab.bd`).
 
 ---
 
@@ -251,18 +251,18 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 **Goal:** Real orders with correct delivery math and payable flows.
 
 #### 2.1 Cart → order draft
-- [ ] Persist cart (localStorage + server draft optional).
-- [ ] Checkout page: name, phone (BD 01XXXXXXXXX), address line, Pathao city/zone/area selects.
-- [ ] Create `orders` + `order_items` in `pending_payment` or `pending_cod`.
-- [ ] Stock reservation strategy (decrement on pay confirm / on COD place—document and implement one).
+- [x] Persist cart (localStorage + server draft optional).
+- [x] Checkout page: name, phone (BD 01XXXXXXXXX), address line, Pathao city/zone/area selects.
+- [x] Create `orders` + `order_items` in `pending_payment` or `pending_cod`.
+- [x] Stock reservation strategy (decrement on pay confirm / on COD place—document and implement one).
 
 #### 2.2 Pathao integration
-- [ ] Admin stores Pathao credentials + `store_id` (Integrations).
-- [ ] Server: auth token cache; city/zone/area list endpoints for checkout UI.
-- [ ] Server: price-plan quote (weight from sum of product weights or default).
-- [ ] COD fee from API percentage × amount_to_collect (fallback Admin %).
-- [ ] ROUNDUP final delivery charge; show breakdown: delivery, COD fee, campaign, total.
-- [ ] Create consignment API when status → `shipped`/`ready_to_ship` (define trigger).
+- [x] Admin stores Pathao credentials + `store_id` (Integrations).
+- [x] Server: auth token cache; city/zone/area list endpoints for checkout UI.
+- [x] Server: price-plan quote (weight from sum of product weights or default).
+- [x] COD fee from API percentage × amount_to_collect (fallback Admin %).
+- [x] ROUNDUP final delivery charge; show breakdown: delivery, COD fee, campaign, total.
+- [x] Create consignment API when status → `shipped`/`ready_to_ship` (define trigger).
 - [ ] Persist consignment id + webhook/poll handler for status.
 
 #### 2.3 Campaign delivery rules
@@ -285,14 +285,14 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [ ] Sandbox test matrix (Eng + Ops).
 
 #### 2.6 COD
-- [ ] Place order without gateway; status `awaiting_fulfillment`.
-- [ ] `amount_to_collect` = goods + delivery (post-campaign, ceiled) passed to Pathao.
-- [ ] Clear UX: COD fee shown before confirm.
+- [x] Place order without gateway; status `awaiting_fulfillment`.
+- [x] `amount_to_collect` = goods + delivery (post-campaign, ceiled) passed to Pathao.
+- [x] Clear UX: COD fee shown before confirm.
 
 #### 2.7 Order confirmation UX
-- [ ] Success / failure pages with order id.
+- [x] Success / failure pages with order id.
 - [ ] Optional email via free Resend later; v1 can be on-page + Admin notification only.
-- [ ] Stop advertising unpaid gateways until live credentials verified.
+- [x] Stop advertising unpaid gateways until live credentials verified.
 
 **Phase 2 done when:** Customer can complete bKash, Nagad, and COD orders; delivery charge matches Pathao+COD+campaign+ceil; Admin sees order + can create shipment.
 
@@ -438,8 +438,8 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 
 ## 13. Open decisions (resolve during build)
 
-1. Stock decrement: on payment success vs on order place (COD).  
+1. Stock decrement: **decided for COD v1 — decrement on order place** (gateway payments can switch to on-paid later).  
 2. Campaign applied before or after COD fee (recommend: Pathao + COD → campaign → ceil).  
-3. Shipment create: manual “Book Pathao” button vs auto on status change.  
-4. Secret storage: Vercel env only vs encrypted rows in `integration_settings`.  
+3. Shipment create: **decided — manual “Send to Pathao” on order detail** (same as Chilirig).  
+4. Secret storage: **Pathao — Admin Integrations UI → `integration_settings` (env fallback still works)**.  
 5. Customer accounts: none in v1 (guest checkout only) unless pulled forward.

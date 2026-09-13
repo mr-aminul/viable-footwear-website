@@ -67,6 +67,12 @@ export default async function ProductsPage({ searchParams }: Props) {
             <AdminButton href="/admin/catalog/products/new">
               New product
             </AdminButton>
+            <AdminButton
+              href="/admin/catalog/products/bulk"
+              variant="secondary"
+            >
+              Bulk sheet
+            </AdminButton>
             <AdminButton href="/admin/catalog/categories" variant="secondary">
               Categories
             </AdminButton>
@@ -128,9 +134,17 @@ export default async function ProductsPage({ searchParams }: Props) {
             title="No products yet"
             description="Create a category, then add your first product with sizes and photos."
             action={
-              <AdminButton href="/admin/catalog/products/new">
-                Create product
-              </AdminButton>
+              <div className="flex flex-wrap justify-center gap-2">
+                <AdminButton href="/admin/catalog/products/new">
+                  Create product
+                </AdminButton>
+                <AdminButton
+                  href="/admin/catalog/products/bulk"
+                  variant="secondary"
+                >
+                  Bulk sheet
+                </AdminButton>
+              </div>
             }
           />
         ) : (

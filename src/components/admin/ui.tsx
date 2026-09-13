@@ -1,21 +1,39 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { ArrowLeft } from 'lucide-react'
 
 export function AdminPageHeader({
   title,
   description,
   actions,
+  backHref,
+  backLabel = 'Back',
 }: {
   title: string
   description?: ReactNode
   actions?: ReactNode
+  /** Theme back control — left of the heading, icon only. */
+  backHref?: string
+  backLabel?: string
 }) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
-          {title}
-        </h1>
+      <div className="min-w-0">
+        <div className="flex items-center gap-3">
+          {backHref ? (
+            <Link
+              href={backHref}
+              aria-label={backLabel}
+              title={backLabel}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-navy text-white transition hover:bg-navy-deep"
+            >
+              <ArrowLeft size={18} strokeWidth={2} aria-hidden />
+            </Link>
+          ) : null}
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
+            {title}
+          </h1>
+        </div>
         {description ? (
           <div className="mt-2 max-w-2xl text-[14px] text-mute">{description}</div>
         ) : null}

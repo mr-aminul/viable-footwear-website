@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 import { CategoryForm } from '@/components/admin/CategoryForm'
-import { AdminPageHeader } from '@/components/admin/ui'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = {
@@ -22,24 +21,15 @@ export default async function EditCategoryPage({ params }: Props) {
   if (!category) notFound()
 
   return (
-    <>
-      <AdminPageHeader
-        title={category.name}
-        description={`Slug: ${category.slug}`}
-      />
-      <div className="mt-8">
-        <CategoryForm
-          initial={{
-            id: category.id,
-            name: category.name,
-            slug: category.slug,
-            sort_order: category.sort_order,
-            active: category.active,
-            seo_title: category.seo_title ?? '',
-            seo_description: category.seo_description ?? '',
-          }}
-        />
-      </div>
-    </>
+    <CategoryForm
+      initial={{
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+        active: category.active,
+        seo_title: category.seo_title ?? '',
+        seo_description: category.seo_description ?? '',
+      }}
+    />
   )
 }

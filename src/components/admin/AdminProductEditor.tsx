@@ -18,7 +18,7 @@ import {
   AdminProductGallery,
   type GalleryMedia,
 } from '@/components/admin/AdminProductGallery'
-import { normalizeColorHex } from '@/lib/catalog/gallery'
+import { resolveMediaUrl } from '@/lib/catalog/media-url'
 import {
   VariantsEditor,
   buildVariantsPayload,
@@ -119,17 +119,18 @@ export function AdminProductEditor({
   const categoryLabel =
     categories.find((c) => c.id === categoryId)?.name ?? product.categoryLabel
 
-  const galleryColorOptions = useMemo(() => {
-    const unique = new Map<string, string>()
-    for (const row of variantRows) {
-      const hex = normalizeColorHex(row.color_hex)
-      if (!hex) continue
-      if (!unique.has(hex)) {
-        unique.set(hex, row.color.trim() || hex)
-      }
-    }
-    return [...unique.entries()].map(([hex, label]) => ({ hex, label }))
-  }, [variantRows])
+  const variantImageOptions = useMemo(
+    () =>
+      [...media]
+        .filter((m) => m.media_type === 'image')
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((m) => ({
+          id: m.id,
+          url: resolveMediaUrl(m.storage_path, 'image'),
+          colorHex: m.color_hex ?? null,
+        })),
+    [media],
+  )
 
   const save = () => {
     setError(null)
@@ -253,7 +254,6 @@ export function AdminProductEditor({
             onBadgeChange={setBadge}
             isDraft={!active}
             media={media}
-            colorOptions={galleryColorOptions}
             placeholderSrc={product.image}
           />
 
@@ -470,7 +470,12 @@ export function AdminProductEditor({
           Size, color, SKU, and stock. Required before publishing.
         </p>
         <div className="mt-4">
-          <VariantsEditor rows={variantRows} onChange={setVariantRows} />
+          <VariantsEditor
+            productId={product.id}
+            rows={variantRows}
+            onChange={setVariantRows}
+            images={variantImageOptions}
+          />
         </div>
       </section>
 

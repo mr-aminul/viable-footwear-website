@@ -50,6 +50,14 @@ export async function uploadProductMedia(
   }
 
   const alt = String(formData.get('alt') ?? '').trim() || null
+  const colorHexRaw = String(formData.get('color_hex') ?? '').trim()
+  let colorHex: string | null = null
+  if (colorHexRaw) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(colorHexRaw)) {
+      return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
+    }
+    colorHex = colorHexRaw.toUpperCase()
+  }
   const isVideo = file.type.startsWith('video/')
   const mediaType = isVideo ? 'video' : 'image'
 
@@ -138,6 +146,7 @@ export async function uploadProductMedia(
       storage_path: storagePath,
       alt,
       sort_order: nextSort,
+      color_hex: mediaType === 'image' ? colorHex : null,
     })
     .select('id')
     .single()
@@ -267,7 +276,7 @@ export async function updateMediaAlt(
 }
 
 /**
- * Tag a gallery image with a colorway hex (null = shared across colors).
+ * Tag a gallery image with a colorway (null = shared across colors).
  */
 export async function updateMediaColor(
   mediaId: string,
@@ -312,5 +321,40 @@ export async function updateMediaColor(
     .maybeSingle()
 
   revalidateProduct(media.product_id, product?.slug)
+  return { ok: true }
+}
+
+/**
+ * Clear all gallery images tagged to a colorway (make them shared again).
+ */
+export async function clearColorwayMedia(
+  productId: string,
+  colorHex: string,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const trimmed = colorHex.trim().toUpperCase()
+  if (!/^#[0-9A-F]{6}$/.test(trimmed)) {
+    return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
+  }
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('id', productId)
+    .maybeSingle()
+  if (!product) return { ok: false, error: 'Product not found.' }
+
+  const { error } = await supabase
+    .from('product_media')
+    .update({ color_hex: null })
+    .eq('product_id', productId)
+    .eq('media_type', 'image')
+    .eq('color_hex', trimmed)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidateProduct(productId, product.slug)
   return { ok: true }
 }

@@ -87,6 +87,202 @@ async function countActiveVariants(
   return count ?? 0
 }
 
+/** One sheet row for bulk create (client-owned key for result mapping). */
+export type BulkProductRowInput = {
+  key: string
+  name: string
+  slug: string
+  description: string
+  price: number | null
+  compare_at: number | null
+  weight_kg: number | null
+  category_id: string | null
+  badge: string
+  featured: boolean
+  size_eu: number | null
+  color: string
+  color_hex: string
+  stock: number | null
+  sku: string
+}
+
+export type BulkProductRowResult = {
+  key: string
+  ok: boolean
+  id?: string
+  error?: string
+}
+
+/**
+ * Create many products (+ one starter variant each) from a sheet payload.
+ * Processes rows in order; empty name rows are skipped by the client.
+ */
+export async function bulkCreateProducts(
+  rows: BulkProductRowInput[],
+): Promise<ActionResult<{ created: number; results: BulkProductRowResult[] }>> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, error: 'Add at least one product row.' }
+  }
+  if (rows.length > 500) {
+    return { ok: false, error: 'Bulk create is limited to 500 rows at a time.' }
+  }
+
+  const results: BulkProductRowResult[] = []
+  const seenSlugs = new Set<string>()
+  const createdSlugs: string[] = []
+  let created = 0
+
+  for (const row of rows) {
+    const name = row.name?.trim() ?? ''
+    if (!name) {
+      results.push({ key: row.key, ok: false, error: 'Name is required.' })
+      continue
+    }
+
+    const slug = (row.slug?.trim() || slugify(name)).toLowerCase()
+    const price = row.price
+    const compareAt = row.compare_at
+    const weightKg = row.weight_kg ?? 0.5
+    const sizeEu = row.size_eu ?? 40
+    const stock = row.stock ?? 0
+    const badge = normalizeProductBadge(row.badge)
+    const colorHex = normalizeColorHex(row.color_hex) ?? '#1A3668'
+    const color = row.color?.trim() || null
+    const sku = row.sku?.trim() || null
+    const description = row.description?.trim() ?? ''
+    const categoryId = row.category_id?.trim() || null
+    const featured = Boolean(row.featured)
+
+    if (!isValidSlug(slug)) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Slug must be lowercase letters, numbers, and hyphens.',
+      })
+      continue
+    }
+    if (seenSlugs.has(slug)) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Duplicate slug in this sheet.',
+      })
+      continue
+    }
+    if (price == null || !Number.isFinite(price) || price < 0) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Price must be zero or greater.',
+      })
+      continue
+    }
+    if (compareAt != null && (!Number.isFinite(compareAt) || compareAt < 0)) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Compare-at must be zero or greater.',
+      })
+      continue
+    }
+    if (!Number.isFinite(weightKg) || weightKg <= 0) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Weight must be greater than zero.',
+      })
+      continue
+    }
+    if (!Number.isFinite(sizeEu) || sizeEu <= 0) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Size EU must be a valid number.',
+      })
+      continue
+    }
+    if (!Number.isFinite(stock) || stock < 0) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: 'Stock must be zero or greater.',
+      })
+      continue
+    }
+
+    seenSlugs.add(slug)
+
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .insert({
+        name,
+        slug,
+        description,
+        price,
+        compare_at: compareAt,
+        weight_kg: weightKg,
+        category_id: categoryId,
+        badge,
+        featured,
+        active: true,
+      })
+      .select('id')
+      .single()
+
+    if (productError || !product) {
+      seenSlugs.delete(slug)
+      results.push({
+        key: row.key,
+        ok: false,
+        error:
+          productError?.code === '23505'
+            ? 'That slug is already in use.'
+            : (productError?.message ?? 'Could not create product.'),
+      })
+      continue
+    }
+
+    const { error: variantError } = await supabase
+      .from('product_variants')
+      .insert({
+        product_id: product.id,
+        size_eu: sizeEu,
+        color,
+        color_hex: colorHex,
+        sku,
+        stock,
+        active: true,
+      })
+
+    if (variantError) {
+      await supabase.from('products').delete().eq('id', product.id)
+      seenSlugs.delete(slug)
+      results.push({
+        key: row.key,
+        ok: false,
+        error:
+          variantError.code === '23505'
+            ? 'Duplicate size/color combination.'
+            : variantError.message,
+      })
+      continue
+    }
+
+    created += 1
+    createdSlugs.push(slug)
+    results.push({ key: row.key, ok: true, id: product.id })
+  }
+
+  if (created > 0) {
+    revalidateProductSurfaces(...createdSlugs)
+  }
+
+  return { ok: true, data: { created, results } }
+}
+
 /**
  * Create product core fields, then edit page for variants/media.
  */

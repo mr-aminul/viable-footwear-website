@@ -1,5 +1,3 @@
-import type { ProductImage } from '@/lib/catalog/types'
-
 /**
  * Normalize a hex swatch for storage / matching (#RRGGBB uppercase).
  */
@@ -13,12 +11,17 @@ export function normalizeColorHex(
   return null
 }
 
+export type ColorTaggedImage = {
+  url: string
+  colorHex: string | null
+}
+
 /**
  * Gallery for a selected colorway: color-tagged images first, then shared
  * (untagged). Falls back to all images if nothing matches.
  */
 export function galleryForColor(
-  images: ProductImage[],
+  images: ColorTaggedImage[],
   colorKey: string | null | undefined,
 ): string[] {
   if (images.length === 0) return []

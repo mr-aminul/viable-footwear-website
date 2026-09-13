@@ -67,8 +67,9 @@ export function RelatedProductsPicker({
   return (
     <div className="space-y-6">
       <p className="text-[13px] text-mute">
-        Hover a card and check it to feature here. Selection order is the PDP
-        order · {selectedIds.length}/{RELATED_PRODUCTS_DISPLAY_CAP} selected
+        Hover a card and check it to feature here. Selection order matches the
+        product page · {selectedIds.length}/{RELATED_PRODUCTS_DISPLAY_CAP}{' '}
+        selected
       </p>
 
       {selectedIds.length > 0 ? (

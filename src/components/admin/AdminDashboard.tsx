@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import type { LucideIcon } from 'lucide-react'
+import { Package, Plug, ShoppingBag, Store, Users } from 'lucide-react'
 import { useStaffProfile } from '@/components/admin/AdminStaffContext'
 
 /**
@@ -11,6 +13,28 @@ export default function AdminDashboard() {
   const profile = useStaffProfile()
   const searchParams = useSearchParams()
   const showAdminOnlyError = searchParams.get('error') === 'admin_only'
+
+  const links: QuickLink[] = [
+    { href: '/admin/catalog', label: 'Products', icon: Package },
+    { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
+    { href: '/', label: 'View storefront', icon: Store },
+    ...(profile.role === 'admin'
+      ? [
+          {
+            href: '/admin/integrations',
+            label: 'Integrations',
+            hint: 'Admin',
+            icon: Plug,
+          },
+          {
+            href: '/admin/users',
+            label: 'Staff users',
+            hint: 'Admin',
+            icon: Users,
+          },
+        ]
+      : []),
+  ]
 
   return (
     <>
@@ -24,49 +48,52 @@ export default function AdminDashboard() {
         Dashboard
       </h1>
       <p className="mt-2 max-w-xl text-[14px] text-mute">
-        Products CMS is live. Checkout, Pathao, and analytics land in later
-        phases — see <code className="text-ink">docs/REQUIREMENTS.md</code>.
+        Welcome back
+        {profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}. Manage
+        your catalog and keep the storefront up to date.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <KpiCard title="Sales" value="—" hint="Phase 3" />
-        <KpiCard title="Orders today" value="—" hint="Phase 2–3" />
-        <KpiCard title="To ship" value="—" hint="Phase 3 logistics" />
+        <KpiCard title="Sales" value="—" hint="Coming soon" />
+        <KpiCard title="Orders today" value="—" hint="Coming soon" />
+        <KpiCard title="To ship" value="—" hint="Coming soon" />
       </div>
 
-      <div className="mt-10 rounded-2xl border border-cloud bg-white p-5">
+      <div className="mt-10">
         <h2 className="text-[15px] font-semibold text-ink">Quick links</h2>
-        <ul className="mt-3 space-y-2 text-[14px] text-mute">
-          <li>
-            <Link href="/admin/catalog" className="text-navy hover:underline">
-              Products
-            </Link>
-          </li>
-          <li>
-            <Link href="/" className="text-navy hover:underline">
-              View storefront
-            </Link>
-          </li>
-          {profile.role === 'admin' ? (
-            <>
-              <li>
-                <Link
-                  href="/admin/integrations"
-                  className="text-navy hover:underline"
-                >
-                  Integrations (Admin)
-                </Link>
-              </li>
-              <li>
-                <Link href="/admin/users" className="text-navy hover:underline">
-                  Staff users (Admin)
-                </Link>
-              </li>
-            </>
-          ) : null}
-        </ul>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {links.map((link) => (
+            <QuickLinkCard key={link.href} {...link} />
+          ))}
+        </div>
       </div>
     </>
+  )
+}
+
+type QuickLink = {
+  href: string
+  label: string
+  hint?: string
+  icon: LucideIcon
+}
+
+function QuickLinkCard({ href, label, hint, icon: Icon }: QuickLink) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-2xl border border-cloud bg-white p-4 shadow-card transition hover:border-navy/30 hover:bg-mist/40"
+    >
+      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-navy/5 text-navy transition group-hover:bg-navy/10">
+        <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold text-ink">{label}</span>
+        {hint ? (
+          <span className="mt-0.5 block text-[12px] text-mute">{hint}</span>
+        ) : null}
+      </span>
+    </Link>
   )
 }
 
