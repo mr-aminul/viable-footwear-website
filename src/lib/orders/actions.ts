@@ -3,38 +3,61 @@
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
-import { createPathaoOrder, normalizePathaoPhone } from '@/lib/pathao'
+import { resolvePathaoConfig } from '@/lib/integrations/pathao-settings'
+import {
+  createPathaoOrder,
+  getPathaoOrderInfo,
+  normalizePathaoPhone,
+} from '@/lib/pathao'
+import type { OrderStatus } from '@/lib/supabase/database.types'
 import { createClient } from '@/lib/supabase/server'
+
+/** Map Pathao consignment status → our order_status. */
+function mapPathaoStatusToOrderStatus(
+  info: { order_status?: string; order_status_slug?: string },
+): OrderStatus | null {
+  const slug = (info.order_status_slug || '').toLowerCase()
+  const label = (info.order_status || '').toLowerCase()
+  const text = `${slug} ${label}`
+
+  if (text.includes('deliver')) return 'delivered'
+  if (text.includes('return')) return 'returned'
+  if (text.includes('cancel')) return 'cancelled'
+  if (
+    text.includes('transit') ||
+    text.includes('picked') ||
+    text.includes('on_the_way') ||
+    text.includes('on the way') ||
+    text.includes('assigned')
+  ) {
+    return 'shipped'
+  }
+  if (text.includes('pending') || text.includes('pickup')) return 'shipped'
+  return null
+}
 
 export async function dispatchOrderToPathao(
   orderId: string,
 ): Promise<ActionResult<{ consignmentId: string }>> {
   await requireRole(['admin', 'manager'])
 
-  const storeId = process.env.PATHAO_STORE_ID
-  if (
-    !storeId ||
-    !process.env.PATHAO_CLIENT_ID ||
-    !process.env.PATHAO_CLIENT_SECRET ||
-    !process.env.PATHAO_USERNAME ||
-    !process.env.PATHAO_PASSWORD
-  ) {
-    return {
-      ok: false,
-      error: 'Pathao is not fully configured in environment variables.',
+  let parsedStoreId: number
+  try {
+    const config = await resolvePathaoConfig()
+    parsedStoreId = Number.parseInt(config.storeId, 10)
+    if (!Number.isFinite(parsedStoreId) || parsedStoreId <= 0) {
+      return { ok: false, error: 'Pathao store ID is invalid.' }
     }
-  }
-
-  const parsedStoreId = Number.parseInt(storeId, 10)
-  if (!Number.isFinite(parsedStoreId) || parsedStoreId <= 0) {
-    return { ok: false, error: 'PATHAO_STORE_ID is invalid.' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
   }
 
   const supabase = await createClient()
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, pathao_consignment_id',
+      'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id',
     )
     .eq('id', orderId)
     .single()
@@ -135,7 +158,10 @@ export async function dispatchOrderToPathao(
       item_type: 2,
       item_quantity: 1,
       item_weight: String(totalWeight),
-      amount_to_collect: Math.round(Number(order.total) || 0),
+      amount_to_collect:
+        order.payment_method === 'cod'
+          ? Math.round(Number(order.total) || 0)
+          : 0,
       item_description:
         itemsSummary.length > 0 && itemsSummary.length <= 220
           ? itemsSummary
@@ -175,5 +201,64 @@ export async function dispatchOrderToPathao(
     revalidatePath('/admin/orders')
     revalidatePath(`/admin/orders/${order.id}`)
     return { ok: false, error: pathaoError }
+  }
+}
+
+/**
+ * Poll Pathao for the latest consignment status and update the order row.
+ */
+export async function syncPathaoOrderStatus(
+  orderId: string,
+): Promise<
+  ActionResult<{ status: OrderStatus; pathaoLabel: string }>
+> {
+  await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('id, pathao_consignment_id, status')
+    .eq('id', orderId)
+    .single()
+
+  if (error || !order) return { ok: false, error: 'Order not found.' }
+  if (!order.pathao_consignment_id) {
+    return { ok: false, error: 'Order has no Pathao consignment yet.' }
+  }
+
+  try {
+    const info = await getPathaoOrderInfo(order.pathao_consignment_id)
+    const mapped = mapPathaoStatusToOrderStatus(info)
+    const pathaoLabel =
+      info.order_status || info.order_status_slug || 'Unknown'
+
+    const nextStatus = mapped ?? order.status
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({
+        status: nextStatus,
+        pathao_error: null,
+        notes: `Pathao: ${pathaoLabel}`,
+      })
+      .eq('id', order.id)
+
+    if (updateError) {
+      return { ok: false, error: 'Could not save Pathao status.' }
+    }
+
+    revalidatePath('/admin/orders')
+    revalidatePath(`/admin/orders/${order.id}`)
+    return {
+      ok: true,
+      data: { status: nextStatus, pathaoLabel },
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await supabase
+      .from('orders')
+      .update({ pathao_error: message })
+      .eq('id', orderId)
+    revalidatePath(`/admin/orders/${orderId}`)
+    return { ok: false, error: message }
   }
 }

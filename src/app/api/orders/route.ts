@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
+import { listActiveCampaignsForCheckout } from '@/lib/campaigns/queries'
+import { pickCampaignDelivery } from '@/lib/campaigns/rules'
+import { isBkashConfigured } from '@/lib/integrations/bkash-settings'
 import {
   computeCodCheckoutTotals,
   isValidBdMobile,
   PATHAO_ADDRESS_MAX_LENGTH,
 } from '@/lib/orders/cod-total'
 import { generateOrderNumber } from '@/lib/orders/order-number'
+import {
+  computePrepaidCheckoutTotals,
+  createBkashPayment,
+} from '@/lib/payments/bkash'
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
 import { createServiceClient } from '@/lib/supabase/admin'
+import type { Json } from '@/lib/supabase/database.types'
 
 type LineInput = {
   productId?: string
@@ -33,8 +41,12 @@ export async function POST(request: NextRequest) {
       city_name?: string
       zone_name?: string
       area_name?: string
+      payment_method?: 'cod' | 'bkash'
       items?: LineInput[]
     }
+
+    const paymentMethod =
+      body.payment_method === 'bkash' ? 'bkash' : ('cod' as const)
 
     const fullName = String(body.fullName ?? '').trim()
     const email = String(body.email ?? '').trim()
@@ -271,18 +283,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { shipping, total } = computeCodCheckoutTotals(
+    const campaigns = await listActiveCampaignsForCheckout()
+    const match = pickCampaignDelivery(campaigns, {
       subtotal,
       pathaoDeliveryFee,
-    )
+      cityId,
+    })
+    const deliveryAfterCampaign =
+      match?.adjustedDeliveryFee ?? pathaoDeliveryFee
+
+    if (paymentMethod === 'bkash') {
+      const ready = await isBkashConfigured()
+      if (!ready) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'bKash is not available yet. Please pay with Cash on Delivery.',
+          },
+          { status: 400, headers: NO_STORE_HEADERS },
+        )
+      }
+    }
+
+    const { shipping, total } =
+      paymentMethod === 'bkash'
+        ? computePrepaidCheckoutTotals(subtotal, deliveryAfterCampaign)
+        : computeCodCheckoutTotals(subtotal, deliveryAfterCampaign)
+
     const orderNumber = generateOrderNumber()
 
     const { data: insertedOrder, error: orderInsertError } = await supabase
       .from('orders')
       .insert({
         order_number: orderNumber,
-        status: 'awaiting_fulfillment',
-        payment_method: 'cod',
+        status:
+          paymentMethod === 'bkash' ? 'pending_payment' : 'awaiting_fulfillment',
+        payment_method: paymentMethod,
         email: email || null,
         full_name: fullName,
         phone,
@@ -298,6 +334,7 @@ export async function POST(request: NextRequest) {
         shipping,
         total,
         pathao_delivery_fee: pathaoDeliveryFee,
+        campaign_id: match?.campaignId ?? null,
       })
       .select('id, order_number')
       .single()
@@ -326,31 +363,80 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Decrement stock after order rows exist (COD place).
-    for (const line of lines) {
-      const variant = variantMap.get(line.variantId)!
-      const nextStock = variant.stock - line.quantity
-      const { error: stockError } = await supabase
-        .from('product_variants')
-        .update({ stock: nextStock })
-        .eq('id', line.variantId)
-        .gte('stock', line.quantity)
+    // COD: decrement on place. bKash: decrement on successful payment.
+    if (paymentMethod === 'cod') {
+      for (const line of lines) {
+        const variant = variantMap.get(line.variantId)!
+        const nextStock = variant.stock - line.quantity
+        const { error: stockError } = await supabase
+          .from('product_variants')
+          .update({ stock: nextStock })
+          .eq('id', line.variantId)
+          .gte('stock', line.quantity)
 
-      if (stockError) {
-        console.error('[orders] stock decrement', stockError)
+        if (stockError) {
+          console.error('[orders] stock decrement', stockError)
+        }
       }
+
+      return NextResponse.json(
+        {
+          success: true,
+          orderId: insertedOrder.order_number,
+          paymentMethod,
+          total,
+          shipping,
+          pathaoDeliveryFee,
+        },
+        { headers: NO_STORE_HEADERS },
+      )
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        orderId: insertedOrder.order_number,
-        total,
-        shipping,
-        pathaoDeliveryFee,
-      },
-      { headers: NO_STORE_HEADERS },
-    )
+    try {
+      const site =
+        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        'http://localhost:3000'
+      const created = await createBkashPayment({
+        amount: total,
+        merchantInvoiceNumber: insertedOrder.order_number,
+        callbackURL: `${site}/api/payments/bkash/callback`,
+        payerReference: phone,
+      })
+
+      await supabase.from('payment_attempts').insert({
+        order_id: insertedOrder.id,
+        gateway: 'bkash',
+        external_id: created.paymentID ?? null,
+        status: 'created',
+        amount: total,
+        raw_json: created as unknown as Json,
+      })
+
+      return NextResponse.json(
+        {
+          success: true,
+          orderId: insertedOrder.order_number,
+          paymentMethod,
+          total,
+          shipping,
+          pathaoDeliveryFee,
+          bkashURL: created.bkashURL,
+          paymentID: created.paymentID,
+        },
+        { headers: NO_STORE_HEADERS },
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('[orders] bkash create', message)
+      await supabase.from('orders').delete().eq('id', insertedOrder.id)
+      return NextResponse.json(
+        {
+          success: false,
+          error: message || 'Could not start bKash payment. Try COD instead.',
+        },
+        { status: 502, headers: NO_STORE_HEADERS },
+      )
+    }
   } catch (error) {
     console.error('[orders]', error)
     return NextResponse.json(

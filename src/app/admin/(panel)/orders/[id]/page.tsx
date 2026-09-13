@@ -4,6 +4,7 @@ import { formatPrice } from '@/lib/brand'
 import { getOrderById } from '@/lib/orders/queries'
 import { AdminPageHeader } from '@/components/admin/ui'
 import { DispatchPathaoButton } from '@/components/admin/DispatchPathaoButton'
+import { SyncPathaoStatusButton } from '@/components/admin/SyncPathaoStatusButton'
 
 export const metadata = {
   title: 'Order detail',
@@ -38,9 +39,14 @@ export default async function OrderDetailPage({
         backHref="/admin/orders"
         backLabel="Back to orders"
         actions={
-          !alreadyDispatched && order.status !== 'cancelled' ? (
-            <DispatchPathaoButton orderId={order.id} />
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {alreadyDispatched ? (
+              <SyncPathaoStatusButton orderId={order.id} />
+            ) : null}
+            {!alreadyDispatched && order.status !== 'cancelled' ? (
+              <DispatchPathaoButton orderId={order.id} />
+            ) : null}
+          </div>
         }
       />
 
@@ -122,6 +128,9 @@ export default async function OrderDetailPage({
               <p className="mt-2 rounded-xl bg-spark/5 px-3 py-2 text-[12px] text-spark">
                 {order.pathao_error}
               </p>
+            ) : null}
+            {order.notes ? (
+              <p className="mt-2 text-[12px] text-mute">{order.notes}</p>
             ) : null}
           </dl>
         </section>

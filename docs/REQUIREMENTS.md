@@ -1,8 +1,8 @@
 # Viable Footwear — Requirements & Task Breakdown
 
-**Status:** Phase 2 in progress — COD checkout + Pathao quote/dispatch (Chilirig method); campaigns/bKash/Nagad pending  
+**Status:** Phase 2 in progress — COD + Pathao + campaigns + bKash wired; Nagad pending  
 **Last updated:** 2026-09-13  
-**Current codebase:** Next.js App Router storefront (DB catalog) + Admin Catalog CMS + COD checkout/Pathao + production on Vercel (`viable.inventivelab.bd`).
+**Current codebase:** Next.js App Router storefront (DB catalog) + Admin CMS + COD/bKash checkout/Pathao + production on Vercel (`viable.inventivelab.bd`).
 
 ---
 
@@ -263,20 +263,20 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [x] COD fee from API percentage × amount_to_collect (fallback Admin %).
 - [x] ROUNDUP final delivery charge; show breakdown: delivery, COD fee, campaign, total.
 - [x] Create consignment API when status → `shipped`/`ready_to_ship` (define trigger).
-- [ ] Persist consignment id + webhook/poll handler for status.
+- [x] Persist consignment id + webhook/poll handler for status.
 
 #### 2.3 Campaign delivery rules
-- [ ] Campaign model: name, priority, date range, active, rule type.
-- [ ] Rule types (v1): free_shipping_min_subtotal; delivery_percent_off; delivery_fixed; optional city allow/deny list.
-- [ ] Evaluate after Pathao base+COD; before ceil (or after—**decide: apply then ceil**).
-- [ ] Manager/Admin CRUD UI; preview quote in admin optional.
-- [ ] Store `campaign_id` + snapshot amounts on order.
+- [x] Campaign model: name, priority, date range, active, rule type.
+- [x] Rule types (v1): free_shipping_min_subtotal; delivery_percent_off; delivery_fixed; optional city allow/deny list.
+- [x] Evaluate after Pathao base+COD; before ceil (or after—**decide: apply then ceil**).
+- [x] Manager/Admin CRUD UI; preview quote in admin optional.
+- [x] Store `campaign_id` + snapshot amounts on order.
 
 #### 2.4 bKash
-- [ ] Admin: sandbox/prod credentials + callback URLs.
-- [ ] Create payment (server) → redirect customer → execute/query on callback.
-- [ ] Idempotent order mark `paid`; store trx id on `payment_attempts`.
-- [ ] Failure/cancel paths return customer to checkout with message.
+- [x] Admin: sandbox/prod credentials + callback URLs.
+- [x] Create payment (server) → redirect customer → execute/query on callback.
+- [x] Idempotent order mark `paid`; store trx id on `payment_attempts`.
+- [x] Failure/cancel paths return customer to checkout with message.
 - [ ] Ops: complete merchant onboarding (Ops); sandbox test matrix (Eng).
 
 #### 2.5 Nagad
@@ -293,6 +293,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [x] Success / failure pages with order id.
 - [ ] Optional email via free Resend later; v1 can be on-page + Admin notification only.
 - [x] Stop advertising unpaid gateways until live credentials verified.
+- [x] Guest “Your Orders” (browser localStorage + Pathao tracking refresh via order+phone lookup).
 
 **Phase 2 done when:** Customer can complete bKash, Nagad, and COD orders; delivery charge matches Pathao+COD+campaign+ceil; Admin sees order + can create shipment.
 
@@ -439,7 +440,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 ## 13. Open decisions (resolve during build)
 
 1. Stock decrement: **decided for COD v1 — decrement on order place** (gateway payments can switch to on-paid later).  
-2. Campaign applied before or after COD fee (recommend: Pathao + COD → campaign → ceil).  
+2. Campaign applied before or after COD fee: **decided — Pathao delivery → campaign adjust → COD inflate → ceil**.  
 3. Shipment create: **decided — manual “Send to Pathao” on order detail** (same as Chilirig).  
 4. Secret storage: **Pathao — Admin Integrations UI → `integration_settings` (env fallback still works)**.  
 5. Customer accounts: none in v1 (guest checkout only) unless pulled forward.

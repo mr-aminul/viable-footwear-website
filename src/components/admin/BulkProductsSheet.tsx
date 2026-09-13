@@ -20,8 +20,10 @@ import {
   DEFAULT_PRODUCT_BADGE,
   PRODUCT_BADGE_OPTIONS,
 } from '@/lib/catalog/badge'
+import type { ProductBadge } from '@/lib/catalog/constants'
 import { slugify } from '@/lib/catalog/slug'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { BadgePicker } from '@/components/admin/BadgePicker'
 import {
   AdminButton,
   FormError,
@@ -40,11 +42,9 @@ type SheetColumn =
   | 'badge'
   | 'featured'
   | 'description'
-  | 'size_eu'
-  | 'color'
-  | 'color_hex'
+  | 'sizes'
+  | 'colors'
   | 'stock'
-  | 'sku'
 
 type SheetRow = {
   key: string
@@ -58,47 +58,98 @@ type SheetRow = {
   badge: string
   featured: boolean
   description: string
-  size_eu: string
-  color: string
-  color_hex: string
+  sizes: string
+  colors: string
   stock: string
-  sku: string
   status: 'idle' | 'ok' | 'error'
   message?: string
   createdId?: string
 }
 
+/**
+ * Fixed track sizes (no fr). Spreadsheet grids must not let inputs inflate
+ * columns past the header — use minmax(0, …) so cells can shrink.
+ */
 const COLUMNS: Array<{
   key: SheetColumn
   label: string
   width: string
   kind: 'text' | 'number' | 'select' | 'checkbox'
+  placeholder?: string
 }> = [
-  { key: 'name', label: 'Name', width: 'minmax(11rem, 1.4fr)', kind: 'text' },
-  { key: 'slug', label: 'Slug', width: 'minmax(9rem, 1fr)', kind: 'text' },
+  {
+    key: 'name',
+    label: 'Name',
+    width: 'minmax(0, 12rem)',
+    kind: 'text',
+    placeholder: 'Product name',
+  },
+  {
+    key: 'slug',
+    label: 'Slug',
+    width: 'minmax(0, 10rem)',
+    kind: 'text',
+    placeholder: 'auto',
+  },
   {
     key: 'category_id',
     label: 'Category',
-    width: 'minmax(8rem, 0.9fr)',
+    width: 'minmax(0, 9rem)',
     kind: 'select',
   },
-  { key: 'price', label: 'Price ৳', width: '6.5rem', kind: 'number' },
-  { key: 'compare_at', label: 'Compare ৳', width: '6.5rem', kind: 'number' },
-  { key: 'weight_kg', label: 'Weight kg', width: '6rem', kind: 'number' },
-  { key: 'badge', label: 'Badge', width: '7.5rem', kind: 'select' },
-  { key: 'featured', label: 'Featured', width: '5rem', kind: 'checkbox' },
+  { key: 'price', label: 'Price ৳', width: 'minmax(0, 6.5rem)', kind: 'number' },
+  {
+    key: 'compare_at',
+    label: 'Compare ৳',
+    width: 'minmax(0, 6.5rem)',
+    kind: 'number',
+  },
+  {
+    key: 'weight_kg',
+    label: 'Weight kg',
+    width: 'minmax(0, 6rem)',
+    kind: 'number',
+    placeholder: '0.5',
+  },
+  { key: 'badge', label: 'Badge', width: 'minmax(0, 8.5rem)', kind: 'select' },
+  {
+    key: 'featured',
+    label: 'Featured',
+    width: 'minmax(0, 5rem)',
+    kind: 'checkbox',
+  },
   {
     key: 'description',
     label: 'Description',
-    width: 'minmax(12rem, 1.6fr)',
+    width: 'minmax(0, 14rem)',
     kind: 'text',
   },
-  { key: 'size_eu', label: 'Size EU', width: '5.5rem', kind: 'number' },
-  { key: 'color', label: 'Color', width: '7rem', kind: 'text' },
-  { key: 'color_hex', label: 'Hex', width: '6.5rem', kind: 'text' },
-  { key: 'stock', label: 'Stock', width: '5rem', kind: 'number' },
-  { key: 'sku', label: 'SKU', width: '7rem', kind: 'text' },
+  {
+    key: 'sizes',
+    label: 'Sizes',
+    width: 'minmax(0, 11rem)',
+    kind: 'text',
+    placeholder: '40, 41, 42',
+  },
+  {
+    key: 'colors',
+    label: 'Colors',
+    width: 'minmax(0, 12rem)',
+    kind: 'text',
+    placeholder: 'Black, White',
+  },
+  {
+    key: 'stock',
+    label: 'Stock each',
+    width: 'minmax(0, 6rem)',
+    kind: 'number',
+    placeholder: '0',
+  },
 ]
+
+const cellShellClassName = 'min-w-0 overflow-hidden border-l border-cloud/70'
+const cellControlClassName =
+  'h-full w-full min-w-0 bg-transparent px-2 py-2.5 text-[13px] text-ink outline-none focus:bg-navy/[0.04]'
 
 const COLUMN_KEYS = COLUMNS.map((column) => column.key)
 
@@ -113,15 +164,13 @@ function createEmptyRow(): SheetRow {
     category_id: '',
     price: '',
     compare_at: '',
-    weight_kg: '0.5',
+    weight_kg: '',
     badge: DEFAULT_PRODUCT_BADGE,
     featured: false,
     description: '',
-    size_eu: '40',
-    color: '',
-    color_hex: '#1A3668',
-    stock: '0',
-    sku: '',
+    sizes: '',
+    colors: '',
+    stock: '',
     status: 'idle',
   }
 }
@@ -148,11 +197,28 @@ function isRowFilled(row: SheetRow): boolean {
       row.slug.trim() ||
       row.price.trim() ||
       row.compare_at.trim() ||
+      row.weight_kg.trim() ||
       row.description.trim() ||
-      row.color.trim() ||
-      row.sku.trim() ||
-      (row.stock.trim() && row.stock.trim() !== '0'),
+      row.category_id.trim() ||
+      row.featured ||
+      row.sizes.trim() ||
+      row.colors.trim() ||
+      row.stock.trim(),
   )
+}
+
+function countListItems(raw: string): number {
+  return raw
+    .split(/[,|/;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean).length
+}
+
+/** Live preview of how many variants this row will create. */
+function previewVariantCount(row: SheetRow): number {
+  const sizes = Math.max(1, countListItems(row.sizes))
+  const colors = Math.max(1, countListItems(row.colors))
+  return sizes * colors
 }
 
 function resolveCategoryId(
@@ -230,11 +296,9 @@ function applyCellValue(
     case 'compare_at':
     case 'weight_kg':
     case 'description':
-    case 'size_eu':
-    case 'color':
-    case 'color_hex':
+    case 'sizes':
+    case 'colors':
     case 'stock':
-    case 'sku':
       return {
         ...row,
         [column]: raw,
@@ -258,11 +322,9 @@ function toBulkInput(row: SheetRow): BulkProductRowInput {
     category_id: row.category_id || null,
     badge: row.badge,
     featured: row.featured,
-    size_eu: parseOptionalNumber(row.size_eu),
-    color: row.color,
-    color_hex: row.color_hex,
+    sizes: row.sizes,
+    colors: row.colors,
     stock: parseOptionalNumber(row.stock),
-    sku: row.sku,
   }
 }
 
@@ -289,14 +351,14 @@ export function BulkProductsSheet({
   const [pending, startTransition] = useTransition()
   const cellRefs = useRef(new Map<string, HTMLElement>())
 
-  const filledCount = useMemo(
-    () => rows.filter((row) => isRowFilled(row)).length,
+  const productCount = useMemo(
+    () => rows.filter((row) => row.name.trim()).length,
     [rows],
   )
 
   const gridTemplate = useMemo(
     () =>
-      `2.5rem ${COLUMNS.map((column) => column.width).join(' ')} 2.5rem minmax(8rem, 0.8fr)`,
+      `2.5rem ${COLUMNS.map((column) => column.width).join(' ')} 2.5rem minmax(0, 10rem)`,
     [],
   )
 
@@ -450,9 +512,9 @@ export function BulkProductsSheet({
     setError(null)
     setSuccess(null)
 
-    const payload = rows.filter(isRowFilled).map(toBulkInput)
+    const payload = rows.filter((row) => row.name.trim()).map(toBulkInput)
     if (payload.length === 0) {
-      setError('Fill at least one product row before creating.')
+      setError('Add a product name on at least one row.')
       return
     }
 
@@ -469,14 +531,18 @@ export function BulkProductsSheet({
 
       setRows((current) => {
         const next = current.map((row) => {
-          if (!isRowFilled(row)) return row
+          if (!row.name.trim()) return row
           const outcome = byKey.get(row.key)
           if (!outcome) return row
           if (outcome.ok) {
+            const variants = outcome.variantCount ?? 0
             return {
               ...row,
               status: 'ok' as const,
-              message: 'Created',
+              message:
+                variants > 1
+                  ? `Created · ${variants} variants`
+                  : 'Created',
               createdId: outcome.id,
             }
           }
@@ -490,22 +556,33 @@ export function BulkProductsSheet({
 
         const remaining = next.filter((row) => row.status !== 'ok')
         const blankPad =
-          remaining.filter(isRowFilled).length === 0
+          remaining.filter((row) => row.name.trim()).length === 0
             ? createBlankRows(INITIAL_BLANK_ROWS)
             : createBlankRows(2)
-        return [...remaining.filter(isRowFilled), ...blankPad]
+        return [
+          ...remaining.filter((row) => isRowFilled(row)),
+          ...blankPad,
+        ]
       })
 
       const created = result.data!.created
       const failed = result.data!.results.filter((item) => !item.ok).length
+      const variantTotal = result.data!.results
+        .filter((item) => item.ok)
+        .reduce((sum, item) => sum + (item.variantCount ?? 0), 0)
+
       if (created > 0 && failed === 0) {
-        setSuccess(`Created ${created} product${created === 1 ? '' : 's'}.`)
+        setSuccess(
+          `Created ${created} product${created === 1 ? '' : 's'} (${variantTotal} variant${variantTotal === 1 ? '' : 's'}).`,
+        )
       } else if (created > 0) {
         setSuccess(
           `Created ${created} product${created === 1 ? '' : 's'}. ${failed} row${failed === 1 ? '' : 's'} need fixes.`,
         )
       } else {
-        setError('No products were created. Fix the highlighted rows and try again.')
+        setError(
+          'No products were created. Fix the highlighted rows and try again.',
+        )
       }
     })
   }
@@ -517,229 +594,246 @@ export function BulkProductsSheet({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cloud bg-white px-4 py-3 text-[13px]">
         <p className="text-mute">
-          Type directly in the sheet, or paste from Google Sheets / Excel.
-          Tab / Enter moves like a spreadsheet. Each row creates one product
-          with a starter size/color variant — add gallery photos afterward.
+          <span className="font-medium text-ink">One row = one product.</span>{' '}
+          Type sizes like <span className="font-medium text-ink">40, 41, 42</span>{' '}
+          and colors like{' '}
+          <span className="font-medium text-ink">Black, White</span> — we create
+          every combination for you. Same stock applies to each variant; tweak
+          individually later on the product page.
         </p>
-        <p className="font-semibold text-ink">
-          {filledCount} row{filledCount === 1 ? '' : 's'} ready
+        <p className="shrink-0 font-semibold text-ink">
+          {productCount} product{productCount === 1 ? '' : 's'} ready
         </p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-cloud bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
         <div className="overflow-x-auto">
-          <div className="min-w-[1180px]">
+          <div className="w-max min-w-full">
             <div
               className="sticky top-0 z-10 grid items-center gap-0 border-b border-cloud bg-mist/80 text-[11px] font-semibold uppercase tracking-wider text-mute backdrop-blur"
               style={{ gridTemplateColumns: gridTemplate }}
             >
               <div className="px-2 py-3 text-center">#</div>
               {COLUMNS.map((column) => (
-                <div key={column.key} className="px-2 py-3">
+                <div
+                  key={column.key}
+                  className={`${cellShellClassName} truncate px-2 py-3`}
+                >
                   {column.label}
                 </div>
               ))}
-              <div className="px-2 py-3" />
-              <div className="px-2 py-3">Status</div>
+              <div className={cellShellClassName} />
+              <div className={`${cellShellClassName} truncate px-2 py-3`}>
+                Status
+              </div>
             </div>
 
             <div>
-              {rows.map((row, rowIndex) => (
-                <div
-                  key={row.key}
-                  className={[
-                    'grid items-stretch gap-0 border-b border-cloud last:border-0',
-                    row.status === 'error' ? 'bg-spark/[0.04]' : '',
-                    row.status === 'ok' ? 'bg-navy/[0.03]' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  style={{ gridTemplateColumns: gridTemplate }}
-                >
-                  <div className="flex items-center justify-center px-2 text-[12px] text-mute">
-                    {rowIndex + 1}
-                  </div>
+              {rows.map((row, rowIndex) => {
+                const hasName = Boolean(row.name.trim())
+                const variantPreview = hasName ? previewVariantCount(row) : 0
 
-                  {COLUMNS.map((column, colIndex) => {
-                    const common = {
-                      onFocus: () => setFocus({ row: rowIndex, col: colIndex }),
-                      onKeyDown: (
-                        event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
-                      ) => onCellKeyDown(event, rowIndex, colIndex),
-                      onPaste: (event: ClipboardEvent<HTMLElement>) =>
-                        handlePaste(event, rowIndex, colIndex),
-                    }
+                return (
+                  <div
+                    key={row.key}
+                    className={[
+                      'grid items-stretch gap-0 border-b border-cloud last:border-0',
+                      row.status === 'error' ? 'bg-spark/[0.04]' : '',
+                      row.status === 'ok' ? 'bg-navy/[0.03]' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    style={{ gridTemplateColumns: gridTemplate }}
+                  >
+                    <div className="flex items-center justify-center px-2 text-[12px] text-mute">
+                      {rowIndex + 1}
+                    </div>
 
-                    if (column.kind === 'checkbox') {
+                    {COLUMNS.map((column, colIndex) => {
+                      const common = {
+                        onFocus: () =>
+                          setFocus({ row: rowIndex, col: colIndex }),
+                        onKeyDown: (event: KeyboardEvent<HTMLElement>) =>
+                          onCellKeyDown(event, rowIndex, colIndex),
+                        onPaste: (event: ClipboardEvent<HTMLElement>) =>
+                          handlePaste(event, rowIndex, colIndex),
+                      }
+
+                      if (column.kind === 'checkbox') {
+                        return (
+                          <div
+                            key={column.key}
+                            className={`flex items-center justify-center px-2 ${cellShellClassName}`}
+                          >
+                            <input
+                              ref={(node) =>
+                                setCellRef(rowIndex, colIndex, node)
+                              }
+                              type="checkbox"
+                              checked={row.featured}
+                              aria-label={`Featured row ${rowIndex + 1}`}
+                              className="h-4 w-4"
+                              onChange={(event) =>
+                                updateRow(rowIndex, (current) => ({
+                                  ...current,
+                                  featured: event.target.checked,
+                                  status: 'idle',
+                                  message: undefined,
+                                }))
+                              }
+                              {...common}
+                            />
+                          </div>
+                        )
+                      }
+
+                      if (column.key === 'category_id') {
+                        return (
+                          <div key={column.key} className={cellShellClassName}>
+                            <select
+                              ref={(node) =>
+                                setCellRef(rowIndex, colIndex, node)
+                              }
+                              value={row.category_id}
+                              aria-label={`Category row ${rowIndex + 1}`}
+                              className={cellControlClassName}
+                              onChange={(event) =>
+                                updateRow(rowIndex, (current) =>
+                                  applyCellValue(
+                                    current,
+                                    'category_id',
+                                    event.target.value,
+                                    categories,
+                                  ),
+                                )
+                              }
+                              {...common}
+                            >
+                              <option value="">—</option>
+                              {categories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      }
+
+                      if (column.key === 'badge') {
+                        return (
+                          <div
+                            key={column.key}
+                            className={`flex items-center px-2 ${cellShellClassName}`}
+                            onPaste={common.onPaste}
+                          >
+                            <BadgePicker
+                              compact
+                              portal
+                              value={row.badge}
+                              aria-label={`Badge row ${rowIndex + 1}`}
+                              buttonRef={(node) =>
+                                setCellRef(rowIndex, colIndex, node)
+                              }
+                              onFocus={common.onFocus}
+                              onKeyDown={common.onKeyDown}
+                              onChange={(badge: ProductBadge) =>
+                                updateRow(rowIndex, (current) =>
+                                  applyCellValue(
+                                    current,
+                                    'badge',
+                                    badge,
+                                    categories,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                        )
+                      }
+
                       return (
-                        <div
-                          key={column.key}
-                          className="flex items-center justify-center border-l border-cloud/70 px-2"
-                        >
+                        <div key={column.key} className={cellShellClassName}>
                           <input
                             ref={(node) => setCellRef(rowIndex, colIndex, node)}
-                            type="checkbox"
-                            checked={row.featured}
-                            aria-label={`Featured row ${rowIndex + 1}`}
-                            className="h-4 w-4"
+                            type="text"
+                            inputMode={
+                              column.kind === 'number' ? 'decimal' : undefined
+                            }
+                            value={cellValue(row, column.key)}
+                            placeholder={column.placeholder}
+                            aria-label={`${column.label} row ${rowIndex + 1}`}
+                            className={`${cellControlClassName} placeholder:text-mute/60`}
                             onChange={(event) =>
-                              updateRow(rowIndex, (current) => ({
-                                ...current,
-                                featured: event.target.checked,
-                                status: 'idle',
-                                message: undefined,
-                              }))
+                              updateRow(rowIndex, (current) =>
+                                applyCellValue(
+                                  current,
+                                  column.key,
+                                  event.target.value,
+                                  categories,
+                                ),
+                              )
                             }
                             {...common}
                           />
                         </div>
                       )
-                    }
+                    })}
 
-                    if (column.key === 'category_id') {
-                      return (
-                        <div
-                          key={column.key}
-                          className="border-l border-cloud/70"
-                        >
-                          <select
-                            ref={(node) => setCellRef(rowIndex, colIndex, node)}
-                            value={row.category_id}
-                            aria-label={`Category row ${rowIndex + 1}`}
-                            className="h-full w-full bg-transparent px-2 py-2.5 text-[13px] text-ink outline-none focus:bg-navy/[0.04]"
-                            onChange={(event) =>
-                              updateRow(rowIndex, (current) =>
-                                applyCellValue(
-                                  current,
-                                  'category_id',
-                                  event.target.value,
-                                  categories,
-                                ),
-                              )
-                            }
-                            {...common}
-                          >
-                            <option value="">—</option>
-                            {categories.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )
-                    }
-
-                    if (column.key === 'badge') {
-                      return (
-                        <div
-                          key={column.key}
-                          className="border-l border-cloud/70"
-                        >
-                          <select
-                            ref={(node) => setCellRef(rowIndex, colIndex, node)}
-                            value={row.badge}
-                            aria-label={`Badge row ${rowIndex + 1}`}
-                            className="h-full w-full bg-transparent px-2 py-2.5 text-[13px] text-ink outline-none focus:bg-navy/[0.04]"
-                            onChange={(event) =>
-                              updateRow(rowIndex, (current) =>
-                                applyCellValue(
-                                  current,
-                                  'badge',
-                                  event.target.value,
-                                  categories,
-                                ),
-                              )
-                            }
-                            {...common}
-                          >
-                            {PRODUCT_BADGE_OPTIONS.map((badge) => (
-                              <option key={badge} value={badge}>
-                                {badge}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <div
-                        key={column.key}
-                        className="border-l border-cloud/70"
-                      >
-                        <input
-                          ref={(node) => setCellRef(rowIndex, colIndex, node)}
-                          type={column.kind === 'number' ? 'number' : 'text'}
-                          inputMode={
-                            column.kind === 'number' ? 'decimal' : undefined
-                          }
-                          value={cellValue(row, column.key)}
-                          placeholder={
-                            column.key === 'name'
-                              ? 'Product name'
-                              : column.key === 'slug'
-                                ? 'auto'
-                                : undefined
-                          }
-                          aria-label={`${column.label} row ${rowIndex + 1}`}
-                          className="h-full w-full bg-transparent px-2 py-2.5 text-[13px] text-ink outline-none placeholder:text-mute/60 focus:bg-navy/[0.04]"
-                          onChange={(event) =>
-                            updateRow(rowIndex, (current) =>
-                              applyCellValue(
-                                current,
-                                column.key,
-                                event.target.value,
-                                categories,
-                              ),
-                            )
-                          }
-                          {...common}
-                        />
-                      </div>
-                    )
-                  })}
-
-                  <div className="flex items-center justify-center border-l border-cloud/70">
-                    <button
-                      type="button"
-                      aria-label={`Remove row ${rowIndex + 1}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-mute hover:bg-mist hover:text-spark"
-                      onClick={() => removeRow(rowIndex)}
+                    <div
+                      className={`flex items-center justify-center ${cellShellClassName}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center border-l border-cloud/70 px-2 text-[12px]">
-                    {row.status === 'ok' && row.createdId ? (
-                      <Link
-                        href={`/admin/catalog/products/${row.createdId}`}
-                        className="font-semibold text-navy hover:underline"
+                      <button
+                        type="button"
+                        aria-label={`Remove row ${rowIndex + 1}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-mute hover:bg-mist hover:text-spark"
+                        onClick={() => removeRow(rowIndex)}
                       >
-                        Created · Edit
-                      </Link>
-                    ) : row.status === 'error' ? (
-                      <span className="text-spark">{row.message}</span>
-                    ) : isRowFilled(row) ? (
-                      <span className="text-mute">Ready</span>
-                    ) : (
-                      <span className="text-mute/50">—</span>
-                    )}
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    <div
+                      className={`flex min-w-0 items-center px-2 text-[12px] ${cellShellClassName}`}
+                    >
+                      {row.status === 'ok' && row.createdId ? (
+                        <Link
+                          href={`/admin/catalog/products/${row.createdId}`}
+                          className="truncate font-semibold text-navy hover:underline"
+                        >
+                          {row.message ?? 'Created · Edit'}
+                        </Link>
+                      ) : row.status === 'error' ? (
+                        <span className="truncate text-spark">
+                          {row.message}
+                        </span>
+                      ) : hasName ? (
+                        <span className="text-mute">
+                          Ready · {variantPreview} variant
+                          {variantPreview === 1 ? '' : 's'}
+                        </span>
+                      ) : (
+                        <span className="text-mute/50">—</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <AdminActionButton type="button" disabled={pending} onClick={publishSheet}>
+        <AdminActionButton
+          type="button"
+          disabled={pending}
+          onClick={publishSheet}
+        >
           {pending
             ? 'Creating…'
-            : filledCount > 0
-              ? `Create ${filledCount} product${filledCount === 1 ? '' : 's'}`
+            : productCount > 0
+              ? `Create ${productCount} product${productCount === 1 ? '' : 's'}`
               : 'Create products'}
         </AdminActionButton>
         <AdminActionButton

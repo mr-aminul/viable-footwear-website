@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
+import { useOrders } from '@/context/OrdersContext'
 import { formatPrice } from '@/lib/brand'
 import {
-  computeCodCheckoutTotals,
   isValidBdMobile,
   PATHAO_ADDRESS_MAX_LENGTH,
 } from '@/lib/orders/cod-total'
@@ -47,12 +47,24 @@ const inputClass =
 
 export function CheckoutPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { items, cartTotal, cartWeightKg, clearCart, hydrated } = useCart()
+  const { addOrder } = useOrders()
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [placedTotal, setPlacedTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<CheckoutErrorState | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash'>('cod')
+  const [bkashAvailable, setBkashAvailable] = useState(false)
+  const [quoteCodTotal, setQuoteCodTotal] = useState<number | null>(null)
+  const [quoteCodShipping, setQuoteCodShipping] = useState<number | null>(null)
+  const [quotePrepaidTotal, setQuotePrepaidTotal] = useState<number | null>(
+    null,
+  )
+  const [quotePrepaidShipping, setQuotePrepaidShipping] = useState<
+    number | null
+  >(null)
   const [formData, setFormData] = useState({
     email: '',
     fullName: '',
@@ -74,6 +86,8 @@ export function CheckoutPage() {
   const [zonesLoading, setZonesLoading] = useState(false)
   const [areasLoading, setAreasLoading] = useState(false)
   const [shippingPrice, setShippingPrice] = useState<number | null>(null)
+  const [campaignLabel, setCampaignLabel] = useState<string | null>(null)
+  const [campaignDiscount, setCampaignDiscount] = useState<number | null>(null)
   const [shippingPriceLoading, setShippingPriceLoading] = useState(false)
   const [shippingPriceError, setShippingPriceError] = useState<string | null>(
     null,
@@ -83,6 +97,38 @@ export function CheckoutPage() {
     Partial<Record<CheckoutFieldKey, HTMLInputElement | HTMLSelectElement | null>>
   >({})
 
+  const quoteShipping =
+    paymentMethod === 'bkash' ? quotePrepaidShipping : quoteCodShipping
+  const quoteTotal =
+    paymentMethod === 'bkash' ? quotePrepaidTotal : quoteCodTotal
+
+  useEffect(() => {
+    const pay = searchParams.get('pay')
+    const msg = searchParams.get('message')
+    const oid = searchParams.get('orderId')
+    if (pay === 'success' && oid) {
+      setOrderId(oid)
+      setOrderPlaced(true)
+      clearCart()
+      return
+    }
+    if (pay === 'failed') {
+      setError({
+        title: 'Payment not completed',
+        message: msg || 'bKash payment did not finish. You can try again.',
+      })
+    }
+  }, [searchParams, clearCart])
+
+  useEffect(() => {
+    fetch('/api/payments/bkash/status', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.configured) setBkashAvailable(true)
+      })
+      .catch(() => {})
+  }, [])
+
   const addressSuffix = [formData.areaName, formData.zoneName, formData.cityName]
     .filter(Boolean)
     .join(', ')
@@ -90,11 +136,6 @@ export function CheckoutPage() {
     0,
     PATHAO_ADDRESS_MAX_LENGTH - (addressSuffix ? addressSuffix.length + 2 : 0),
   )
-
-  const totals =
-    shippingPrice != null
-      ? computeCodCheckoutTotals(cartTotal, shippingPrice)
-      : null
 
   const focusField = useCallback(
     (field: CheckoutFieldKey) => {
@@ -180,14 +221,26 @@ export function CheckoutPage() {
   }, [])
 
   const loadShippingPrice = useCallback(
-    (cityId: string, zoneId: string, itemWeight: number) => {
+    (cityId: string, zoneId: string, itemWeight: number, subtotal: number) => {
       if (!cityId || !zoneId) {
         setShippingPrice(null)
+        setQuoteCodTotal(null)
+        setQuoteCodShipping(null)
+        setQuotePrepaidTotal(null)
+        setQuotePrepaidShipping(null)
+        setCampaignLabel(null)
+        setCampaignDiscount(null)
         setShippingPriceError(null)
         return
       }
       setShippingPriceLoading(true)
       setShippingPrice(null)
+      setQuoteCodTotal(null)
+      setQuoteCodShipping(null)
+      setQuotePrepaidTotal(null)
+      setQuotePrepaidShipping(null)
+      setCampaignLabel(null)
+      setCampaignDiscount(null)
       setShippingPriceError(null)
       fetch('/api/pathao/price', {
         method: 'POST',
@@ -197,11 +250,33 @@ export function CheckoutPage() {
           city_id: Number(cityId),
           zone_id: Number(zoneId),
           item_weight: itemWeight,
+          subtotal,
         }),
       })
         .then((r) => r.json())
         .then((j) => {
-          if (j.success && typeof j.price === 'number') {
+          if (j.success && typeof j.pathaoDeliveryFee === 'number') {
+            setShippingPrice(j.pathaoDeliveryFee)
+            setQuoteCodShipping(
+              typeof j.shipping === 'number' ? j.shipping : null,
+            )
+            setQuoteCodTotal(typeof j.total === 'number' ? j.total : null)
+            setQuotePrepaidShipping(
+              typeof j.prepaidShipping === 'number' ? j.prepaidShipping : null,
+            )
+            setQuotePrepaidTotal(
+              typeof j.prepaidTotal === 'number' ? j.prepaidTotal : null,
+            )
+            if (j.campaign?.name) {
+              setCampaignLabel(String(j.campaign.name))
+              setCampaignDiscount(
+                typeof j.campaign.discount === 'number'
+                  ? j.campaign.discount
+                  : null,
+              )
+            }
+            setShippingPriceError(null)
+          } else if (j.success && typeof j.price === 'number') {
             setShippingPrice(j.price)
             setShippingPriceError(null)
           } else {
@@ -216,12 +291,29 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (formData.zoneId && formData.cityId) {
-      loadShippingPrice(formData.cityId, formData.zoneId, cartWeightKg)
+      loadShippingPrice(
+        formData.cityId,
+        formData.zoneId,
+        cartWeightKg,
+        cartTotal,
+      )
     } else {
       setShippingPrice(null)
+      setQuoteCodTotal(null)
+      setQuoteCodShipping(null)
+      setQuotePrepaidTotal(null)
+      setQuotePrepaidShipping(null)
+      setCampaignLabel(null)
+      setCampaignDiscount(null)
       setShippingPriceError(null)
     }
-  }, [formData.cityId, formData.zoneId, cartWeightKg, loadShippingPrice])
+  }, [
+    formData.cityId,
+    formData.zoneId,
+    cartWeightKg,
+    cartTotal,
+    loadShippingPrice,
+  ])
 
   const getValidationError = (): CheckoutErrorState | null => {
     if (!formData.fullName.trim()) {
@@ -336,6 +428,7 @@ export function CheckoutPage() {
             variantId: item.variantId,
             quantity: item.quantity,
           })),
+          payment_method: paymentMethod,
         }),
       })
       const data = (await res.json()) as {
@@ -343,6 +436,8 @@ export function CheckoutPage() {
         error?: string
         orderId?: string
         total?: number
+        paymentMethod?: string
+        bkashURL?: string
       }
 
       if (!res.ok || !data.success) {
@@ -356,9 +451,40 @@ export function CheckoutPage() {
         return
       }
 
+      if (data.bkashURL) {
+        if (data.orderId) {
+          addOrder({
+            orderId: data.orderId,
+            date: new Date().toISOString(),
+            phone: formData.phone.trim(),
+            pathaoConsignmentId: null,
+            status: 'pending_payment',
+            total: typeof data.total === 'number' ? data.total : undefined,
+            itemsSummary: items
+              .map((i) => `${i.product.name} (EU ${i.size}) × ${i.quantity}`)
+              .join(' · '),
+          })
+        }
+        window.location.href = data.bkashURL
+        return
+      }
+
       setOrderId(data.orderId ?? null)
       setPlacedTotal(typeof data.total === 'number' ? data.total : null)
       setOrderPlaced(true)
+      if (data.orderId) {
+        addOrder({
+          orderId: data.orderId,
+          date: new Date().toISOString(),
+          phone: formData.phone.trim(),
+          pathaoConsignmentId: null,
+          status: 'awaiting_fulfillment',
+          total: typeof data.total === 'number' ? data.total : undefined,
+          itemsSummary: items
+            .map((i) => `${i.product.name} (EU ${i.size}) × ${i.quantity}`)
+            .join(' · '),
+        })
+      }
       clearCart()
     } catch {
       setError({
@@ -393,9 +519,10 @@ export function CheckoutPage() {
           <h1 className="font-display text-3xl font-extrabold tracking-tight">
             Order confirmed
           </h1>
-          <p className="mt-3 max-w-md text-[15px] text-mute">
-            Pay cash on delivery when your order arrives. We&apos;ll prepare it
-            for Pathao shipping shortly.
+                <p className="mt-3 max-w-md text-[15px] text-mute">
+            {searchParams.get('pay') === 'success'
+              ? 'Payment received. We’ll prepare your order for Pathao shipping shortly.'
+              : 'Pay cash on delivery when your order arrives. We’ll prepare it for Pathao shipping shortly.'}
           </p>
         </div>
 
@@ -437,10 +564,16 @@ export function CheckoutPage() {
           </div>
         ) : null}
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link
+            href="/orders"
+            className="inline-flex justify-center rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white hover:bg-navy-soft"
+          >
+            View your orders
+          </Link>
           <Link
             href="/shop"
-            className="inline-flex justify-center rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white hover:bg-navy-soft"
+            className="inline-flex justify-center rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink hover:bg-mist"
           >
             Continue shopping
           </Link>
@@ -683,6 +816,42 @@ export function CheckoutPage() {
             </label>
           </section>
 
+          <section className="rounded-2xl border border-cloud bg-white p-5 sm:p-6">
+            <h2 className="text-[15px] font-semibold">Payment</h2>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cod')}
+                className={[
+                  'rounded-xl px-4 py-3 text-left text-[14px] font-semibold transition',
+                  paymentMethod === 'cod'
+                    ? 'bg-navy text-white'
+                    : 'bg-ink/[0.045] text-ink hover:bg-ink/[0.07]',
+                ].join(' ')}
+              >
+                Cash on delivery
+              </button>
+              <button
+                type="button"
+                disabled={!bkashAvailable}
+                onClick={() => setPaymentMethod('bkash')}
+                className={[
+                  'rounded-xl px-4 py-3 text-left text-[14px] font-semibold transition disabled:opacity-45',
+                  paymentMethod === 'bkash'
+                    ? 'bg-navy text-white'
+                    : 'bg-ink/[0.045] text-ink hover:bg-ink/[0.07]',
+                ].join(' ')}
+              >
+                bKash
+                {!bkashAvailable ? (
+                  <span className="mt-1 block text-[11px] font-normal opacity-80">
+                    Not configured yet
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </section>
+
           {error ? (
             <div
               role="alert"
@@ -719,21 +888,35 @@ export function CheckoutPage() {
               </span>
             </div>
             <div className="flex justify-between text-mute">
-              <span>Delivery + COD fee</span>
+              <span>
+                {paymentMethod === 'bkash' ? 'Delivery' : 'Delivery + COD fee'}
+              </span>
               <span className="font-medium text-ink">
                 {shippingPriceLoading
                   ? 'Calculating…'
-                  : totals
-                    ? formatPrice(totals.shipping)
+                  : quoteShipping != null
+                    ? formatPrice(quoteShipping)
                     : '—'}
               </span>
             </div>
+            {campaignLabel ? (
+              <div className="flex justify-between text-[12px] text-navy">
+                <span>{campaignLabel}</span>
+                <span>
+                  {campaignDiscount != null && campaignDiscount > 0
+                    ? `−${formatPrice(campaignDiscount)}`
+                    : 'Applied'}
+                </span>
+              </div>
+            ) : null}
             {shippingPriceError ? (
               <p className="text-[12px] text-spark">{shippingPriceError}</p>
             ) : null}
             <div className="flex justify-between border-t border-cloud pt-3 text-[16px] font-semibold text-ink">
-              <span>Total (COD)</span>
-              <span>{totals ? formatPrice(totals.total) : '—'}</span>
+              <span>{paymentMethod === 'bkash' ? 'Total' : 'Total (COD)'}</span>
+              <span>
+                {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
+              </span>
             </div>
           </div>
           <button
@@ -744,8 +927,12 @@ export function CheckoutPage() {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Placing order…
+                {paymentMethod === 'bkash'
+                  ? 'Redirecting to bKash…'
+                  : 'Placing order…'}
               </>
+            ) : paymentMethod === 'bkash' ? (
+              'Pay with bKash'
             ) : (
               'Place COD order'
             )}

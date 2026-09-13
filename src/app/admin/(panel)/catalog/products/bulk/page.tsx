@@ -14,7 +14,7 @@ export default async function BulkProductsPage() {
     <>
       <AdminPageHeader
         title="Bulk add products"
-        description="Fill the sheet like Google Sheets — one product per row. Paste from Excel works too."
+        description="One row per product. List sizes and colors — we build every size × color variant for you."
         backHref="/admin/catalog"
         backLabel="Back to products"
       />

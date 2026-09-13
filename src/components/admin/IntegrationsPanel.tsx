@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { ChevronRight, X } from 'lucide-react'
+import { BkashSettingsForm } from '@/components/admin/BkashSettingsForm'
 import { PathaoSettingsForm } from '@/components/admin/PathaoSettingsForm'
+import type { BkashSettingsView } from '@/lib/integrations/bkash-settings'
 import type { PathaoSettingsView } from '@/lib/integrations/pathao-settings'
 
 type IntegrationId = 'pathao' | 'bkash' | 'nagad' | 'gtm' | 'meta' | 'inventory'
@@ -16,7 +18,7 @@ type IntegrationRow = {
 
 const INTEGRATIONS: IntegrationRow[] = [
   { id: 'pathao', name: 'Pathao Courier', category: 'Shipping', available: true },
-  { id: 'bkash', name: 'bKash', category: 'Payments', available: false },
+  { id: 'bkash', name: 'bKash', category: 'Payments', available: true },
   { id: 'nagad', name: 'Nagad', category: 'Payments', available: false },
   {
     id: 'gtm',
@@ -33,19 +35,30 @@ const INTEGRATIONS: IntegrationRow[] = [
   },
 ]
 
-function pathaoStatusLabel(pathao: PathaoSettingsView): {
-  label: string
-  tone: 'ok' | 'warn' | 'mute'
-} {
-  if (pathao.source === 'admin') return { label: 'Connected', tone: 'ok' }
-  if (pathao.source === 'env') return { label: 'Env fallback', tone: 'mute' }
-  return { label: 'Not set up', tone: 'warn' }
+function statusFor(
+  id: IntegrationId,
+  pathao: PathaoSettingsView,
+  bkash: BkashSettingsView,
+): { label: string; tone: 'ok' | 'warn' | 'mute' } {
+  if (id === 'pathao') {
+    if (pathao.source === 'admin') return { label: 'Connected', tone: 'ok' }
+    if (pathao.source === 'env') return { label: 'Env fallback', tone: 'mute' }
+    return { label: 'Not set up', tone: 'warn' }
+  }
+  if (id === 'bkash') {
+    if (bkash.source === 'admin') return { label: 'Connected', tone: 'ok' }
+    if (bkash.source === 'env') return { label: 'Env fallback', tone: 'mute' }
+    return { label: 'Not set up', tone: 'warn' }
+  }
+  return { label: 'Coming soon', tone: 'mute' }
 }
 
 export function IntegrationsPanel({
   pathao,
+  bkash,
 }: {
   pathao: PathaoSettingsView
+  bkash: BkashSettingsView
 }) {
   const [openId, setOpenId] = useState<IntegrationId | null>(null)
   const titleId = useId()
@@ -74,11 +87,7 @@ export function IntegrationsPanel({
     <>
       <ul className="mt-8 divide-y divide-cloud overflow-hidden rounded-2xl border border-cloud bg-white">
         {INTEGRATIONS.map((row) => {
-          const status =
-            row.id === 'pathao'
-              ? pathaoStatusLabel(pathao)
-              : ({ label: 'Coming soon', tone: 'mute' } as const)
-
+          const status = statusFor(row.id, pathao, bkash)
           return (
             <li key={row.id}>
               <button
@@ -120,8 +129,16 @@ export function IntegrationsPanel({
       >
         {openId === 'pathao' ? (
           <PathaoSettingsForm initial={pathao} embedded />
+        ) : openId === 'bkash' ? (
+          <BkashSettingsForm initial={bkash} />
         ) : openRow ? (
-          <ComingSoonPanel name={openRow.name} category={openRow.category} />
+          <div className="rounded-2xl bg-mist/70 px-4 py-6">
+            <p className="text-[14px] font-semibold text-ink">{openRow.name}</p>
+            <p className="mt-1 text-[13px] text-mute">{openRow.category}</p>
+            <p className="mt-4 text-[13px] leading-relaxed text-mute">
+              Setup for this integration isn&apos;t available yet.
+            </p>
+          </div>
         ) : null}
       </SideDrawer>
     </>
@@ -159,7 +176,6 @@ function SideDrawer({
           open ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       />
-
       <aside
         role="dialog"
         aria-modal="true"
@@ -184,25 +200,6 @@ function SideDrawer({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
       </aside>
-    </div>
-  )
-}
-
-function ComingSoonPanel({
-  name,
-  category,
-}: {
-  name: string
-  category: string
-}) {
-  return (
-    <div className="rounded-2xl bg-mist/70 px-4 py-6">
-      <p className="text-[14px] font-semibold text-ink">{name}</p>
-      <p className="mt-1 text-[13px] text-mute">{category}</p>
-      <p className="mt-4 text-[13px] leading-relaxed text-mute">
-        Setup for this integration isn&apos;t available yet. Pathao shipping is
-        ready to configure now.
-      </p>
     </div>
   )
 }

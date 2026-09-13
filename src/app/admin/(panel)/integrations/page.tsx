@@ -1,4 +1,5 @@
 import { requireRole } from '@/lib/auth/session'
+import { getBkashSettingsView } from '@/lib/integrations/bkash-settings'
 import { getPathaoSettingsView } from '@/lib/integrations/pathao-settings'
 import { IntegrationsPanel } from '@/components/admin/IntegrationsPanel'
 import { AdminPageHeader } from '@/components/admin/ui'
@@ -10,15 +11,18 @@ export const metadata = {
 
 export default async function IntegrationsPage() {
   await requireRole('admin')
-  const pathao = await getPathaoSettingsView()
+  const [pathao, bkash] = await Promise.all([
+    getPathaoSettingsView(),
+    getBkashSettingsView(),
+  ])
 
   return (
     <>
       <AdminPageHeader
         title="Integrations"
-        description="Pick an integration to set it up. Pathao shipping is ready — payments and tags come next."
+        description="Pick an integration to set it up. Pathao and bKash are ready — Nagad and tags come next."
       />
-      <IntegrationsPanel pathao={pathao} />
+      <IntegrationsPanel pathao={pathao} bkash={bkash} />
     </>
   )
 }

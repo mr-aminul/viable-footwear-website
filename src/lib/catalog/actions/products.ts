@@ -87,7 +87,7 @@ async function countActiveVariants(
   return count ?? 0
 }
 
-/** One sheet row for bulk create (client-owned key for result mapping). */
+/** One sheet row = one product. Variants expand from sizes × colors lists. */
 export type BulkProductRowInput = {
   key: string
   name: string
@@ -99,11 +99,12 @@ export type BulkProductRowInput = {
   category_id: string | null
   badge: string
   featured: boolean
-  size_eu: number | null
-  color: string
-  color_hex: string
+  /** Comma/space separated EU sizes, e.g. "40, 41, 42". */
+  sizes: string
+  /** Comma separated colors, e.g. "Black, White" or "Black:#111111". */
+  colors: string
+  /** Starting stock applied to every generated variant. */
   stock: number | null
-  sku: string
 }
 
 export type BulkProductRowResult = {
@@ -111,11 +112,142 @@ export type BulkProductRowResult = {
   ok: boolean
   id?: string
   error?: string
+  /** How many variants were created for this product. */
+  variantCount?: number
+}
+
+const MAX_VARIANTS_PER_PRODUCT = 80
+
+const NAMED_COLOR_HEX: Record<string, string> = {
+  black: '#111111',
+  white: '#F5F5F5',
+  ivory: '#FFFFF0',
+  cream: '#FFFDD0',
+  navy: '#1A3668',
+  blue: '#2563EB',
+  red: '#DC2626',
+  green: '#16A34A',
+  brown: '#8B5E3C',
+  tan: '#D2B48C',
+  beige: '#E8DCC8',
+  grey: '#6B7280',
+  gray: '#6B7280',
+  charcoal: '#374151',
+  pink: '#DB2777',
+  purple: '#7C3AED',
+  yellow: '#EAB308',
+  orange: '#EA580C',
+  olive: '#6B8E23',
+  maroon: '#7F1D1D',
+  gold: '#C9A227',
+  silver: '#C0C0C0',
+}
+
+function splitList(raw: string): string[] {
+  return raw
+    .split(/[,|/;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function parseSizesList(raw: string): number[] | { error: string } {
+  const parts = splitList(raw)
+  if (parts.length === 0) return [40]
+
+  const sizes: number[] = []
+  for (const part of parts) {
+    const value = Number(part)
+    if (!Number.isFinite(value) || value <= 0) {
+      return { error: `Invalid size "${part}". Use numbers like 40, 41, 42.` }
+    }
+    if (!sizes.includes(value)) sizes.push(value)
+  }
+  return sizes.sort((a, b) => a - b)
+}
+
+function parseColorToken(raw: string): { color: string; color_hex: string } {
+  const match = raw.match(/^(.+?)[#:=]\s*(#?[0-9a-fA-F]{6})$/)
+  if (match) {
+    const color = match[1]!.trim()
+    const hex = normalizeColorHex(match[2]) ?? '#1A3668'
+    return { color, color_hex: hex }
+  }
+
+  const color = raw.trim()
+  const named = NAMED_COLOR_HEX[color.toLowerCase()]
+  return { color, color_hex: named ?? '#1A3668' }
+}
+
+function parseColorsList(
+  raw: string,
+): Array<{ color: string | null; color_hex: string }> | { error: string } {
+  const parts = splitList(raw)
+  if (parts.length === 0) {
+    return [{ color: null, color_hex: '#1A3668' }]
+  }
+
+  const colors: Array<{ color: string | null; color_hex: string }> = []
+  const seen = new Set<string>()
+  for (const part of parts) {
+    const parsed = parseColorToken(part)
+    const key = `${(parsed.color || '').toLowerCase()}|${parsed.color_hex}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    colors.push(parsed)
+  }
+  return colors
+}
+
+function expandVariants(input: {
+  sizes: string
+  colors: string
+  stock: number | null
+}):
+  | {
+      variants: Array<{
+        size_eu: number
+        color: string | null
+        color_hex: string
+        stock: number
+        sku: string | null
+      }>
+    }
+  | { error: string } {
+  const sizes = parseSizesList(input.sizes)
+  if ('error' in sizes) return sizes
+  const colors = parseColorsList(input.colors)
+  if ('error' in colors) return colors
+
+  const stock = input.stock ?? 0
+  if (!Number.isFinite(stock) || stock < 0) {
+    return { error: 'Stock must be zero or greater.' }
+  }
+
+  const total = sizes.length * colors.length
+  if (total > MAX_VARIANTS_PER_PRODUCT) {
+    return {
+      error: `That makes ${total} variants (max ${MAX_VARIANTS_PER_PRODUCT}). Use fewer sizes or colors.`,
+    }
+  }
+
+  const variants = []
+  for (const size of sizes) {
+    for (const color of colors) {
+      variants.push({
+        size_eu: size,
+        color: color.color,
+        color_hex: color.color_hex,
+        stock,
+        sku: null,
+      })
+    }
+  }
+  return { variants }
 }
 
 /**
- * Create many products (+ one starter variant each) from a sheet payload.
- * Processes rows in order; empty name rows are skipped by the client.
+ * Create many products from a sheet.
+ * One row = one product. Sizes × colors expand into variants automatically.
  */
 export async function bulkCreateProducts(
   rows: BulkProductRowInput[],
@@ -146,15 +278,6 @@ export async function bulkCreateProducts(
     const price = row.price
     const compareAt = row.compare_at
     const weightKg = row.weight_kg ?? 0.5
-    const sizeEu = row.size_eu ?? 40
-    const stock = row.stock ?? 0
-    const badge = normalizeProductBadge(row.badge)
-    const colorHex = normalizeColorHex(row.color_hex) ?? '#1A3668'
-    const color = row.color?.trim() || null
-    const sku = row.sku?.trim() || null
-    const description = row.description?.trim() ?? ''
-    const categoryId = row.category_id?.trim() || null
-    const featured = Boolean(row.featured)
 
     if (!isValidSlug(slug)) {
       results.push({
@@ -196,20 +319,14 @@ export async function bulkCreateProducts(
       })
       continue
     }
-    if (!Number.isFinite(sizeEu) || sizeEu <= 0) {
-      results.push({
-        key: row.key,
-        ok: false,
-        error: 'Size EU must be a valid number.',
-      })
-      continue
-    }
-    if (!Number.isFinite(stock) || stock < 0) {
-      results.push({
-        key: row.key,
-        ok: false,
-        error: 'Stock must be zero or greater.',
-      })
+
+    const expanded = expandVariants({
+      sizes: row.sizes ?? '',
+      colors: row.colors ?? '',
+      stock: row.stock,
+    })
+    if ('error' in expanded) {
+      results.push({ key: row.key, ok: false, error: expanded.error })
       continue
     }
 
@@ -220,13 +337,13 @@ export async function bulkCreateProducts(
       .insert({
         name,
         slug,
-        description,
+        description: row.description?.trim() ?? '',
         price,
         compare_at: compareAt,
         weight_kg: weightKg,
-        category_id: categoryId,
-        badge,
-        featured,
+        category_id: row.category_id?.trim() || null,
+        badge: normalizeProductBadge(row.badge),
+        featured: Boolean(row.featured),
         active: true,
       })
       .select('id')
@@ -247,15 +364,17 @@ export async function bulkCreateProducts(
 
     const { error: variantError } = await supabase
       .from('product_variants')
-      .insert({
-        product_id: product.id,
-        size_eu: sizeEu,
-        color,
-        color_hex: colorHex,
-        sku,
-        stock,
-        active: true,
-      })
+      .insert(
+        expanded.variants.map((variant) => ({
+          product_id: product.id,
+          size_eu: variant.size_eu,
+          color: variant.color,
+          color_hex: variant.color_hex,
+          sku: variant.sku,
+          stock: variant.stock,
+          active: true,
+        })),
+      )
 
     if (variantError) {
       await supabase.from('products').delete().eq('id', product.id)
@@ -273,7 +392,12 @@ export async function bulkCreateProducts(
 
     created += 1
     createdSlugs.push(slug)
-    results.push({ key: row.key, ok: true, id: product.id })
+    results.push({
+      key: row.key,
+      ok: true,
+      id: product.id,
+      variantCount: expanded.variants.length,
+    })
   }
 
   if (created > 0) {

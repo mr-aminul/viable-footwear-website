@@ -10,19 +10,16 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import { Reorder, useMotionValue, useReducedMotion } from 'framer-motion'
-import { ChevronDown, ImagePlus, Trash2, Upload } from 'lucide-react'
+import { ImagePlus, Trash2, Upload } from 'lucide-react'
 import {
   deleteProductMedia,
   reorderProductMedia,
   uploadProductMedia,
 } from '@/lib/catalog/actions/media'
-import {
-  PRODUCT_BADGE_OPTIONS,
-  normalizeProductBadge,
-  productBadgeClassName,
-} from '@/lib/catalog/badge'
+import { normalizeProductBadge, productBadgeClassName } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
+import { BadgePicker } from '@/components/admin/BadgePicker'
 import { FormError } from '@/components/admin/ui'
 
 export type GalleryMedia = {
@@ -31,6 +28,7 @@ export type GalleryMedia = {
   storage_path: string
   alt: string | null
   sort_order: number
+  color_hex?: string | null
 }
 
 type GalleryImage = GalleryMedia & { url: string }
@@ -45,8 +43,6 @@ type AdminProductGalleryProps = {
   /** Fallback when no uploaded images exist yet. */
   placeholderSrc: string
 }
-
-const BADGE_OPTIONS = PRODUCT_BADGE_OPTIONS
 
 function sameOrder(a: GalleryImage[], b: GalleryImage[]) {
   if (a.length !== b.length) return false
@@ -155,11 +151,9 @@ export function AdminProductGallery({
 }: AdminProductGalleryProps) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
-  const badgeMenuRef = useRef<HTMLDivElement>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [badgeOpen, setBadgeOpen] = useState(false)
 
   const sortedFromProps = useMemo(
     () =>
@@ -184,24 +178,6 @@ export function AdminProductGallery({
   useEffect(() => {
     imagesRef.current = images
   }, [images])
-
-  useEffect(() => {
-    if (!badgeOpen) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (!badgeMenuRef.current?.contains(event.target as Node)) {
-        setBadgeOpen(false)
-      }
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setBadgeOpen(false)
-    }
-    window.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [badgeOpen])
 
   const video = useMemo(() => {
     const row = media.find((m) => m.media_type === 'video')
@@ -331,70 +307,8 @@ export function AdminProductGallery({
         </div>
 
         {onBadgeChange ? (
-          <div ref={badgeMenuRef} className="absolute left-4 top-4 z-30">
-            {(() => {
-              const activeBadge = normalizeProductBadge(badge)
-              return (
-                <>
-                  <div
-                    className={`inline-flex items-stretch overflow-hidden rounded-full text-[11px] font-bold uppercase tracking-wider shadow-sm ${productBadgeClassName(activeBadge)}`}
-                  >
-                    <span className="px-2.5 py-1">{activeBadge}</span>
-                    <button
-                      type="button"
-                      aria-label="Choose badge"
-                      aria-expanded={badgeOpen}
-                      aria-haspopup="listbox"
-                      onClick={() => setBadgeOpen((open) => !open)}
-                      className="border-l border-white/25 px-1.5 transition hover:bg-white/10"
-                    >
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 transition ${badgeOpen ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-                  </div>
-
-                  {badgeOpen ? (
-                    <div
-                      role="listbox"
-                      aria-label="Badge options"
-                      className="absolute left-0 top-full z-40 mt-1.5 min-w-[10.5rem] overflow-hidden rounded-xl bg-white py-1 shadow-lift ring-1 ring-cloud"
-                    >
-                      {BADGE_OPTIONS.map((option) => {
-                        const selected = activeBadge === option
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            onClick={() => {
-                              onBadgeChange(option)
-                              setBadgeOpen(false)
-                            }}
-                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition hover:bg-mist ${selected
-                                ? 'font-semibold text-navy'
-                                : 'font-medium text-ink'
-                              }`}
-                          >
-                            <span
-                              className={`inline-flex min-w-16 justify-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${productBadgeClassName(option)}`}
-                            >
-                              {option}
-                            </span>
-                            {selected ? (
-                              <span className="ml-auto text-[11px] text-navy">
-                                Selected
-                              </span>
-                            ) : null}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </>
-              )
-            })()}
+          <div className="absolute left-4 top-4 z-30">
+            <BadgePicker value={badge} onChange={onBadgeChange} />
           </div>
         ) : (
           <span

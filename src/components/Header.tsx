@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Heart,
   Menu,
+  Package,
   Search,
   ShoppingBag,
   User,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
+import { useOrders } from '@/context/OrdersContext'
 import { BRAND } from '@/lib/brand'
 import { BrandLogo } from '@/components/BrandLogo'
 
@@ -28,10 +30,19 @@ const links = [
 
 export function Header() {
   const { cartCount, wishlist } = useCart()
+  const { orderCount, hydrated: ordersHydrated } = useOrders()
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const showOrdersLink = ordersHydrated && orderCount > 0
+
+  const navLinks = [
+    ...links,
+    ...(showOrdersLink
+      ? [{ to: '/orders', label: 'Your Orders', accent: false }]
+      : []),
+  ]
 
   useEffect(() => {
     setOpen(false)
@@ -68,7 +79,7 @@ export function Header() {
           <BrandLogo />
 
           <nav className="hidden items-center gap-7 lg:flex">
-            {links.map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.to + link.label}
                 href={link.to}
@@ -92,6 +103,18 @@ export function Header() {
             >
               <Search className="h-[18px] w-[18px]" />
             </Link>
+            {showOrdersLink ? (
+              <Link
+                href="/orders"
+                className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
+                aria-label="Your orders"
+              >
+                <Package className="h-[18px] w-[18px]" />
+                <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-navy px-1 text-[10px] font-bold text-white">
+                  {orderCount}
+                </span>
+              </Link>
+            ) : null}
             <Link
               href="/shop"
               className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
@@ -156,7 +179,7 @@ export function Header() {
                 </button>
               </div>
               <nav className="flex flex-col gap-1 p-4">
-                {links.map((link) => (
+                {navLinks.map((link) => (
                   <Link
                     key={link.to + link.label}
                     href={link.to}

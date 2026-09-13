@@ -1,6 +1,8 @@
 export type UserRole = 'admin' | 'manager'
 export type OrderStatus =
   | 'new'
+  | 'pending_payment'
+  | 'paid'
   | 'awaiting_fulfillment'
   | 'packed'
   | 'shipped'
@@ -234,6 +236,8 @@ export interface Database {
           pathao_cancelled_at: string | null
           campaign_id: string | null
           notes: string | null
+          paid_at: string | null
+          payment_trx_id: string | null
           created_at: string
           updated_at: string
         }
@@ -262,6 +266,8 @@ export interface Database {
           pathao_cancelled_at?: string | null
           campaign_id?: string | null
           notes?: string | null
+          paid_at?: string | null
+          payment_trx_id?: string | null
         }
         Update: Partial<Database['public']['Tables']['orders']['Insert']>
         Relationships: []
@@ -295,6 +301,32 @@ export interface Database {
           weight_kg?: number
         }
         Update: Partial<Database['public']['Tables']['order_items']['Insert']>
+        Relationships: []
+      }
+      payment_attempts: {
+        Row: {
+          id: string
+          order_id: string
+          gateway: 'bkash' | 'nagad'
+          external_id: string | null
+          trx_id: string | null
+          status: 'created' | 'completed' | 'failed' | 'cancelled'
+          amount: number
+          raw_json: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          gateway: 'bkash' | 'nagad'
+          external_id?: string | null
+          trx_id?: string | null
+          status?: 'created' | 'completed' | 'failed' | 'cancelled'
+          amount: number
+          raw_json?: Json
+        }
+        Update: Partial<Database['public']['Tables']['payment_attempts']['Insert']>
         Relationships: []
       }
     }

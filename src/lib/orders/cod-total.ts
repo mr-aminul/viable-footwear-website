@@ -1,26 +1,36 @@
 /**
- * COD checkout totals — same method as Chilirig.
- *
- * Pathao keeps ~1% of amount_to_collect as COD fee. We inflate the payable total
- * so after that fee the merchant still nets (subtotal + Pathao delivery).
- * Final customer charge is ROUNDUP (ceil) per Viable requirements.
+ * COD checkout totals — Pathao delivery → optional campaign → COD inflate → ceil.
  */
 export function computeCodCheckoutTotals(
   subtotal: number,
-  pathaoDeliveryFee: number,
+  deliveryFeeAfterCampaign: number,
 ): {
-  pathaoDeliveryFee: number
+  deliveryFee: number
   shipping: number
   total: number
 } {
-  const goodsPlusDelivery = Math.max(0, subtotal) + Math.max(0, pathaoDeliveryFee)
+  const delivery = Math.max(0, deliveryFeeAfterCampaign)
+  const goodsPlusDelivery = Math.max(0, subtotal) + delivery
   const inflated = goodsPlusDelivery / 0.99
   const total = Math.ceil(inflated)
   const shipping = total - Math.max(0, subtotal)
   return {
-    pathaoDeliveryFee: Math.max(0, pathaoDeliveryFee),
+    deliveryFee: delivery,
     shipping,
     total,
+  }
+}
+
+/** @deprecated alias — prefer deliveryFeeAfterCampaign naming */
+export function computeCodCheckoutTotalsLegacy(
+  subtotal: number,
+  pathaoDeliveryFee: number,
+) {
+  const r = computeCodCheckoutTotals(subtotal, pathaoDeliveryFee)
+  return {
+    pathaoDeliveryFee: pathaoDeliveryFee,
+    shipping: r.shipping,
+    total: r.total,
   }
 }
 

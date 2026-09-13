@@ -35,7 +35,7 @@ const nav: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/catalog', label: 'Products', icon: Package },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone, soon: true },
+  { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, soon: true },
 ]
 
