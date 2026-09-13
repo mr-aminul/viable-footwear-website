@@ -232,6 +232,7 @@ export interface Database {
           total: number
           pathao_delivery_fee: number | null
           pathao_consignment_id: string | null
+          pathao_status: string | null
           pathao_error: string | null
           pathao_cancelled_at: string | null
           campaign_id: string | null
@@ -262,6 +263,7 @@ export interface Database {
           total: number
           pathao_delivery_fee?: number | null
           pathao_consignment_id?: string | null
+          pathao_status?: string | null
           pathao_error?: string | null
           pathao_cancelled_at?: string | null
           campaign_id?: string | null

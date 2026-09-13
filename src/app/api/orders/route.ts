@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { listActiveCampaignsForCheckout } from '@/lib/campaigns/queries'
 import { pickCampaignDelivery } from '@/lib/campaigns/rules'
 import { isBkashConfigured } from '@/lib/integrations/bkash-settings'
+import { isNagadConfigured } from '@/lib/integrations/nagad-settings'
 import {
   computeCodCheckoutTotals,
   isValidBdMobile,
@@ -13,6 +15,11 @@ import {
   computePrepaidCheckoutTotals,
   createBkashPayment,
 } from '@/lib/payments/bkash'
+import { createNagadPayment } from '@/lib/payments/nagad'
+import {
+  emitOmsWebhook,
+  orderPayloadFromRow,
+} from '@/lib/integrations/oms-webhook'
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
 import { createServiceClient } from '@/lib/supabase/admin'
 import type { Json } from '@/lib/supabase/database.types'
@@ -41,12 +48,16 @@ export async function POST(request: NextRequest) {
       city_name?: string
       zone_name?: string
       area_name?: string
-      payment_method?: 'cod' | 'bkash'
+      payment_method?: 'cod' | 'bkash' | 'nagad'
       items?: LineInput[]
     }
 
     const paymentMethod =
-      body.payment_method === 'bkash' ? 'bkash' : ('cod' as const)
+      body.payment_method === 'bkash'
+        ? ('bkash' as const)
+        : body.payment_method === 'nagad'
+          ? ('nagad' as const)
+          : ('cod' as const)
 
     const fullName = String(body.fullName ?? '').trim()
     const email = String(body.email ?? '').trim()
@@ -305,10 +316,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { shipping, total } =
-      paymentMethod === 'bkash'
-        ? computePrepaidCheckoutTotals(subtotal, deliveryAfterCampaign)
-        : computeCodCheckoutTotals(subtotal, deliveryAfterCampaign)
+    if (paymentMethod === 'nagad') {
+      const ready = await isNagadConfigured()
+      if (!ready) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Nagad is not available yet. Please pay with Cash on Delivery.',
+          },
+          { status: 400, headers: NO_STORE_HEADERS },
+        )
+      }
+    }
+
+    const isPrepaid =
+      paymentMethod === 'bkash' || paymentMethod === 'nagad'
+
+    const { shipping, total } = isPrepaid
+      ? computePrepaidCheckoutTotals(subtotal, deliveryAfterCampaign)
+      : computeCodCheckoutTotals(subtotal, deliveryAfterCampaign)
 
     const orderNumber = generateOrderNumber()
 
@@ -316,8 +342,7 @@ export async function POST(request: NextRequest) {
       .from('orders')
       .insert({
         order_number: orderNumber,
-        status:
-          paymentMethod === 'bkash' ? 'pending_payment' : 'awaiting_fulfillment',
+        status: isPrepaid ? 'pending_payment' : 'awaiting_fulfillment',
         payment_method: paymentMethod,
         email: email || null,
         full_name: fullName,
@@ -363,7 +388,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // COD: decrement on place. bKash: decrement on successful payment.
+    // COD: decrement on place. Gateways: decrement on successful payment.
     if (paymentMethod === 'cod') {
       for (const line of lines) {
         const variant = variantMap.get(line.variantId)!
@@ -379,6 +404,26 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      revalidatePath('/admin', 'layout')
+      revalidatePath('/admin/orders')
+
+      const omsOrder = orderPayloadFromRow({
+        id: insertedOrder.id,
+        order_number: insertedOrder.order_number,
+        status: 'awaiting_fulfillment',
+        payment_method: paymentMethod,
+        total,
+        full_name: fullName,
+        phone,
+        email: email || null,
+        city_name: cityName,
+        zone_name: zoneName,
+        area_name: areaName,
+        address,
+      })
+      void emitOmsWebhook('order.created', omsOrder)
+      void emitOmsWebhook('order.paid', omsOrder)
+
       return NextResponse.json(
         {
           success: true,
@@ -392,10 +437,80 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const site =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+      'http://localhost:3000'
+
+    if (paymentMethod === 'nagad') {
+      try {
+        const forwarded = request.headers.get('x-forwarded-for')
+        const clientIp =
+          forwarded?.split(',')[0]?.trim() ||
+          request.headers.get('x-real-ip') ||
+          '103.100.200.100'
+        const created = await createNagadPayment({
+          amount: total,
+          orderId: insertedOrder.order_number,
+          clientIp,
+          callbackURL: `${site}/api/payments/nagad/callback`,
+          productDetails: { order: insertedOrder.order_number },
+        })
+
+        await supabase.from('payment_attempts').insert({
+          order_id: insertedOrder.id,
+          gateway: 'nagad',
+          external_id: created.paymentRefId,
+          status: 'created',
+          amount: total,
+          raw_json: created as unknown as Json,
+        })
+
+        void emitOmsWebhook(
+          'order.created',
+          orderPayloadFromRow({
+            id: insertedOrder.id,
+            order_number: insertedOrder.order_number,
+            status: 'pending_payment',
+            payment_method: paymentMethod,
+            total,
+            full_name: fullName,
+            phone,
+            email: email || null,
+            city_name: cityName,
+            zone_name: zoneName,
+            area_name: areaName,
+            address,
+          }),
+        )
+
+        return NextResponse.json(
+          {
+            success: true,
+            orderId: insertedOrder.order_number,
+            paymentMethod,
+            total,
+            shipping,
+            pathaoDeliveryFee,
+            nagadURL: created.redirectUrl,
+            paymentRefId: created.paymentRefId,
+          },
+          { headers: NO_STORE_HEADERS },
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error('[orders] nagad create', message)
+        await supabase.from('orders').delete().eq('id', insertedOrder.id)
+        return NextResponse.json(
+          {
+            success: false,
+            error: message || 'Could not start Nagad payment. Try COD instead.',
+          },
+          { status: 502, headers: NO_STORE_HEADERS },
+        )
+      }
+    }
+
     try {
-      const site =
-        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
-        'http://localhost:3000'
       const created = await createBkashPayment({
         amount: total,
         merchantInvoiceNumber: insertedOrder.order_number,
@@ -411,6 +526,24 @@ export async function POST(request: NextRequest) {
         amount: total,
         raw_json: created as unknown as Json,
       })
+
+      void emitOmsWebhook(
+        'order.created',
+        orderPayloadFromRow({
+          id: insertedOrder.id,
+          order_number: insertedOrder.order_number,
+          status: 'pending_payment',
+          payment_method: paymentMethod,
+          total,
+          full_name: fullName,
+          phone,
+          email: email || null,
+          city_name: cityName,
+          zone_name: zoneName,
+          area_name: areaName,
+          address,
+        }),
+      )
 
       return NextResponse.json(
         {

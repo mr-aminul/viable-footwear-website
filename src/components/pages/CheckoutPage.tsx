@@ -7,11 +7,17 @@ import { Check, Copy, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
 import { useOrders } from '@/context/OrdersContext'
+import { SearchableSelect, type SearchableSelectHandle } from '@/components/SearchableSelect'
 import { formatPrice } from '@/lib/brand'
 import {
   isValidBdMobile,
   PATHAO_ADDRESS_MAX_LENGTH,
 } from '@/lib/orders/cod-total'
+import {
+  trackBeginCheckout,
+  trackPurchase,
+} from '@/lib/analytics/events'
+import { showToast } from '@/components/ToastHost'
 
 interface PathaoCity {
   city_id: number
@@ -42,21 +48,123 @@ interface CheckoutErrorState {
   field?: CheckoutFieldKey
 }
 
+type CheckoutFormData = {
+  email: string
+  fullName: string
+  phone: string
+  secondaryPhone: string
+  address: string
+  cityId: string
+  cityName: string
+  zoneId: string
+  zoneName: string
+  areaId: string
+  areaName: string
+}
+
+type CheckoutPaymentMethod = 'cod' | 'bkash' | 'nagad'
+
+type CheckoutDraft = {
+  formData: CheckoutFormData
+  paymentMethod: CheckoutPaymentMethod
+  showSecondaryPhone: boolean
+}
+
+const CHECKOUT_DRAFT_KEY = 'viable-checkout-draft'
+
+const EMPTY_FORM: CheckoutFormData = {
+  email: '',
+  fullName: '',
+  phone: '',
+  secondaryPhone: '',
+  address: '',
+  cityId: '',
+  cityName: '',
+  zoneId: '',
+  zoneName: '',
+  areaId: '',
+  areaName: '',
+}
+
+function parsePaymentMethod(value: unknown): CheckoutPaymentMethod {
+  if (value === 'bkash' || value === 'nagad') return value
+  return 'cod'
+}
+
+function readCheckoutDraft(): CheckoutDraft | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(CHECKOUT_DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CheckoutDraft>
+    if (!parsed?.formData || typeof parsed.formData !== 'object') return null
+    return {
+      formData: { ...EMPTY_FORM, ...parsed.formData },
+      paymentMethod: parsePaymentMethod(parsed.paymentMethod),
+      showSecondaryPhone: Boolean(parsed.showSecondaryPhone),
+    }
+  } catch {
+    return null
+  }
+}
+
 const inputClass =
   'mt-1.5 w-full rounded-xl border border-cloud bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition focus:border-navy/40 focus:ring-2 focus:ring-navy/10'
+
+const inputErrorClass =
+  'mt-1.5 w-full rounded-xl border border-spark/50 bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition focus:border-spark/50 focus:ring-2 focus:ring-spark/15'
+
+function normalizeBdMobile(raw: string) {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('01')) return digits
+  if (digits.length === 13 && digits.startsWith('8801')) return digits.slice(2)
+  return digits
+}
+
+function fieldClass(hasError: boolean) {
+  return hasError ? inputErrorClass : inputClass
+}
+
+function SectionHeading({
+  step,
+  title,
+  hint,
+}: {
+  step: number
+  title: string
+  hint?: string
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-[12px] font-bold text-white">
+        {step}
+      </span>
+      <div className="min-w-0 pt-0.5">
+        <h2 className="text-[15px] font-semibold leading-none">{title}</h2>
+        {hint ? (
+          <p className="mt-1.5 text-[13px] text-mute">{hint}</p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 export function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { items, cartTotal, cartWeightKg, clearCart, hydrated } = useCart()
+  const { items, cartTotal, cartCount, cartWeightKg, clearCart, hydrated } =
+    useCart()
   const { addOrder } = useOrders()
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [placedTotal, setPlacedTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<CheckoutErrorState | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bkash'>('cod')
+  const [paymentMethod, setPaymentMethod] =
+    useState<CheckoutPaymentMethod>('cod')
   const [bkashAvailable, setBkashAvailable] = useState(false)
+  const [nagadAvailable, setNagadAvailable] = useState(false)
+  const [gatewaysChecked, setGatewaysChecked] = useState(false)
   const [quoteCodTotal, setQuoteCodTotal] = useState<number | null>(null)
   const [quoteCodShipping, setQuoteCodShipping] = useState<number | null>(null)
   const [quotePrepaidTotal, setQuotePrepaidTotal] = useState<number | null>(
@@ -65,20 +173,9 @@ export function CheckoutPage() {
   const [quotePrepaidShipping, setQuotePrepaidShipping] = useState<
     number | null
   >(null)
-  const [formData, setFormData] = useState({
-    email: '',
-    fullName: '',
-    phone: '',
-    secondaryPhone: '',
-    address: '',
-    cityId: '',
-    cityName: '',
-    zoneId: '',
-    zoneName: '',
-    areaId: '',
-    areaName: '',
-  })
+  const [formData, setFormData] = useState<CheckoutFormData>(EMPTY_FORM)
   const [showSecondaryPhone, setShowSecondaryPhone] = useState(false)
+  const [draftHydrated, setDraftHydrated] = useState(false)
   const [cities, setCities] = useState<PathaoCity[]>([])
   const [zones, setZones] = useState<PathaoZone[]>([])
   const [areas, setAreas] = useState<PathaoArea[]>([])
@@ -94,13 +191,26 @@ export function CheckoutPage() {
   )
   const [copied, setCopied] = useState(false)
   const fieldRefs = useRef<
-    Partial<Record<CheckoutFieldKey, HTMLInputElement | HTMLSelectElement | null>>
+    Partial<
+      Record<
+        CheckoutFieldKey,
+        | HTMLInputElement
+        | HTMLTextAreaElement
+        | HTMLSelectElement
+        | SearchableSelectHandle
+        | null
+      >
+    >
   >({})
 
+  const clearFieldError = useCallback((field: CheckoutFieldKey) => {
+    setError((prev) => (prev?.field === field ? null : prev))
+  }, [])
+
   const quoteShipping =
-    paymentMethod === 'bkash' ? quotePrepaidShipping : quoteCodShipping
+    paymentMethod === 'cod' ? quoteCodShipping : quotePrepaidShipping
   const quoteTotal =
-    paymentMethod === 'bkash' ? quotePrepaidTotal : quoteCodTotal
+    paymentMethod === 'cod' ? quoteCodTotal : quotePrepaidTotal
 
   useEffect(() => {
     const pay = searchParams.get('pay')
@@ -109,24 +219,77 @@ export function CheckoutPage() {
     if (pay === 'success' && oid) {
       setOrderId(oid)
       setOrderPlaced(true)
+      let purchaseValue = 0
+      try {
+        const raw = window.sessionStorage.getItem('viable-purchase')
+        if (raw) {
+          const pending = JSON.parse(raw) as {
+            orderId?: string
+            total?: number
+          }
+          if (pending.orderId === oid && typeof pending.total === 'number') {
+            purchaseValue = pending.total
+            setPlacedTotal(pending.total)
+          }
+          window.sessionStorage.removeItem('viable-purchase')
+        }
+      } catch {
+        // ignore
+      }
+      trackPurchase({ transactionId: oid, value: purchaseValue })
+      try {
+        window.localStorage.removeItem(CHECKOUT_DRAFT_KEY)
+      } catch {
+        // ignore
+      }
       clearCart()
       return
     }
     if (pay === 'failed') {
+      const message = msg || 'Payment did not finish. You can try again.'
       setError({
         title: 'Payment not completed',
-        message: msg || 'bKash payment did not finish. You can try again.',
+        message,
+      })
+      showToast({
+        title: 'Payment not completed',
+        message,
       })
     }
   }, [searchParams, clearCart])
 
   useEffect(() => {
-    fetch('/api/payments/bkash/status', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j?.configured) setBkashAvailable(true)
-      })
-      .catch(() => {})
+    if (!hydrated || items.length === 0) return
+    trackBeginCheckout({
+      value: cartTotal,
+      items: items.map((item) => ({
+        item_id: item.product.id,
+        item_name: item.product.name,
+        item_category: item.product.categoryLabel || item.product.category,
+        price: item.product.price,
+        quantity: item.quantity,
+        item_variant: `EU ${item.size}`,
+      })),
+    })
+    // Once per checkout visit with a cart
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated])
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/payments/bkash/status', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((j) => {
+          if (j?.configured) setBkashAvailable(true)
+        })
+        .catch(() => {}),
+      fetch('/api/payments/nagad/status', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((j) => {
+          if (j?.configured) setNagadAvailable(true)
+        })
+        .catch(() => {}),
+    ]).finally(() => setGatewaysChecked(true))
   }, [])
 
   const addressSuffix = [formData.areaName, formData.zoneName, formData.cityName]
@@ -172,53 +335,108 @@ export function CheckoutPage() {
       .finally(() => setCitiesLoading(false))
   }, [])
 
-  const loadZones = useCallback((cityId: string) => {
-    if (!cityId) {
+  const loadZones = useCallback(
+    (cityId: string, options?: { resetSelection?: boolean }) => {
+      const resetSelection = options?.resetSelection ?? true
+      if (!cityId) {
+        setZones([])
+        setAreas([])
+        setShippingPrice(null)
+        return
+      }
+      setZonesLoading(true)
       setZones([])
       setAreas([])
       setShippingPrice(null)
-      return
-    }
-    setZonesLoading(true)
-    setZones([])
-    setAreas([])
-    setShippingPrice(null)
-    setFormData((prev) => ({
-      ...prev,
-      zoneId: '',
-      zoneName: '',
-      areaId: '',
-      areaName: '',
-    }))
-    fetch(`/api/pathao/zones?city_id=${encodeURIComponent(cityId)}`, {
-      cache: 'no-store',
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.success && Array.isArray(j.data)) setZones(j.data)
+      if (resetSelection) {
+        setFormData((prev) => ({
+          ...prev,
+          zoneId: '',
+          zoneName: '',
+          areaId: '',
+          areaName: '',
+        }))
+      }
+      fetch(`/api/pathao/zones?city_id=${encodeURIComponent(cityId)}`, {
+        cache: 'no-store',
       })
-      .catch(() => {})
-      .finally(() => setZonesLoading(false))
-  }, [])
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.success && Array.isArray(j.data)) setZones(j.data)
+        })
+        .catch(() => {})
+        .finally(() => setZonesLoading(false))
+    },
+    [],
+  )
 
-  const loadAreas = useCallback((zoneId: string) => {
-    if (!zoneId) {
+  const loadAreas = useCallback(
+    (zoneId: string, options?: { resetSelection?: boolean }) => {
+      const resetSelection = options?.resetSelection ?? true
+      if (!zoneId) {
+        setAreas([])
+        return
+      }
+      setAreasLoading(true)
       setAreas([])
-      return
-    }
-    setAreasLoading(true)
-    setAreas([])
-    setFormData((prev) => ({ ...prev, areaId: '', areaName: '' }))
-    fetch(`/api/pathao/areas?zone_id=${encodeURIComponent(zoneId)}`, {
-      cache: 'no-store',
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.success && Array.isArray(j.data)) setAreas(j.data)
+      if (resetSelection) {
+        setFormData((prev) => ({ ...prev, areaId: '', areaName: '' }))
+      }
+      fetch(`/api/pathao/areas?zone_id=${encodeURIComponent(zoneId)}`, {
+        cache: 'no-store',
       })
-      .catch(() => {})
-      .finally(() => setAreasLoading(false))
-  }, [])
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.success && Array.isArray(j.data)) setAreas(j.data)
+        })
+        .catch(() => {})
+        .finally(() => setAreasLoading(false))
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const draft = readCheckoutDraft()
+    if (draft) {
+      setFormData(draft.formData)
+      setPaymentMethod(draft.paymentMethod)
+      setShowSecondaryPhone(
+        draft.showSecondaryPhone || Boolean(draft.formData.secondaryPhone),
+      )
+      if (draft.formData.cityId) {
+        loadZones(draft.formData.cityId, { resetSelection: false })
+      }
+      if (draft.formData.zoneId) {
+        loadAreas(draft.formData.zoneId, { resetSelection: false })
+      }
+    }
+    setDraftHydrated(true)
+  }, [loadZones, loadAreas])
+
+  useEffect(() => {
+    if (!draftHydrated) return
+    try {
+      const draft: CheckoutDraft = {
+        formData,
+        paymentMethod,
+        showSecondaryPhone:
+          showSecondaryPhone || Boolean(formData.secondaryPhone),
+      }
+      window.localStorage.setItem(CHECKOUT_DRAFT_KEY, JSON.stringify(draft))
+    } catch {
+      // ignore quota errors
+    }
+  }, [formData, paymentMethod, showSecondaryPhone, draftHydrated])
+
+  useEffect(() => {
+    if (!gatewaysChecked) return
+    if (paymentMethod === 'bkash' && !bkashAvailable) {
+      setPaymentMethod('cod')
+    }
+    if (paymentMethod === 'nagad' && !nagadAvailable) {
+      setPaymentMethod('cod')
+    }
+  }, [gatewaysChecked, bkashAvailable, nagadAvailable, paymentMethod])
 
   const loadShippingPrice = useCallback(
     (cityId: string, zoneId: string, itemWeight: number, subtotal: number) => {
@@ -281,9 +499,22 @@ export function CheckoutPage() {
             setShippingPriceError(null)
           } else {
             setShippingPriceError(j.error || 'Could not get shipping rate')
+            showToast({
+              title: 'Delivery quote failed',
+              message:
+                j.error ||
+                'We couldn’t get a Pathao rate for that address. Try again or pick another area.',
+            })
           }
         })
-        .catch(() => setShippingPriceError('Could not load shipping rate'))
+        .catch(() => {
+          setShippingPriceError('Could not load shipping rate')
+          showToast({
+            title: 'Delivery quote failed',
+            message:
+              'Check your connection and try selecting your city again.',
+          })
+        })
         .finally(() => setShippingPriceLoading(false))
     },
     [],
@@ -330,25 +561,21 @@ export function CheckoutPage() {
         field: 'phone',
       }
     }
-    const digits = formData.phone.replace(/\D/g, '')
-    const normalized =
-      digits.length === 11 && digits.startsWith('01')
-        ? digits
-        : digits.length === 13 && digits.startsWith('8801')
-          ? digits.slice(2)
-          : digits
-    if (!isValidBdMobile(normalized)) {
+    if (!isValidBdMobile(normalizeBdMobile(formData.phone))) {
       return {
         title: 'Check your phone number',
         message: 'Use an 11-digit BD mobile number, e.g. 01712345678.',
         field: 'phone',
       }
     }
-    if (!formData.address.trim()) {
+    if (
+      formData.secondaryPhone.trim() &&
+      !isValidBdMobile(normalizeBdMobile(formData.secondaryPhone))
+    ) {
       return {
-        title: 'Address required',
-        message: 'Please enter your detailed delivery address.',
-        field: 'address',
+        title: 'Check secondary phone',
+        message: 'Use an 11-digit BD mobile number, e.g. 01712345678.',
+        field: 'secondaryPhone',
       }
     }
     if (!formData.cityId) {
@@ -363,6 +590,13 @@ export function CheckoutPage() {
         title: 'Zone required',
         message: 'Please select a zone.',
         field: 'zoneId',
+      }
+    }
+    if (!formData.address.trim()) {
+      return {
+        title: 'Address required',
+        message: 'Please enter your detailed delivery address.',
+        field: 'address',
       }
     }
     if (shippingPriceLoading) {
@@ -438,21 +672,39 @@ export function CheckoutPage() {
         total?: number
         paymentMethod?: string
         bkashURL?: string
+        nagadURL?: string
       }
 
       if (!res.ok || !data.success) {
+        const message =
+          data.error ||
+          'Please review your delivery details and try again.'
         setError({
           title: "We couldn't place your order",
-          message:
-            data.error ||
-            'Please review your delivery details and try again.',
+          message,
+        })
+        showToast({
+          title: "We couldn't place your order",
+          message,
         })
         setLoading(false)
         return
       }
 
-      if (data.bkashURL) {
+      const redirectUrl = data.bkashURL || data.nagadURL
+      if (redirectUrl) {
         if (data.orderId) {
+          try {
+            window.sessionStorage.setItem(
+              'viable-purchase',
+              JSON.stringify({
+                orderId: data.orderId,
+                total: typeof data.total === 'number' ? data.total : cartTotal,
+              }),
+            )
+          } catch {
+            // ignore
+          }
           addOrder({
             orderId: data.orderId,
             date: new Date().toISOString(),
@@ -460,18 +712,43 @@ export function CheckoutPage() {
             pathaoConsignmentId: null,
             status: 'pending_payment',
             total: typeof data.total === 'number' ? data.total : undefined,
+            paymentMethod:
+              paymentMethod === 'nagad'
+                ? 'nagad'
+                : paymentMethod === 'bkash'
+                  ? 'bkash'
+                  : 'cod',
             itemsSummary: items
               .map((i) => `${i.product.name} (EU ${i.size}) × ${i.quantity}`)
               .join(' · '),
           })
         }
-        window.location.href = data.bkashURL
+        window.location.href = redirectUrl
         return
       }
 
       setOrderId(data.orderId ?? null)
       setPlacedTotal(typeof data.total === 'number' ? data.total : null)
       setOrderPlaced(true)
+      if (data.orderId) {
+        trackPurchase({
+          transactionId: data.orderId,
+          value: typeof data.total === 'number' ? data.total : cartTotal,
+          items: items.map((item) => ({
+            item_id: item.product.id,
+            item_name: item.product.name,
+            item_category: item.product.categoryLabel || item.product.category,
+            price: item.product.price,
+            quantity: item.quantity,
+            item_variant: `EU ${item.size}`,
+          })),
+        })
+      }
+      try {
+        window.localStorage.removeItem(CHECKOUT_DRAFT_KEY)
+      } catch {
+        // ignore
+      }
       if (data.orderId) {
         addOrder({
           orderId: data.orderId,
@@ -480,6 +757,7 @@ export function CheckoutPage() {
           pathaoConsignmentId: null,
           status: 'awaiting_fulfillment',
           total: typeof data.total === 'number' ? data.total : undefined,
+          paymentMethod: paymentMethod === 'cod' ? 'cod' : paymentMethod,
           itemsSummary: items
             .map((i) => `${i.product.name} (EU ${i.size}) × ${i.quantity}`)
             .join(' · '),
@@ -491,12 +769,16 @@ export function CheckoutPage() {
         title: 'Connection problem',
         message: 'Check your internet connection and try again.',
       })
+      showToast({
+        title: 'Connection problem',
+        message: 'Check your internet connection and try again.',
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  if (!hydrated) {
+  if (!hydrated || !draftHydrated) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-24 text-center text-mute md:px-6">
         Loading checkout…
@@ -505,34 +787,35 @@ export function CheckoutPage() {
   }
 
   if (orderPlaced) {
+    const paidOnline = searchParams.get('pay') === 'success'
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 md:px-6">
+      <div className="mx-auto max-w-lg px-4 py-16 md:px-6 md:py-20">
         <div className="flex flex-col items-center text-center">
           <motion.div
             className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-navy text-white"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.35 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
           >
             <Check className="h-8 w-8" strokeWidth={2.5} />
           </motion.div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">
+          <h1 className="font-display text-3xl font-extrabold tracking-tight md:text-4xl">
             Order confirmed
           </h1>
-                <p className="mt-3 max-w-md text-[15px] text-mute">
-            {searchParams.get('pay') === 'success'
+          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-mute">
+            {paidOnline
               ? 'Payment received. We’ll prepare your order for Pathao shipping shortly.'
               : 'Pay cash on delivery when your order arrives. We’ll prepare it for Pathao shipping shortly.'}
           </p>
         </div>
 
         {orderId ? (
-          <div className="mt-8 rounded-2xl border border-cloud bg-mist/60 p-5">
+          <div className="mt-8 rounded-2xl border border-cloud bg-mist/80 p-5 sm:p-6">
             <p className="text-[12px] font-semibold uppercase tracking-wider text-mute">
               Order number
             </p>
             <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="font-mono text-[18px] font-semibold text-ink">
+              <p className="text-[18px] font-semibold tracking-tight text-navy">
                 {orderId}
               </p>
               <button
@@ -543,7 +826,7 @@ export function CheckoutPage() {
                     window.setTimeout(() => setCopied(false), 2000)
                   })
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-cloud bg-white px-3 py-1.5 text-[12px] font-medium text-ink"
+                className="inline-flex items-center gap-1.5 rounded-full border border-cloud bg-white px-3 py-1.5 text-[12px] font-medium text-ink transition hover:bg-white"
               >
                 {copied ? (
                   <Check className="h-3.5 w-3.5" />
@@ -554,26 +837,28 @@ export function CheckoutPage() {
               </button>
             </div>
             {placedTotal != null ? (
-              <p className="mt-3 text-[14px] text-mute">
-                Amount to collect:{' '}
-                <span className="font-semibold text-ink">
+              <div className="mt-4 flex items-baseline justify-between border-t border-cloud pt-4">
+                <span className="text-[13px] text-mute">
+                  {paidOnline ? 'Amount paid' : 'Amount to pay'}
+                </span>
+                <span className="font-display text-[22px] tabular-nums tracking-tight text-navy-deep">
                   {formatPrice(placedTotal)}
                 </span>
-              </p>
+              </div>
             ) : null}
           </div>
         ) : null}
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
             href="/orders"
-            className="inline-flex justify-center rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white hover:bg-navy-soft"
+            className="inline-flex justify-center rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft"
           >
             View your orders
           </Link>
           <Link
             href="/shop"
-            className="inline-flex justify-center rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink hover:bg-mist"
+            className="inline-flex justify-center rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:bg-mist"
           >
             Continue shopping
           </Link>
@@ -586,23 +871,52 @@ export function CheckoutPage() {
     return null
   }
 
+  const canSubmit =
+    !loading && !shippingPriceLoading && shippingPrice != null
+  const submitLabel = loading
+    ? paymentMethod === 'bkash'
+      ? 'Redirecting to bKash…'
+      : paymentMethod === 'nagad'
+        ? 'Redirecting to Nagad…'
+        : 'Placing order…'
+    : paymentMethod === 'bkash'
+      ? 'Pay with bKash'
+      : paymentMethod === 'nagad'
+        ? 'Pay with Nagad'
+        : 'Place COD order'
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14 lg:px-8">
-      <h1 className="font-display text-4xl font-extrabold tracking-tight md:text-5xl">
-        Checkout
-      </h1>
-      <p className="mt-2 text-[15px] text-mute">
-        Cash on delivery · Pathao shipping quote
-      </p>
+    <div className="mx-auto max-w-7xl px-4 py-10 pb-28 md:px-6 md:py-14 lg:px-8 lg:pb-14">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-4xl font-extrabold tracking-tight md:text-5xl">
+            Checkout
+          </h1>
+          <p className="mt-2 text-[15px] text-mute">
+            Delivery via Pathao · Pay on delivery, bKash, or Nagad
+          </p>
+        </div>
+        <Link
+          href="/cart"
+          className="text-[13px] font-medium text-navy underline-offset-4 hover:underline"
+        >
+          Edit bag
+        </Link>
+      </div>
 
       <form
+        id="checkout-form"
         onSubmit={handleSubmit}
-        className="mt-10 grid gap-10 lg:grid-cols-[1fr_360px]"
+        className="mt-10 grid gap-8 lg:grid-cols-[1fr_340px] lg:gap-10"
       >
-        <div className="space-y-6">
+        <div className="space-y-5">
           <section className="rounded-2xl border border-cloud bg-white p-5 sm:p-6">
-            <h2 className="text-[15px] font-semibold">Contact</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <SectionHeading
+              step={1}
+              title="Contact"
+              hint="We’ll use this to confirm delivery."
+            />
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="block sm:col-span-2">
                 <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
                   Full name
@@ -611,11 +925,12 @@ export function CheckoutPage() {
                   ref={(el) => {
                     fieldRefs.current.fullName = el
                   }}
-                  className={inputClass}
+                  className={fieldClass(error?.field === 'fullName')}
                   value={formData.fullName}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    clearFieldError('fullName')
                     setFormData((p) => ({ ...p, fullName: e.target.value }))
-                  }
+                  }}
                   autoComplete="name"
                   required
                 />
@@ -628,16 +943,20 @@ export function CheckoutPage() {
                   ref={(el) => {
                     fieldRefs.current.phone = el
                   }}
-                  className={inputClass}
+                  className={fieldClass(error?.field === 'phone')}
                   value={formData.phone}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    clearFieldError('phone')
                     setFormData((p) => ({ ...p, phone: e.target.value }))
-                  }
+                  }}
                   placeholder="01712345678"
                   inputMode="tel"
                   autoComplete="tel"
                   required
                 />
+                <p className="mt-1 text-[12px] text-mute">
+                  11-digit BD mobile
+                </p>
               </label>
               <label className="block">
                 <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
@@ -647,12 +966,13 @@ export function CheckoutPage() {
                   ref={(el) => {
                     fieldRefs.current.email = el
                   }}
-                  className={inputClass}
+                  className={fieldClass(error?.field === 'email')}
                   type="email"
                   value={formData.email}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    clearFieldError('email')
                     setFormData((p) => ({ ...p, email: e.target.value }))
-                  }
+                  }}
                   autoComplete="email"
                 />
               </label>
@@ -666,21 +986,23 @@ export function CheckoutPage() {
                   ref={(el) => {
                     fieldRefs.current.secondaryPhone = el
                   }}
-                  className={inputClass}
+                  className={fieldClass(error?.field === 'secondaryPhone')}
                   value={formData.secondaryPhone}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    clearFieldError('secondaryPhone')
                     setFormData((p) => ({
                       ...p,
                       secondaryPhone: e.target.value,
                     }))
-                  }
+                  }}
+                  placeholder="01712345678"
                   inputMode="tel"
                 />
               </label>
             ) : (
               <button
                 type="button"
-                className="mt-3 text-[13px] font-medium text-navy hover:underline"
+                className="mt-4 text-[13px] font-medium text-navy hover:underline"
                 onClick={() => setShowSecondaryPhone(true)}
               >
                 + Add secondary phone
@@ -689,165 +1011,242 @@ export function CheckoutPage() {
           </section>
 
           <section className="rounded-2xl border border-cloud bg-white p-5 sm:p-6">
-            <h2 className="text-[15px] font-semibold">Delivery</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <SectionHeading
+              step={2}
+              title="Delivery"
+              hint="Select city and zone to get your shipping quote."
+            />
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <label className="block">
                 <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
                   City
                 </span>
-                <select
+                <SearchableSelect
                   ref={(el) => {
                     fieldRefs.current.cityId = el
                   }}
-                  className={inputClass}
                   value={formData.cityId}
                   disabled={citiesLoading}
-                  onChange={(e) => {
-                    const city = cities.find(
-                      (c) => String(c.city_id) === e.target.value,
-                    )
+                  invalid={error?.field === 'cityId'}
+                  placeholder={citiesLoading ? 'Loading…' : 'Select city'}
+                  searchPlaceholder="Search city…"
+                  options={cities.map((c) => ({
+                    value: String(c.city_id),
+                    label: c.city_name,
+                  }))}
+                  onChange={(next) => {
+                    clearFieldError('cityId')
+                    const city = cities.find((c) => String(c.city_id) === next)
                     setFormData((p) => ({
                       ...p,
-                      cityId: e.target.value,
+                      cityId: next,
                       cityName: city?.city_name ?? '',
                     }))
-                    loadZones(e.target.value)
+                    loadZones(next)
                   }}
                   required
-                >
-                  <option value="">
-                    {citiesLoading ? 'Loading…' : 'Select city'}
-                  </option>
-                  {cities.map((c) => (
-                    <option key={c.city_id} value={c.city_id}>
-                      {c.city_name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <label className="block">
                 <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
                   Zone
                 </span>
-                <select
+                <SearchableSelect
                   ref={(el) => {
                     fieldRefs.current.zoneId = el
                   }}
-                  className={inputClass}
                   value={formData.zoneId}
                   disabled={!formData.cityId || zonesLoading}
-                  onChange={(e) => {
-                    const zone = zones.find(
-                      (z) => String(z.zone_id) === e.target.value,
-                    )
+                  invalid={error?.field === 'zoneId'}
+                  placeholder={
+                    !formData.cityId
+                      ? 'Select city first'
+                      : zonesLoading
+                        ? 'Loading…'
+                        : 'Select zone'
+                  }
+                  searchPlaceholder="Search zone…"
+                  options={zones.map((z) => ({
+                    value: String(z.zone_id),
+                    label: z.zone_name,
+                  }))}
+                  onChange={(next) => {
+                    clearFieldError('zoneId')
+                    const zone = zones.find((z) => String(z.zone_id) === next)
                     setFormData((p) => ({
                       ...p,
-                      zoneId: e.target.value,
+                      zoneId: next,
                       zoneName: zone?.zone_name ?? '',
                     }))
-                    loadAreas(e.target.value)
+                    loadAreas(next)
                   }}
                   required
-                >
-                  <option value="">
-                    {zonesLoading ? 'Loading…' : 'Select zone'}
-                  </option>
-                  {zones.map((z) => (
-                    <option key={z.zone_id} value={z.zone_id}>
-                      {z.zone_name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <label className="block">
                 <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
                   Area
                 </span>
-                <select
+                <SearchableSelect
                   ref={(el) => {
                     fieldRefs.current.areaId = el
                   }}
-                  className={inputClass}
                   value={formData.areaId}
                   disabled={!formData.zoneId || areasLoading}
-                  onChange={(e) => {
-                    const area = areas.find(
-                      (a) => String(a.area_id) === e.target.value,
-                    )
+                  invalid={error?.field === 'areaId'}
+                  placeholder={
+                    !formData.zoneId
+                      ? 'Select zone first'
+                      : areasLoading
+                        ? 'Loading…'
+                        : 'Select area (optional)'
+                  }
+                  searchPlaceholder="Search area…"
+                  options={areas.map((a) => ({
+                    value: String(a.area_id),
+                    label: a.area_name,
+                  }))}
+                  onChange={(next) => {
+                    clearFieldError('areaId')
+                    const area = areas.find((a) => String(a.area_id) === next)
                     setFormData((p) => ({
                       ...p,
-                      areaId: e.target.value,
+                      areaId: next,
                       areaName: area?.area_name ?? '',
                     }))
                   }}
-                >
-                  <option value="">
-                    {areasLoading ? 'Loading…' : 'Select area (optional)'}
-                  </option>
-                  {areas.map((a) => (
-                    <option key={a.area_id} value={a.area_id}>
-                      {a.area_name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             </div>
             <label className="mt-4 block">
               <span className="text-[12px] font-semibold uppercase tracking-wider text-mute">
                 Detailed address
               </span>
-              <input
+              <textarea
                 ref={(el) => {
                   fieldRefs.current.address = el
                 }}
-                className={inputClass}
+                className={`${fieldClass(error?.field === 'address')} min-h-[5.5rem] resize-y`}
                 value={formData.address}
                 maxLength={addressMaxLength}
-                onChange={(e) =>
+                onChange={(e) => {
+                  clearFieldError('address')
                   setFormData((p) => ({ ...p, address: e.target.value }))
-                }
+                }}
                 placeholder="House, road, landmark"
                 required
               />
               <p className="mt-1 text-[12px] text-mute">
-                {formData.address.length}/{addressMaxLength} · city/zone/area
-                are added automatically
+                {formData.address.length}/{addressMaxLength}
+                {addressSuffix
+                  ? ` · “${addressSuffix}” is added automatically`
+                  : ' · city/zone/area are added automatically'}
               </p>
             </label>
+            {!formData.zoneId ? (
+              <p className="mt-3 rounded-xl bg-mist/80 px-3.5 py-2.5 text-[13px] text-mute">
+                Shipping charge appears after you pick a city and zone.
+              </p>
+            ) : shippingPriceLoading ? (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-mist/80 px-3.5 py-2.5 text-[13px] text-mute">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Calculating delivery charge…
+              </p>
+            ) : quoteShipping != null ? (
+              <p className="mt-3 rounded-xl bg-navy/5 px-3.5 py-2.5 text-[13px] text-navy">
+                Delivery charge:{' '}
+                <span className="font-semibold tabular-nums">
+                  {formatPrice(quoteShipping)}
+                </span>
+                {paymentMethod === 'cod' ? ' (included in COD total)' : ''}
+              </p>
+            ) : null}
           </section>
 
           <section className="rounded-2xl border border-cloud bg-white p-5 sm:p-6">
-            <h2 className="text-[15px] font-semibold">Payment</h2>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <SectionHeading step={3} title="Payment" />
+            <p className="mt-2 text-[13px] text-mute">
+              {gatewaysChecked
+                ? [
+                    'Cash on delivery',
+                    bkashAvailable ? 'bKash' : null,
+                    nagadAvailable ? 'Nagad' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : 'Checking available payment methods…'}
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => setPaymentMethod('cod')}
+                aria-pressed={paymentMethod === 'cod'}
                 className={[
-                  'rounded-xl px-4 py-3 text-left text-[14px] font-semibold transition',
+                  'rounded-xl border px-4 py-3.5 text-left transition',
                   paymentMethod === 'cod'
-                    ? 'bg-navy text-white'
-                    : 'bg-ink/[0.045] text-ink hover:bg-ink/[0.07]',
+                    ? 'border-navy bg-navy text-white'
+                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
                 ].join(' ')}
               >
-                Cash on delivery
+                <span className="block text-[14px] font-semibold">
+                  Cash on delivery
+                </span>
+                <span
+                  className={[
+                    'mt-1 block text-[12px] font-normal',
+                    paymentMethod === 'cod' ? 'text-white/75' : 'text-mute',
+                  ].join(' ')}
+                >
+                  Pay when your order arrives
+                </span>
               </button>
               <button
                 type="button"
                 disabled={!bkashAvailable}
                 onClick={() => setPaymentMethod('bkash')}
+                aria-pressed={paymentMethod === 'bkash'}
                 className={[
-                  'rounded-xl px-4 py-3 text-left text-[14px] font-semibold transition disabled:opacity-45',
+                  'rounded-xl border px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45',
                   paymentMethod === 'bkash'
-                    ? 'bg-navy text-white'
-                    : 'bg-ink/[0.045] text-ink hover:bg-ink/[0.07]',
+                    ? 'border-navy bg-navy text-white'
+                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
                 ].join(' ')}
               >
-                bKash
-                {!bkashAvailable ? (
-                  <span className="mt-1 block text-[11px] font-normal opacity-80">
-                    Not configured yet
-                  </span>
-                ) : null}
+                <span className="block text-[14px] font-semibold">bKash</span>
+                <span
+                  className={[
+                    'mt-1 block text-[12px] font-normal',
+                    paymentMethod === 'bkash' ? 'text-white/75' : 'text-mute',
+                  ].join(' ')}
+                >
+                  {!bkashAvailable
+                    ? 'Not configured yet'
+                    : 'Pay now, then we ship'}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={!nagadAvailable}
+                onClick={() => setPaymentMethod('nagad')}
+                aria-pressed={paymentMethod === 'nagad'}
+                className={[
+                  'rounded-xl border px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45',
+                  paymentMethod === 'nagad'
+                    ? 'border-navy bg-navy text-white'
+                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
+                ].join(' ')}
+              >
+                <span className="block text-[14px] font-semibold">Nagad</span>
+                <span
+                  className={[
+                    'mt-1 block text-[12px] font-normal',
+                    paymentMethod === 'nagad' ? 'text-white/75' : 'text-mute',
+                  ].join(' ')}
+                >
+                  {!nagadAvailable
+                    ? 'Not configured yet'
+                    : 'Pay now, then we ship'}
+                </span>
               </button>
             </div>
           </section>
@@ -863,35 +1262,75 @@ export function CheckoutPage() {
           ) : null}
         </div>
 
-        <aside className="h-fit rounded-2xl bg-mist/80 p-6 lg:sticky lg:top-28">
-          <h2 className="text-[15px] font-semibold">Order summary</h2>
-          <ul className="mt-4 space-y-3 border-b border-cloud pb-4">
-            {items.map((item) => (
-              <li
+        <aside className="h-fit rounded-2xl bg-mist/80 p-5 lg:sticky lg:top-28 lg:p-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[15px] font-semibold">Order summary</h2>
+            <span className="text-[12px] font-medium text-mute">
+              {cartCount} {cartCount === 1 ? 'item' : 'items'}
+            </span>
+          </div>
+
+          <ul className="mt-4 divide-y divide-cloud border-y border-cloud">
+            {items.map((item, index) => (
+              <motion.li
                 key={`${item.product.id}-${item.size}-${item.variantId}`}
-                className="flex justify-between gap-3 text-[13px]"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.3,
+                  delay: index * 0.04,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className="flex items-center gap-3 py-3"
               >
-                <span className="text-mute">
-                  {item.product.name} · EU {item.size} × {item.quantity}
-                </span>
-                <span className="shrink-0 font-medium text-ink">
+                <Link
+                  href={`/product/${item.product.slug}`}
+                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white"
+                >
+                  <img
+                    src={item.product.image}
+                    alt={item.product.name}
+                    className="h-full w-full object-contain"
+                  />
+                  {item.quantity > 1 ? (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-navy px-1 text-[10px] font-bold text-white">
+                      ×{item.quantity}
+                    </span>
+                  ) : null}
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/product/${item.product.slug}`}
+                    className="truncate text-[13px] font-semibold text-ink hover:text-navy"
+                  >
+                    {item.product.name}
+                  </Link>
+                  <p className="mt-0.5 text-[12px] text-mute">
+                    Size EU {item.size}
+                    {item.quantity > 1
+                      ? ` · ${item.quantity} × ${formatPrice(item.product.price)}`
+                      : null}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums">
                   {formatPrice(item.product.price * item.quantity)}
                 </span>
-              </li>
+              </motion.li>
             ))}
           </ul>
-          <div className="mt-4 space-y-2 text-[14px]">
+
+          <div className="mt-4 space-y-2.5 text-[14px]">
             <div className="flex justify-between text-mute">
               <span>Subtotal</span>
-              <span className="font-medium text-ink">
+              <span className="font-medium tabular-nums text-ink">
                 {formatPrice(cartTotal)}
               </span>
             </div>
             <div className="flex justify-between text-mute">
               <span>
-                {paymentMethod === 'bkash' ? 'Delivery' : 'Delivery + COD fee'}
+                {paymentMethod === 'cod' ? 'Delivery charge' : 'Delivery'}
               </span>
-              <span className="font-medium text-ink">
+              <span className="font-medium tabular-nums text-ink">
                 {shippingPriceLoading
                   ? 'Calculating…'
                   : quoteShipping != null
@@ -900,9 +1339,9 @@ export function CheckoutPage() {
               </span>
             </div>
             {campaignLabel ? (
-              <div className="flex justify-between text-[12px] text-navy">
+              <div className="flex justify-between text-[13px] text-navy">
                 <span>{campaignLabel}</span>
-                <span>
+                <span className="tabular-nums">
                   {campaignDiscount != null && campaignDiscount > 0
                     ? `−${formatPrice(campaignDiscount)}`
                     : 'Applied'}
@@ -912,39 +1351,63 @@ export function CheckoutPage() {
             {shippingPriceError ? (
               <p className="text-[12px] text-spark">{shippingPriceError}</p>
             ) : null}
-            <div className="flex justify-between border-t border-cloud pt-3 text-[16px] font-semibold text-ink">
-              <span>{paymentMethod === 'bkash' ? 'Total' : 'Total (COD)'}</span>
-              <span>
+            <div className="flex items-end justify-between border-t border-cloud pt-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+                  {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
+                </p>
+                <p className="mt-0.5 text-[12px] text-mute">
+                  {paymentMethod === 'bkash'
+                    ? 'Paid via bKash'
+                    : paymentMethod === 'nagad'
+                      ? 'Paid via Nagad'
+                      : 'Pay when you receive'}
+                </p>
+              </div>
+              <span className="font-display text-[26px] tabular-nums tracking-tight text-navy-deep">
                 {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
               </span>
             </div>
           </div>
+
           <button
             type="submit"
-            disabled={loading || shippingPriceLoading || shippingPrice == null}
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50"
+            disabled={!canSubmit}
+            className="mt-5 hidden w-full items-center justify-center gap-2 rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50 lg:inline-flex"
           >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {paymentMethod === 'bkash'
-                  ? 'Redirecting to bKash…'
-                  : 'Placing order…'}
-              </>
-            ) : paymentMethod === 'bkash' ? (
-              'Pay with bKash'
-            ) : (
-              'Place COD order'
-            )}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitLabel}
           </button>
           <Link
             href="/cart"
-            className="mt-3 block text-center text-[13px] font-medium text-navy underline-offset-4 hover:underline"
+            className="mt-3 hidden text-center text-[13px] font-medium text-navy underline-offset-4 hover:underline lg:block"
           >
             Back to bag
           </Link>
         </aside>
       </form>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+              {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
+            </p>
+            <p className="truncate font-display text-[20px] tabular-nums tracking-tight text-navy-deep">
+              {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
+            </p>
+          </div>
+          <button
+            type="submit"
+            form="checkout-form"
+            disabled={!canSubmit}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-navy px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {submitLabel}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,15 @@
-import Link from 'next/link'
 import { requireRole } from '@/lib/auth/session'
-import { formatPrice } from '@/lib/brand'
-import { listOrders } from '@/lib/orders/queries'
+import {
+  countUndispatchedOrders,
+  listOrderCityNames,
+  listOrders,
+} from '@/lib/orders/queries'
+import type {
+  OrderStatus,
+  PaymentMethod,
+} from '@/lib/supabase/database.types'
+import { OrdersFilters } from '@/components/admin/OrdersFilters'
+import { OrdersTable } from '@/components/admin/OrdersTable'
 import { AdminPageHeader } from '@/components/admin/ui'
 
 export const metadata = {
@@ -9,97 +17,90 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-function statusLabel(order: {
-  status: string
-  pathao_consignment_id: string | null
-  pathao_error: string | null
-}) {
-  if (order.pathao_consignment_id) return 'Pathao sent'
-  if (order.pathao_error) return 'Pathao failed'
-  if (order.status === 'awaiting_fulfillment') return 'To ship'
-  return order.status
+const STATUS_SET = new Set<OrderStatus>([
+  'new',
+  'pending_payment',
+  'paid',
+  'awaiting_fulfillment',
+  'packed',
+  'shipped',
+  'delivered',
+  'cancelled',
+  'returned',
+])
+
+const PAYMENT_SET = new Set<PaymentMethod>(['cod', 'bkash', 'nagad'])
+
+type Props = {
+  searchParams: Promise<{
+    q?: string
+    status?: string
+    payment?: string
+    city?: string
+    from?: string
+    to?: string
+  }>
 }
 
-export default async function OrdersPage() {
+export default async function OrdersPage({ searchParams }: Props) {
   await requireRole(['admin', 'manager'])
-  const orders = await listOrders()
+  const params = await searchParams
+
+  const status =
+    params.status && STATUS_SET.has(params.status as OrderStatus)
+      ? (params.status as OrderStatus)
+      : undefined
+  const payment =
+    params.payment && PAYMENT_SET.has(params.payment as PaymentMethod)
+      ? (params.payment as PaymentMethod)
+      : undefined
+
+  const [orders, pendingDispatch, cities] = await Promise.all([
+    listOrders({
+      q: params.q,
+      status,
+      payment,
+      city: params.city,
+      from: params.from,
+      to: params.to,
+    }),
+    countUndispatchedOrders(),
+    listOrderCityNames(),
+  ])
 
   return (
     <>
       <AdminPageHeader
         title="Orders"
-        description="COD orders from the storefront. Dispatch to Pathao when ready to ship."
+        description={
+          <>
+            Filter by status, payment, city, or date. Select multiple to
+            dispatch to Pathao in bulk, or manage cancel / resend / delete per
+            order.
+            {pendingDispatch > 0 ? (
+              <span className="mt-1 block font-medium text-navy">
+                {pendingDispatch} awaiting Pathao dispatch
+              </span>
+            ) : null}
+          </>
+        }
       />
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <table className="w-full min-w-[720px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Order</th>
-              <th className="px-4 py-3 font-semibold">Customer</th>
-              <th className="px-4 py-3 font-semibold">Total</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-mute">
-                  No orders yet.
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-cloud last:border-0"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/orders/${order.id}`}
-                      className="font-semibold text-navy hover:underline"
-                    >
-                      {order.order_number}
-                    </Link>
-                    <p className="mt-0.5 text-[11px] text-mute uppercase">
-                      {order.payment_method}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-ink">{order.full_name}</p>
-                    <p className="text-mute">{order.phone}</p>
-                  </td>
-                  <td className="px-4 py-3 font-medium">
-                    {formatPrice(Number(order.total))}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={
-                        order.pathao_consignment_id
-                          ? 'text-navy'
-                          : order.pathao_error
-                            ? 'text-spark'
-                            : 'text-ink'
-                      }
-                    >
-                      {statusLabel(order)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-mute">
-                    {new Date(order.created_at).toLocaleString('en-BD', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <OrdersFilters
+        values={{
+          q: params.q,
+          status: params.status,
+          payment: params.payment,
+          city: params.city,
+          from: params.from,
+          to: params.to,
+        }}
+        cities={cities}
+      />
+
+      <OrdersTable
+        orders={orders.map(({ items: _items, ...order }) => order)}
+      />
     </>
   )
 }

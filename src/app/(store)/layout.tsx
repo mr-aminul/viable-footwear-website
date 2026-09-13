@@ -1,25 +1,18 @@
-'use client'
+import { getPublicMarketingConfig } from '@/lib/integrations/marketing-settings'
+import { MarketingTags } from '@/components/MarketingTags'
+import { StoreProviders } from '@/components/StoreProviders'
 
-import { Suspense } from 'react'
-import { CartProvider } from '@/context/CartContext'
-import { OrdersProvider } from '@/context/OrdersContext'
-import { Header } from '@/components/Header'
-import { Footer } from '@/components/Footer'
-
-export default function StoreLayout({
+export default async function StoreLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const marketing = await getPublicMarketingConfig()
+
   return (
-    <CartProvider>
-      <OrdersProvider>
-        <Suspense fallback={null}>
-          <Header />
-        </Suspense>
-        <main className="flex-1">{children}</main>
-        <Footer />
-      </OrdersProvider>
-    </CartProvider>
+    <>
+      <MarketingTags config={marketing} />
+      <StoreProviders>{children}</StoreProviders>
+    </>
   )
 }

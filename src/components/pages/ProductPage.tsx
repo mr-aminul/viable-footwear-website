@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, Check, Heart, Star, Truck } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import { productBadgeClassName } from '@/lib/catalog/badge'
 import { galleryForColor } from '@/lib/catalog/gallery'
 import type { Product } from '@/lib/catalog/types'
+import { enterTransition } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { ProductCard } from '@/components/ProductCard'
+import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
 
 export function ProductPage({
   product,
@@ -19,6 +21,7 @@ export function ProductPage({
   related: Product[]
 }) {
   const { addToCart, toggleWishlist, isWishlisted } = useCart()
+  const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<number | null>(null)
   const [colorIndex, setColorIndex] = useState(0)
   const [imageIndex, setImageIndex] = useState(0)
@@ -64,6 +67,16 @@ export function ProductPage({
 
   const wished = isWishlisted(product.id)
 
+  useEffect(() => {
+    trackViewItem({
+      item_id: product.id,
+      item_name: product.name,
+      item_category: product.categoryLabel || product.category,
+      price: product.price,
+      quantity: 1,
+    })
+  }, [product.id, product.name, product.category, product.categoryLabel, product.price])
+
   const handleAdd = () => {
     if (size == null) {
       setError('Select a size')
@@ -88,6 +101,14 @@ export function ProductPage({
 
     setError('')
     addToCart(product, size, 1, variant.id)
+    trackAddToCart({
+      item_id: product.id,
+      item_name: product.name,
+      item_category: product.categoryLabel || product.category,
+      price: product.price,
+      quantity: 1,
+      item_variant: `EU ${size}`,
+    })
     setAdded(true)
     window.setTimeout(() => setAdded(false), 2000)
   }
@@ -104,9 +125,9 @@ export function ProductPage({
 
       <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.45 }}
+          transition={enterTransition(reduceMotion)}
           className="space-y-3"
         >
           <div className="relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
@@ -149,9 +170,9 @@ export function ProductPage({
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.1 }}
+          transition={enterTransition(reduceMotion, 0.08)}
         >
           <p className="text-[13px] font-medium text-mute">
             {product.categoryLabel}

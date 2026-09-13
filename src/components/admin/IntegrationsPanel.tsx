@@ -3,8 +3,18 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { BkashSettingsForm } from '@/components/admin/BkashSettingsForm'
+import { GtmSettingsForm } from '@/components/admin/GtmSettingsForm'
+import { MetaPixelSettingsForm } from '@/components/admin/MetaPixelSettingsForm'
+import { NagadSettingsForm } from '@/components/admin/NagadSettingsForm'
+import { OmsWebhookSettingsForm } from '@/components/admin/OmsWebhookSettingsForm'
 import { PathaoSettingsForm } from '@/components/admin/PathaoSettingsForm'
 import type { BkashSettingsView } from '@/lib/integrations/bkash-settings'
+import type {
+  GtmSettingsView,
+  MetaPixelSettingsView,
+} from '@/lib/integrations/marketing-settings'
+import type { NagadSettingsView } from '@/lib/integrations/nagad-settings'
+import type { OmsWebhookSettingsView } from '@/lib/integrations/oms-webhook-settings'
 import type { PathaoSettingsView } from '@/lib/integrations/pathao-settings'
 
 type IntegrationId = 'pathao' | 'bkash' | 'nagad' | 'gtm' | 'meta' | 'inventory'
@@ -13,32 +23,25 @@ type IntegrationRow = {
   id: IntegrationId
   name: string
   category: string
-  available: boolean
 }
 
 const INTEGRATIONS: IntegrationRow[] = [
-  { id: 'pathao', name: 'Pathao Courier', category: 'Shipping', available: true },
-  { id: 'bkash', name: 'bKash', category: 'Payments', available: true },
-  { id: 'nagad', name: 'Nagad', category: 'Payments', available: false },
-  {
-    id: 'gtm',
-    name: 'Google Tag Manager',
-    category: 'Marketing',
-    available: false,
-  },
-  { id: 'meta', name: 'Meta Pixel', category: 'Marketing', available: false },
-  {
-    id: 'inventory',
-    name: 'Inventory sync',
-    category: 'Operations',
-    available: false,
-  },
+  { id: 'pathao', name: 'Pathao Courier', category: 'Shipping' },
+  { id: 'bkash', name: 'bKash', category: 'Payments' },
+  { id: 'nagad', name: 'Nagad', category: 'Payments' },
+  { id: 'gtm', name: 'Google Tag Manager', category: 'Marketing' },
+  { id: 'meta', name: 'Meta Pixel', category: 'Marketing' },
+  { id: 'inventory', name: 'Inventory / OMS webhook', category: 'Operations' },
 ]
 
 function statusFor(
   id: IntegrationId,
   pathao: PathaoSettingsView,
   bkash: BkashSettingsView,
+  nagad: NagadSettingsView,
+  gtm: GtmSettingsView,
+  meta: MetaPixelSettingsView,
+  oms: OmsWebhookSettingsView,
 ): { label: string; tone: 'ok' | 'warn' | 'mute' } {
   if (id === 'pathao') {
     if (pathao.source === 'admin') return { label: 'Connected', tone: 'ok' }
@@ -50,15 +53,46 @@ function statusFor(
     if (bkash.source === 'env') return { label: 'Env fallback', tone: 'mute' }
     return { label: 'Not set up', tone: 'warn' }
   }
+  if (id === 'nagad') {
+    if (nagad.source === 'admin') return { label: 'Connected', tone: 'ok' }
+    if (nagad.source === 'env') return { label: 'Env fallback', tone: 'mute' }
+    return { label: 'Not set up', tone: 'warn' }
+  }
+  if (id === 'gtm') {
+    if (gtm.enabled && gtm.containerId) return { label: 'Enabled', tone: 'ok' }
+    return { label: 'Off', tone: 'mute' }
+  }
+  if (id === 'meta') {
+    if (meta.enabled && meta.pixelId) {
+      return {
+        label: meta.preferGtm ? 'Via GTM' : 'Direct',
+        tone: 'ok',
+      }
+    }
+    return { label: 'Off', tone: 'mute' }
+  }
+  if (id === 'inventory') {
+    if (!oms.enabled) return { label: 'Off', tone: 'mute' }
+    if (!oms.endpointUrl) return { label: 'Stub mode', tone: 'ok' }
+    return { label: 'Enabled', tone: 'ok' }
+  }
   return { label: 'Coming soon', tone: 'mute' }
 }
 
 export function IntegrationsPanel({
   pathao,
   bkash,
+  nagad,
+  gtm,
+  meta,
+  oms,
 }: {
   pathao: PathaoSettingsView
   bkash: BkashSettingsView
+  nagad: NagadSettingsView
+  gtm: GtmSettingsView
+  meta: MetaPixelSettingsView
+  oms: OmsWebhookSettingsView
 }) {
   const [openId, setOpenId] = useState<IntegrationId | null>(null)
   const titleId = useId()
@@ -87,7 +121,7 @@ export function IntegrationsPanel({
     <>
       <ul className="mt-8 divide-y divide-cloud overflow-hidden rounded-2xl border border-cloud bg-white">
         {INTEGRATIONS.map((row) => {
-          const status = statusFor(row.id, pathao, bkash)
+          const status = statusFor(row.id, pathao, bkash, nagad, gtm, meta, oms)
           return (
             <li key={row.id}>
               <button
@@ -131,14 +165,14 @@ export function IntegrationsPanel({
           <PathaoSettingsForm initial={pathao} embedded />
         ) : openId === 'bkash' ? (
           <BkashSettingsForm initial={bkash} />
-        ) : openRow ? (
-          <div className="rounded-2xl bg-mist/70 px-4 py-6">
-            <p className="text-[14px] font-semibold text-ink">{openRow.name}</p>
-            <p className="mt-1 text-[13px] text-mute">{openRow.category}</p>
-            <p className="mt-4 text-[13px] leading-relaxed text-mute">
-              Setup for this integration isn&apos;t available yet.
-            </p>
-          </div>
+        ) : openId === 'nagad' ? (
+          <NagadSettingsForm initial={nagad} />
+        ) : openId === 'gtm' ? (
+          <GtmSettingsForm initial={gtm} />
+        ) : openId === 'meta' ? (
+          <MetaPixelSettingsForm initial={meta} />
+        ) : openId === 'inventory' ? (
+          <OmsWebhookSettingsForm initial={oms} />
         ) : null}
       </SideDrawer>
     </>

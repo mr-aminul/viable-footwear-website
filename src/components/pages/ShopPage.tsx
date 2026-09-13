@@ -108,12 +108,15 @@ export function ShopPage({
       </div>
 
       {filtered.length === 0 && (
-        <div className="py-20 text-center">
-          <p className="text-[15px] text-mute">No products in this filter yet.</p>
+        <div className="rounded-2xl border border-dashed border-cloud bg-white px-6 py-16 text-center">
+          <p className="text-[15px] font-semibold text-ink">No styles match</p>
+          <p className="mt-2 text-[14px] text-mute">
+            Try another category or clear filters.
+          </p>
           <button
             type="button"
             onClick={() => setParams({})}
-            className="mt-4 text-[14px] font-semibold text-navy hover:underline"
+            className="mt-6 text-[14px] font-semibold text-navy hover:underline"
           >
             Clear filters
           </button>

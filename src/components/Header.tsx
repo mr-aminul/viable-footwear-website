@@ -12,11 +12,12 @@ import {
   User,
   X,
 } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
 import { useOrders } from '@/context/OrdersContext'
 import { BRAND } from '@/lib/brand'
 import { BrandLogo } from '@/components/BrandLogo'
+import { drawerTransition } from '@/lib/motion'
 
 const links = [
   { to: '/', label: 'Home' },
@@ -29,13 +30,20 @@ const links = [
 ]
 
 export function Header() {
-  const { cartCount, wishlist } = useCart()
+  const { cartCount, wishlist, hydrated: cartHydrated } = useCart()
   const { orderCount, hydrated: ordersHydrated } = useOrders()
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const reduceMotion = useReducedMotion()
+  // Providers sit outside <Suspense>; their hydrate effects can commit before
+  // Header finishes hydrating. Gate client-only UI on a local mount flag so the
+  // first client render always matches SSR HTML.
+  const [mounted, setMounted] = useState(false)
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const showOrdersLink = ordersHydrated && orderCount > 0
+  const showOrdersLink = mounted && ordersHydrated && orderCount > 0
+  const showCartBadge = mounted && cartHydrated && cartCount > 0
+  const showWishlistBadge = mounted && cartHydrated && wishlist.length > 0
 
   const navLinks = [
     ...links,
@@ -43,6 +51,10 @@ export function Header() {
       ? [{ to: '/orders', label: 'Your Orders', accent: false }]
       : []),
   ]
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     setOpen(false)
@@ -121,7 +133,7 @@ export function Header() {
               aria-label="Wishlist"
             >
               <Heart className="h-[18px] w-[18px]" />
-              {wishlist.length > 0 && (
+              {showWishlistBadge && (
                 <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-spark px-1 text-[10px] font-bold text-white">
                   {wishlist.length}
                 </span>
@@ -133,7 +145,7 @@ export function Header() {
               aria-label="Cart"
             >
               <ShoppingBag className="h-[18px] w-[18px]" />
-              {cartCount > 0 && (
+              {showCartBadge && (
                 <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-navy px-1 text-[10px] font-bold text-white">
                   {cartCount}
                 </span>
@@ -155,17 +167,18 @@ export function Header() {
           <>
             <motion.div
               className="fixed inset-0 z-[60] bg-ink/40 backdrop-blur-sm lg:hidden"
-              initial={{ opacity: 0 }}
+              initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0 }}
+              transition={reduceMotion ? { duration: 0 } : undefined}
               onClick={() => setOpen(false)}
             />
             <motion.aside
               className="fixed inset-y-0 left-0 z-[70] flex w-[min(88vw,320px)] flex-col bg-white shadow-lift lg:hidden"
-              initial={{ x: '-100%' }}
+              initial={reduceMotion ? false : { x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              exit={reduceMotion ? undefined : { x: '-100%' }}
+              transition={reduceMotion ? { duration: 0 } : drawerTransition}
             >
               <div className="flex items-center justify-between border-b border-cloud px-5 py-4">
                 <BrandLogo heightClassName="h-7" />

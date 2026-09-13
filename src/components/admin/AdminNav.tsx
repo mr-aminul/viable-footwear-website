@@ -29,6 +29,7 @@ type NavItem = {
   icon: LucideIcon
   exact?: boolean
   soon?: boolean
+  badgeCount?: number
 }
 
 const nav: NavItem[] = [
@@ -36,7 +37,7 @@ const nav: NavItem[] = [
   { href: '/admin/catalog', label: 'Products', icon: Package },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, soon: true },
+  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
 const adminOnly: NavItem[] = [
@@ -55,12 +56,17 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
+function formatBadgeCount(count: number) {
+  return count > 99 ? '99+' : String(count)
+}
+
 type AdminNavProps = {
   profile: StaffProfile
   /** Mobile drawer presentation (fixed overlay). */
   variant?: 'desktop' | 'mobile'
   isOpen?: boolean
   onClose?: () => void
+  undispatchedOrderCount?: number
 }
 
 function NavLinkItem({
@@ -78,7 +84,13 @@ function NavLinkItem({
   const href = soon ? '/admin' : item.href
   const active = !soon && isActive(pathname, item.href, item.exact)
   const Icon = item.icon
-  const tooltip = soon ? `${item.label} · Coming soon` : item.label
+  const badgeCount = item.badgeCount ?? 0
+  const showBadge = badgeCount > 0 && !soon
+  const tooltip = soon
+    ? `${item.label} · Coming soon`
+    : showBadge
+      ? `${item.label} · ${badgeCount} to dispatch`
+      : item.label
 
   return (
     <Link
@@ -86,24 +98,28 @@ function NavLinkItem({
       prefetch={soon ? false : true}
       onClick={onNavigate}
       title={collapsed ? tooltip : soon ? 'Coming soon' : undefined}
-      aria-label={collapsed ? tooltip : undefined}
+      aria-label={collapsed || showBadge ? tooltip : undefined}
       className={[
-        'flex items-center rounded-lg text-[13px] font-medium transition',
+        'relative flex items-center rounded-lg text-[13px] font-medium transition',
         collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2',
         active
           ? 'bg-white/15 text-white'
           : 'text-white/75 hover:bg-white/10 hover:text-white',
       ].join(' ')}
     >
-      <Icon
-        size={NAV_ICON_SIZE}
-        strokeWidth={NAV_ICON_STROKE}
-        className={[
-          'shrink-0',
-          active ? 'text-white' : 'text-white/55',
-        ].join(' ')}
-        aria-hidden
-      />
+      <span className="relative shrink-0">
+        <Icon
+          size={NAV_ICON_SIZE}
+          strokeWidth={NAV_ICON_STROKE}
+          className={active ? 'text-white' : 'text-white/55'}
+          aria-hidden
+        />
+        {showBadge && collapsed ? (
+          <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-spark px-1 text-[9px] font-bold leading-none text-white">
+            {formatBadgeCount(badgeCount)}
+          </span>
+        ) : null}
+      </span>
       <span
         className={[
           'min-w-0 flex-1 truncate transition-opacity duration-200',
@@ -113,6 +129,11 @@ function NavLinkItem({
       >
         {item.label}
       </span>
+      {showBadge && !collapsed ? (
+        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-spark px-1.5 text-[10px] font-bold leading-none text-white">
+          {formatBadgeCount(badgeCount)}
+        </span>
+      ) : null}
       {soon && !collapsed ? (
         <span className="text-[10px] text-white/45">Soon</span>
       ) : null}
@@ -129,6 +150,7 @@ export function AdminNav({
   variant = 'desktop',
   isOpen = false,
   onClose,
+  undispatchedOrderCount = 0,
 }: AdminNavProps) {
   const pathname = usePathname()
   const { mode, expanded } = useSidebarPrefs()
@@ -136,7 +158,11 @@ export function AdminNav({
   const hoverCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const links =
-    profile.role === 'admin' ? [...nav, ...adminOnly] : nav
+    (profile.role === 'admin' ? [...nav, ...adminOnly] : nav).map((item) =>
+      item.href === '/admin/orders'
+        ? { ...item, badgeCount: undispatchedOrderCount }
+        : item,
+    )
   const isMobile = variant === 'mobile'
   const isManual = mode === 'manual'
   const collapsed = isMobile ? false : isManual ? !expanded : !hovered

@@ -3,13 +3,33 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
-import { Package, Plug, ShoppingBag, Store, Users } from 'lucide-react'
+import {
+  BarChart3,
+  Package,
+  Plug,
+  ShoppingBag,
+  Store,
+  Users,
+} from 'lucide-react'
+import { formatPrice } from '@/lib/brand'
 import { useStaffProfile } from '@/components/admin/AdminStaffContext'
 
 /**
  * Soft navigations skip a server data round-trip; role comes from AdminShell.
  */
-export default function AdminDashboard() {
+export default function AdminDashboard({
+  pendingDispatchCount = 0,
+  sales7DayGmv = 0,
+  sales7DayOrders = 0,
+  ordersToday = 0,
+  gmvToday = 0,
+}: {
+  pendingDispatchCount?: number
+  sales7DayGmv?: number
+  sales7DayOrders?: number
+  ordersToday?: number
+  gmvToday?: number
+}) {
   const profile = useStaffProfile()
   const searchParams = useSearchParams()
   const showAdminOnlyError = searchParams.get('error') === 'admin_only'
@@ -17,6 +37,7 @@ export default function AdminDashboard() {
   const links: QuickLink[] = [
     { href: '/admin/catalog', label: 'Products', icon: Package },
     { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
+    { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/', label: 'View storefront', icon: Store },
     ...(profile.role === 'admin'
       ? [
@@ -54,9 +75,32 @@ export default function AdminDashboard() {
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <KpiCard title="Sales" value="—" hint="Coming soon" />
-        <KpiCard title="Orders today" value="—" hint="Coming soon" />
-        <KpiCard title="To ship" value="—" hint="Coming soon" />
+        <KpiCard
+          title="Sales (7d)"
+          value={formatPrice(Math.round(sales7DayGmv))}
+          hint={`${sales7DayOrders} orders · last 7 days`}
+          href="/admin/analytics?range=7"
+        />
+        <KpiCard
+          title="Orders today"
+          value={String(ordersToday)}
+          hint={
+            ordersToday === 0
+              ? 'No orders yet today'
+              : `${formatPrice(Math.round(gmvToday))} GMV today`
+          }
+          href="/admin/analytics?range=7"
+        />
+        <KpiCard
+          title="To ship"
+          value={String(pendingDispatchCount)}
+          hint={
+            pendingDispatchCount === 0
+              ? 'All caught up'
+              : 'Awaiting Pathao dispatch'
+          }
+          href="/admin/analytics?tab=logistics"
+        />
       </div>
 
       <div className="mt-10">
@@ -101,18 +145,37 @@ function KpiCard({
   title,
   value,
   hint,
+  href,
 }: {
   title: string
   value: string
   hint: string
+  href?: string
 }) {
-  return (
-    <div className="rounded-2xl border border-cloud bg-white p-5 shadow-card">
+  const body = (
+    <>
       <p className="text-[12px] font-medium uppercase tracking-wider text-mute">
         {title}
       </p>
       <p className="mt-2 font-display text-3xl font-extrabold text-ink">{value}</p>
       <p className="mt-1 text-[12px] text-mute">{hint}</p>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="rounded-2xl border border-cloud bg-white p-5 shadow-card transition hover:border-navy/30 hover:bg-mist/40"
+      >
+        {body}
+      </Link>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-cloud bg-white p-5 shadow-card">
+      {body}
     </div>
   )
 }

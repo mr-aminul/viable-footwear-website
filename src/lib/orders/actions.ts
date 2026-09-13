@@ -5,12 +5,36 @@ import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
 import { resolvePathaoConfig } from '@/lib/integrations/pathao-settings'
 import {
+  emitOmsWebhook,
+  orderPayloadFromRow,
+} from '@/lib/integrations/oms-webhook'
+import { generateOrderNumber } from '@/lib/orders/order-number'
+import {
+  cancelPathaoOrder,
   createPathaoOrder,
   getPathaoOrderInfo,
   normalizePathaoPhone,
 } from '@/lib/pathao'
 import type { OrderStatus } from '@/lib/supabase/database.types'
+import { canTransitionStatus } from '@/lib/orders/status-transitions'
+import { storeStatusLabel } from '@/lib/orders/status-labels'
 import { createClient } from '@/lib/supabase/server'
+
+function revalidateAdminOrders(orderId?: string) {
+  revalidatePath('/admin', 'layout')
+  revalidatePath('/admin/orders')
+  if (orderId) revalidatePath(`/admin/orders/${orderId}`)
+}
+
+async function assertPathaoConfigured(): Promise<ActionResult | null> {
+  try {
+    await resolvePathaoConfig()
+    return null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
+  }
+}
 
 /** Map Pathao consignment status → our order_status. */
 function mapPathaoStatusToOrderStatus(
@@ -173,10 +197,13 @@ export async function dispatchOrderToPathao(
       return { ok: false, error: 'Pathao did not return a consignment id.' }
     }
 
+    const pathaoStatus = pathaoRes.data?.order_status?.trim() || null
+
     const { error: updateError } = await supabase
       .from('orders')
       .update({
         pathao_consignment_id: consignmentId,
+        pathao_status: pathaoStatus,
         pathao_error: null,
         status: 'shipped',
       })
@@ -189,8 +216,25 @@ export async function dispatchOrderToPathao(
       }
     }
 
-    revalidatePath('/admin/orders')
-    revalidatePath(`/admin/orders/${order.id}`)
+    revalidateAdminOrders(order.id)
+    void emitOmsWebhook(
+      'order.shipped',
+      orderPayloadFromRow({
+        id: order.id,
+        order_number: order.order_number,
+        status: 'shipped',
+        payment_method: order.payment_method,
+        total: Number(order.total),
+        full_name: order.full_name,
+        phone: order.phone,
+        email: null,
+        city_name: order.city_name,
+        zone_name: order.zone_name,
+        area_name: order.area_name,
+        address: order.address,
+        pathao_consignment_id: consignmentId,
+      }),
+    )
     return { ok: true, data: { consignmentId } }
   } catch (error) {
     const pathaoError = error instanceof Error ? error.message : String(error)
@@ -198,10 +242,88 @@ export async function dispatchOrderToPathao(
       .from('orders')
       .update({ pathao_error: pathaoError })
       .eq('id', order.id)
-    revalidatePath('/admin/orders')
-    revalidatePath(`/admin/orders/${order.id}`)
+    revalidateAdminOrders(order.id)
     return { ok: false, error: pathaoError }
   }
+}
+
+const BULK_ORDER_ACTION_LIMIT = 50
+
+type BulkOrderFailure = {
+  orderId: string
+  orderNumber: string | null
+  error: string
+}
+
+type BulkOrderActionResult = {
+  okCount: number
+  failCount: number
+  failures: BulkOrderFailure[]
+}
+
+async function runBulkOrderAction(
+  orderIds: string[],
+  runOne: (orderId: string) => Promise<ActionResult<unknown>>,
+): Promise<ActionResult<BulkOrderActionResult>> {
+  await requireRole(['admin', 'manager'])
+
+  const uniqueIds = [
+    ...new Set(orderIds.map((id) => id.trim()).filter(Boolean)),
+  ]
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: 'No orders selected.' }
+  }
+  if (uniqueIds.length > BULK_ORDER_ACTION_LIMIT) {
+    return {
+      ok: false,
+      error: `Select at most ${BULK_ORDER_ACTION_LIMIT} orders at a time.`,
+    }
+  }
+
+  const supabase = await createClient()
+  const { data: orderRows } = await supabase
+    .from('orders')
+    .select('id, order_number')
+    .in('id', uniqueIds)
+  const orderNumberById = new Map(
+    (orderRows ?? []).map((row) => [row.id, row.order_number]),
+  )
+
+  const failures: BulkOrderFailure[] = []
+  let okCount = 0
+
+  for (const orderId of uniqueIds) {
+    const result = await runOne(orderId)
+    if (result.ok) {
+      okCount += 1
+      continue
+    }
+    failures.push({
+      orderId,
+      orderNumber: orderNumberById.get(orderId) ?? null,
+      error: result.error,
+    })
+  }
+
+  revalidateAdminOrders()
+
+  return {
+    ok: true,
+    data: {
+      okCount,
+      failCount: failures.length,
+      failures,
+    },
+  }
+}
+
+/**
+ * Dispatch many orders to Pathao sequentially. Continues after individual failures.
+ */
+export async function dispatchOrdersToPathao(
+  orderIds: string[],
+): Promise<ActionResult<BulkOrderActionResult>> {
+  return runBulkOrderAction(orderIds, dispatchOrderToPathao)
 }
 
 /**
@@ -217,7 +339,9 @@ export async function syncPathaoOrderStatus(
   const supabase = await createClient()
   const { data: order, error } = await supabase
     .from('orders')
-    .select('id, pathao_consignment_id, status')
+    .select(
+      'id, order_number, status, payment_method, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
+    )
     .eq('id', orderId)
     .single()
 
@@ -237,8 +361,11 @@ export async function syncPathaoOrderStatus(
       .from('orders')
       .update({
         status: nextStatus,
+        pathao_status: pathaoLabel,
         pathao_error: null,
-        notes: `Pathao: ${pathaoLabel}`,
+        ...(nextStatus === 'cancelled'
+          ? { pathao_cancelled_at: new Date().toISOString() }
+          : {}),
       })
       .eq('id', order.id)
 
@@ -246,8 +373,19 @@ export async function syncPathaoOrderStatus(
       return { ok: false, error: 'Could not save Pathao status.' }
     }
 
-    revalidatePath('/admin/orders')
-    revalidatePath(`/admin/orders/${order.id}`)
+    revalidateAdminOrders(order.id)
+    if (nextStatus === 'delivered' && order.status !== 'delivered') {
+      void emitOmsWebhook(
+        'order.delivered',
+        orderPayloadFromRow({ ...order, status: 'delivered' }),
+      )
+    }
+    if (nextStatus === 'shipped' && order.status !== 'shipped') {
+      void emitOmsWebhook(
+        'order.shipped',
+        orderPayloadFromRow({ ...order, status: 'shipped' }),
+      )
+    }
     return {
       ok: true,
       data: { status: nextStatus, pathaoLabel },
@@ -258,7 +396,323 @@ export async function syncPathaoOrderStatus(
       .from('orders')
       .update({ pathao_error: message })
       .eq('id', orderId)
-    revalidatePath(`/admin/orders/${orderId}`)
+    revalidateAdminOrders(orderId)
     return { ok: false, error: message }
   }
+}
+
+/**
+ * Cancel an order locally and, when present, revoke the Pathao consignment.
+ * Also used to retry Pathao cancel for stranded locally-cancelled orders.
+ */
+export async function cancelOrder(
+  orderId: string,
+): Promise<ActionResult<{ pathaoCancelled: boolean; message: string }>> {
+  await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data: existing, error } = await supabase
+    .from('orders')
+    .select('id, status, pathao_consignment_id, pathao_cancelled_at')
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (error || !existing) return { ok: false, error: 'Order not found.' }
+
+  const alreadyCancelled = existing.status === 'cancelled'
+  const consignmentId = existing.pathao_consignment_id?.trim() || null
+
+  if (alreadyCancelled && !consignmentId) {
+    return { ok: false, error: 'Order is already cancelled.' }
+  }
+
+  if (
+    alreadyCancelled &&
+    consignmentId &&
+    existing.pathao_cancelled_at
+  ) {
+    return { ok: false, error: 'Order and Pathao shipment are already cancelled.' }
+  }
+
+  let pathaoCancelled = false
+  let pathaoAlreadyCancelled = false
+
+  if (consignmentId) {
+    const configError = await assertPathaoConfigured()
+    if (configError) return configError
+
+    try {
+      const result = await cancelPathaoOrder(consignmentId)
+      pathaoCancelled = true
+      pathaoAlreadyCancelled = result.alreadyCancelled
+    } catch (err) {
+      const pathaoError = err instanceof Error ? err.message : String(err)
+      await supabase
+        .from('orders')
+        .update({ pathao_error: pathaoError })
+        .eq('id', orderId)
+      revalidateAdminOrders(orderId)
+      return { ok: false, error: pathaoError }
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      pathao_error: null,
+      ...(pathaoCancelled
+        ? {
+            pathao_cancelled_at: new Date().toISOString(),
+            pathao_status: pathaoAlreadyCancelled
+              ? 'Already cancelled'
+              : 'Cancelled',
+          }
+        : {}),
+    })
+    .eq('id', orderId)
+
+  if (updateError) {
+    return { ok: false, error: 'Failed to cancel order.' }
+  }
+
+  const message = pathaoCancelled
+    ? pathaoAlreadyCancelled
+      ? 'Order cancelled. The Pathao shipment was already cancelled.'
+      : `Order cancelled and Pathao shipment ${consignmentId} cancelled.`
+    : 'Order cancelled.'
+
+  revalidateAdminOrders(orderId)
+  return { ok: true, data: { pathaoCancelled, message } }
+}
+
+/**
+ * Permanently delete an order. Cancels the Pathao consignment first when present.
+ */
+export async function deleteOrder(
+  orderId: string,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data: existing, error } = await supabase
+    .from('orders')
+    .select('id, pathao_consignment_id')
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (error || !existing) return { ok: false, error: 'Order not found.' }
+
+  const consignmentId = existing.pathao_consignment_id?.trim() || null
+
+  if (consignmentId) {
+    const configError = await assertPathaoConfigured()
+    if (configError) return configError
+
+    try {
+      await cancelPathaoOrder(consignmentId)
+    } catch (err) {
+      const pathaoError = err instanceof Error ? err.message : String(err)
+      await supabase
+        .from('orders')
+        .update({ pathao_error: pathaoError })
+        .eq('id', orderId)
+      revalidateAdminOrders(orderId)
+      return { ok: false, error: pathaoError }
+    }
+  }
+
+  // order_items cascade via FK, but delete explicitly for clarity
+  const { error: itemsError } = await supabase
+    .from('order_items')
+    .delete()
+    .eq('order_id', orderId)
+
+  if (itemsError) {
+    return { ok: false, error: 'Failed to delete order items.' }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('orders')
+    .delete()
+    .eq('id', orderId)
+
+  if (deleteError) {
+    return { ok: false, error: 'Failed to delete order.' }
+  }
+
+  revalidateAdminOrders()
+  return { ok: true }
+}
+
+/**
+ * Cancel many orders sequentially. Continues after individual failures.
+ */
+export async function cancelOrders(
+  orderIds: string[],
+): Promise<ActionResult<BulkOrderActionResult>> {
+  return runBulkOrderAction(orderIds, cancelOrder)
+}
+
+/**
+ * Delete many orders sequentially. Continues after individual failures.
+ */
+export async function deleteOrders(
+  orderIds: string[],
+): Promise<ActionResult<BulkOrderActionResult>> {
+  return runBulkOrderAction(orderIds, deleteOrder)
+}
+
+/**
+ * Re-create a cancelled order with the same customer, address, and items
+ * so it can be sent to Pathao again.
+ */
+export async function duplicateOrder(
+  orderId: string,
+): Promise<ActionResult<{ newOrderId: string; orderNumber: string }>> {
+  await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data: source, error } = await supabase
+    .from('orders')
+    .select(
+      'full_name, email, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, subtotal, shipping, total, payment_method, pathao_delivery_fee, campaign_id, status',
+    )
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (error || !source) return { ok: false, error: 'Order not found.' }
+
+  if (source.status !== 'cancelled') {
+    return {
+      ok: false,
+      error: 'Only cancelled orders can be re-created for Pathao resend.',
+    }
+  }
+
+  const { data: sourceItems, error: itemsError } = await supabase
+    .from('order_items')
+    .select(
+      'product_id, variant_id, product_name, size_eu, color, sku, unit_price, quantity, weight_kg',
+    )
+    .eq('order_id', orderId)
+
+  if (itemsError) {
+    return { ok: false, error: 'Failed to load order items.' }
+  }
+
+  const { data: newOrder, error: insertError } = await supabase
+    .from('orders')
+    .insert({
+      order_number: generateOrderNumber(),
+      email: source.email,
+      full_name: source.full_name,
+      phone: source.phone,
+      secondary_phone: source.secondary_phone,
+      address: source.address,
+      city_id: source.city_id,
+      zone_id: source.zone_id,
+      area_id: source.area_id,
+      city_name: source.city_name,
+      zone_name: source.zone_name,
+      area_name: source.area_name,
+      subtotal: source.subtotal,
+      shipping: source.shipping,
+      total: source.total,
+      payment_method: source.payment_method,
+      pathao_delivery_fee: source.pathao_delivery_fee,
+      campaign_id: source.campaign_id,
+      status: 'awaiting_fulfillment',
+      pathao_consignment_id: null,
+      pathao_status: null,
+      pathao_error: null,
+      pathao_cancelled_at: null,
+    })
+    .select('id, order_number')
+    .single()
+
+  if (insertError || !newOrder) {
+    return { ok: false, error: 'Failed to re-create order.' }
+  }
+
+  if (sourceItems && sourceItems.length > 0) {
+    const { error: itemsInsertError } = await supabase.from('order_items').insert(
+      sourceItems.map((item) => ({
+        order_id: newOrder.id,
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        product_name: item.product_name,
+        size_eu: item.size_eu,
+        color: item.color,
+        sku: item.sku,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        weight_kg: item.weight_kg,
+      })),
+    )
+
+    if (itemsInsertError) {
+      await supabase.from('orders').delete().eq('id', newOrder.id)
+      return { ok: false, error: 'Failed to copy order items.' }
+    }
+  }
+
+  revalidateAdminOrders(newOrder.id)
+  return {
+    ok: true,
+    data: { newOrderId: newOrder.id, orderNumber: newOrder.order_number },
+  }
+}
+
+/**
+ * Manual status update along the allowed fulfillment graph.
+ * Prefer Pathao sync for shipped/delivered when a consignment exists.
+ */
+export async function updateOrderStatus(
+  orderId: string,
+  nextStatus: OrderStatus,
+): Promise<ActionResult<{ status: OrderStatus }>> {
+  const session = await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('id, status')
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (error || !order) return { ok: false, error: 'Order not found.' }
+
+  const current = order.status as OrderStatus
+  if (!canTransitionStatus(current, nextStatus)) {
+    return {
+      ok: false,
+      error: `Cannot move from ${storeStatusLabel(current)} to ${storeStatusLabel(nextStatus)}.`,
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({
+      status: nextStatus,
+      ...(nextStatus === 'paid' && { paid_at: new Date().toISOString() }),
+    })
+    .eq('id', orderId)
+
+  if (updateError) {
+    return { ok: false, error: 'Could not update order status.' }
+  }
+
+  console.info(
+    '[orders] status change',
+    {
+      orderId,
+      from: current,
+      to: nextStatus,
+      by: session.profile.email,
+    },
+  )
+
+  revalidateAdminOrders(orderId)
+  return { ok: true, data: { status: nextStatus } }
 }

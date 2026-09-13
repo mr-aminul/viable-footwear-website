@@ -13,9 +13,11 @@ import { AdminStaffProvider } from '@/components/admin/AdminStaffContext'
  */
 export function AdminShell({
   profile,
+  undispatchedOrderCount = 0,
   children,
 }: {
   profile: StaffProfile
+  undispatchedOrderCount?: number
   children: React.ReactNode
 }) {
   const pathname = usePathname()
@@ -51,7 +53,11 @@ export function AdminShell({
     <AdminStaffProvider profile={profile}>
       <div className="flex h-dvh max-h-dvh w-full flex-col overflow-hidden bg-navy-deep">
         <div className="relative z-10 flex min-h-0 flex-1 lg:p-2 lg:pl-0">
-          <AdminNav profile={profile} variant="desktop" />
+          <AdminNav
+            profile={profile}
+            variant="desktop"
+            undispatchedOrderCount={undispatchedOrderCount}
+          />
 
           <div className="lg:hidden" aria-hidden={!mobileOpen}>
             <button
@@ -71,6 +77,7 @@ export function AdminShell({
               variant="mobile"
               isOpen={mobileOpen}
               onClose={() => setMobileOpen(false)}
+              undispatchedOrderCount={undispatchedOrderCount}
             />
           </div>
 

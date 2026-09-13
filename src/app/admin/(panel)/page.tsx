@@ -1,5 +1,7 @@
 import { Suspense } from 'react'
 import AdminDashboard from '@/components/admin/AdminDashboard'
+import { getSalesAnalytics } from '@/lib/orders/analytics'
+import { countUndispatchedOrders } from '@/lib/orders/queries'
 
 export const metadata = {
   title: 'Admin',
@@ -9,10 +11,23 @@ export const metadata = {
 /**
  * Tiny server wrapper — dashboard body is client-side (no per-nav data fetch).
  */
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  const [pendingDispatchCount, sales7] = await Promise.all([
+    countUndispatchedOrders(),
+    getSalesAnalytics(7),
+  ])
+
+  const todayPoint = sales7.series.find((d) => d.date === sales7.to)
+
   return (
     <Suspense fallback={<DashboardFallback />}>
-      <AdminDashboard />
+      <AdminDashboard
+        pendingDispatchCount={pendingDispatchCount}
+        sales7DayGmv={sales7.kpis.gmv}
+        sales7DayOrders={sales7.kpis.orderCount}
+        ordersToday={todayPoint?.orders ?? 0}
+        gmvToday={todayPoint?.gmv ?? 0}
+      />
     </Suspense>
   )
 }

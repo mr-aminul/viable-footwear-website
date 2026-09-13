@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { Heart, ShoppingBag, Star } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import type { Product } from '@/lib/catalog/types'
 import { productBadgeClassName } from '@/lib/catalog/badge'
 import { formatPrice } from '@/lib/brand'
+import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
+import { trackAddToCart } from '@/lib/analytics/events'
 
 interface ProductCardProps {
   product: Product
@@ -18,6 +20,7 @@ interface ProductCardProps {
  */
 export function ProductCard({ product, index = 0 }: ProductCardProps) {
   const { toggleWishlist, isWishlisted, addToCart } = useCart()
+  const reduceMotion = useReducedMotion()
   const wished = isWishlisted(product.id)
   const defaultSize =
     product.sizes[Math.floor(product.sizes.length / 2)] ?? product.sizes[0]
@@ -28,18 +31,11 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      whileHover={{
-        y: -8,
-        transition: { type: 'spring', stiffness: 280, damping: 26, mass: 0.65 },
-      }}
+      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+      whileHover={springHover(reduceMotion)}
       viewport={{ once: true, margin: '-40px' }}
-      transition={{
-        duration: 0.4,
-        delay: index * 0.04,
-        ease: [0.22, 1, 0.36, 1],
-      }}
+      transition={enterTransition(reduceMotion, index * 0.04)}
       className="group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift"
     >
       {product.badge && (
@@ -66,11 +62,19 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
         />
       </button>
 
-      <Link href={`/product/${product.slug}`} className="block aspect-square overflow-hidden">
+      <Link
+        href={`/product/${product.slug}`}
+        className="block aspect-square overflow-hidden"
+      >
         <img
           src={product.image}
           alt={product.name}
-          className="h-full w-full object-contain transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-[1.06]"
+          className={[
+            'h-full w-full object-contain will-change-transform',
+            reduceMotion
+              ? ''
+              : 'transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.06]',
+          ].join(' ')}
           loading="lazy"
         />
       </Link>
@@ -111,6 +115,14 @@ export function ProductCard({ product, index = 0 }: ProductCardProps) {
             onClick={() => {
               if (!defaultVariant || defaultVariant.stock < 1) return
               addToCart(product, defaultVariant.sizeEu, 1, defaultVariant.id)
+              trackAddToCart({
+                item_id: product.id,
+                item_name: product.name,
+                item_category: product.categoryLabel || product.category,
+                price: product.price,
+                quantity: 1,
+                item_variant: `EU ${defaultVariant.sizeEu}`,
+              })
             }}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy text-white transition-colors duration-150 ease-out hover:bg-navy-deep active:scale-[0.97] disabled:opacity-40"
           >

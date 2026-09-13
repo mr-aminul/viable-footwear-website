@@ -1,8 +1,10 @@
 # Viable Footwear — Requirements & Task Breakdown
 
-**Status:** Phase 2 in progress — COD + Pathao + campaigns + bKash wired; Nagad pending  
-**Last updated:** 2026-09-13  
-**Current codebase:** Next.js App Router storefront (DB catalog) + Admin CMS + COD/bKash checkout/Pathao + production on Vercel (`viable.inventivelab.bd`).
+**Status:** Phase 5 complete — motion system + storefront polish; cross-cutting / launch checklist remain  
+**Last updated:** 2026-09-14  
+**Current codebase:** Next.js App Router storefront (DB catalog) + Admin CMS + COD/bKash/Nagad checkout/Pathao + sales/logistics analytics + GTM/Pixel/OMS webhooks + motion polish + production on Vercel (`viable.inventivelab.bd`).
+
+**Secrets approach (4.4):** Payment/Pathao/OMS credentials live in `integration_settings` (Admin UI) with optional Vercel env fallback. Views expose only non-secret flags (`hasApiKey`, etc.). Marketing IDs are Admin-configured and injected server-side on the storefront only.
 
 ---
 
@@ -280,8 +282,8 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [ ] Ops: complete merchant onboarding (Ops); sandbox test matrix (Eng).
 
 #### 2.5 Nagad
-- [ ] Admin credentials + RSA keys as required.
-- [ ] Initiate → complete/verify flow; same order state machine as bKash.
+- [x] Admin credentials + RSA keys as required.
+- [x] Initiate → complete/verify flow; same order state machine as bKash.
 - [ ] Sandbox test matrix (Eng + Ops).
 
 #### 2.6 COD
@@ -304,22 +306,22 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 **Goal:** Run the business day-to-day.
 
 #### 3.1 Order management
-- [ ] Orders list: filters (status, payment method, date, city).
-- [ ] Detail: items, address, payment, shipping quote snapshot, Pathao tracking.
-- [ ] Status transitions with allowed graph (e.g. pending → paid → packed → shipped → delivered; cancel/return).
-- [ ] Manager + Admin can update; log actor if easy.
+- [x] Orders list: filters (status, payment method, date, city).
+- [x] Detail: items, address, payment, shipping quote snapshot, Pathao tracking.
+- [x] Status transitions with allowed graph (e.g. pending → paid → packed → shipped → delivered; cancel/return).
+- [x] Manager + Admin can update; log actor if easy.
 
 #### 3.2 Sales dashboard
-- [ ] KPI cards: orders count, GMV, AOV, paid vs COD.
-- [ ] Charts: sales over time, payment method mix, top products.
-- [ ] Date range preset (7/30/90).
-- [ ] Admin CSV export of orders for range.
+- [x] KPI cards: orders count, GMV, AOV, paid vs COD.
+- [x] Charts: sales over time, payment method mix, top products.
+- [x] Date range preset (7/30/90).
+- [x] Admin CSV export of orders for range.
 
 #### 3.3 Logistics dashboard
-- [ ] Counts by Pathao/shipment status.
-- [ ] COD outstanding / collected (as data allows).
-- [ ] List “needs shipping” queue.
-- [ ] Link out to Pathao tracking where available.
+- [x] Counts by Pathao/shipment status.
+- [x] COD outstanding / collected (as data allows).
+- [x] List “needs shipping” queue.
+- [x] Link out to Pathao tracking where available.
 
 **Phase 3 done when:** Staff can fulfill from dashboard and answer “how are sales / deliveries doing?” without SQL.
 
@@ -330,24 +332,24 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 **Goal:** Tag managers + outbound order webhooks; Admin-configurable.
 
 #### 4.1 Google Tag Manager
-- [ ] Admin field: GTM container ID; enable toggle.
-- [ ] Inject GTM on storefront when enabled (Next script strategy).
-- [ ] dataLayer pushes: view_item, add_to_cart, begin_checkout, purchase (with value, currency BDT, items).
+- [x] Admin field: GTM container ID; enable toggle.
+- [x] Inject GTM on storefront when enabled (Next script strategy).
+- [x] dataLayer pushes: view_item, add_to_cart, begin_checkout, purchase (with value, currency BDT, items).
 
 #### 4.2 Meta Pixel
-- [ ] Admin Pixel ID + enable (document: prefer GTM-managed Pixel).
-- [ ] If direct: base pixel + standard events aligned with dataLayer.
+- [x] Admin Pixel ID + enable (document: prefer GTM-managed Pixel).
+- [x] If direct: base pixel + standard events aligned with dataLayer.
 
 #### 4.3 Nuport-like / warehouse OMS webhook
-- [ ] Admin: endpoint URL, API key/header, enable, event checklist.
-- [ ] POST JSON on order created / paid / shipped / delivered (retry with backoff, log failures).
-- [ ] Stub mode: log-only when URL empty.
+- [x] Admin: endpoint URL, API key/header, enable, event checklist.
+- [x] POST JSON on order created / paid / shipped / delivered (retry with backoff, log failures).
+- [x] Stub mode: log-only when URL empty.
 - [ ] Wire real partner when credentials available (Ops).
 
 #### 4.4 Integration settings security
-- [ ] Admin-only routes/UI.
-- [ ] Secrets stored encrypted or in Vercel env with Admin “configured” flags—pick one approach and document.
-- [ ] Never return raw secrets to Manager or client bundles.
+- [x] Admin-only routes/UI.
+- [x] Secrets stored encrypted or in Vercel env with Admin “configured” flags—pick one approach and document.
+- [x] Never return raw secrets to Manager or client bundles.
 
 **Phase 4 done when:** Admin can turn on GTM/Pixel without deploy; purchase events fire; outbound webhook delivers test payload.
 
@@ -358,17 +360,17 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 **Goal:** Feel premium without blocking commerce.
 
 #### 5.1 Motion system
-- [ ] Shared page transition wrapper for storefront routes.
-- [ ] ProductCard → PDP shared-element or consistent enter animation.
-- [ ] Cart drawer / checkout step transitions.
-- [ ] Header/mobile nav (already partially done)—align to system.
-- [ ] Global `prefers-reduced-motion` short-circuit.
+- [x] Shared page transition wrapper for storefront routes.
+- [x] ProductCard → PDP shared-element or consistent enter animation.
+- [x] Cart drawer / checkout step transitions.
+- [x] Header/mobile nav (already partially done)—align to system.
+- [x] Global `prefers-reduced-motion` short-circuit.
 
 #### 5.2 UX polish
-- [ ] Loading/skeleton states for shop/PDP.
-- [ ] Empty cart / empty admin tables.
-- [ ] Error toasts for quote/payment failures (plain language).
-- [ ] Trust copy only for enabled payment methods.
+- [x] Loading/skeleton states for shop/PDP.
+- [x] Empty cart / empty admin tables.
+- [x] Error toasts for quote/payment failures (plain language).
+- [x] Trust copy only for enabled payment methods.
 
 **Phase 5 done when:** Key journeys feel intentional on mobile + desktop; motion disabled when OS requests.
 
@@ -396,7 +398,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [ ] bKash sandbox payment marks order paid once.
 - [ ] Nagad sandbox payment marks order paid once.
 - [ ] COD order creates with correct collect amount.
-- [ ] Sales + logistics dashboards show real order data.
+- [x] Sales + logistics dashboards show real order data.
 - [ ] GTM container loads; purchase event visible in GTM preview.
 - [ ] Pixel configured or explicitly deferred via GTM.
 - [ ] Nuport-like webhook receives test order event.

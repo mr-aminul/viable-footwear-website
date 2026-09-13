@@ -1,5 +1,6 @@
 import { AdminShell } from '@/components/admin/AdminShell'
 import { requireRole } from '@/lib/auth/session'
+import { countUndispatchedOrders } from '@/lib/orders/queries'
 
 export const metadata = {
   robots: { index: false, follow: false },
@@ -14,5 +15,13 @@ export default async function AdminPanelLayout({
   children: React.ReactNode
 }) {
   const session = await requireRole(['admin', 'manager'])
-  return <AdminShell profile={session.profile}>{children}</AdminShell>
+  const undispatchedOrderCount = await countUndispatchedOrders()
+  return (
+    <AdminShell
+      profile={session.profile}
+      undispatchedOrderCount={undispatchedOrderCount}
+    >
+      {children}
+    </AdminShell>
+  )
 }
