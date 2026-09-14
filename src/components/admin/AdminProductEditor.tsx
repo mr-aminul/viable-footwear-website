@@ -33,6 +33,13 @@ import {
   softFieldClassName,
 } from '@/components/admin/ui'
 
+/** Compact soft fields — match storefront PDP rhythm (not the padded form fields). */
+const pdpFieldClassName =
+  'w-full rounded-lg border-0 bg-ink/[0.045] px-2 py-1 text-[14px] text-ink outline-none transition placeholder:text-mute focus:bg-ink/[0.07]'
+
+const pdpTitleClassName =
+  'w-full rounded-lg border-0 bg-ink/[0.045] px-2 py-0.5 font-display text-4xl font-extrabold leading-tight tracking-tight text-ink outline-none transition placeholder:text-mute focus:bg-ink/[0.07] md:text-5xl'
+
 type CategoryOption = { id: string; name: string }
 
 type AdminProductEditorProps = {
@@ -180,7 +187,7 @@ export function AdminProductEditor({
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-7xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/admin/catalog"
@@ -291,7 +298,7 @@ export function AdminProductEditor({
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              className={`${softFieldClassName} text-[13px] font-medium text-mute`}
+              className={`${pdpFieldClassName} text-[13px] font-medium text-mute`}
             >
               <option value="">Uncategorized</option>
               {categories.map((c) => (
@@ -310,11 +317,11 @@ export function AdminProductEditor({
               setName(next)
               if (!slugTouched) setSlug(slugify(next))
             }}
-            className={`${softFieldClassName} mt-2 font-display text-4xl font-extrabold tracking-tight md:text-5xl`}
+            className={`${pdpTitleClassName} mt-2`}
             placeholder="Product name"
           />
 
-          <div className="mt-2 flex min-w-0 items-center gap-2">
+          <div className="mt-2 flex min-w-0 items-center gap-1.5">
             <span className="shrink-0 text-[12px] text-mute">/</span>
             <input
               value={slug}
@@ -322,12 +329,12 @@ export function AdminProductEditor({
                 setSlugTouched(true)
                 setSlug(e.target.value)
               }}
-              className={`${softFieldClassName} text-[13px] text-mute`}
+              className={`${pdpFieldClassName} text-[13px] text-mute`}
               placeholder="slug"
             />
           </div>
 
-          <div className="mt-3 flex items-center gap-2 px-1">
+          <div className="mt-3 flex items-center gap-2">
             <Star className="h-4 w-4 fill-gold text-gold" />
             <span className="text-[14px] font-medium">
               {product.rating.toFixed(1)}
@@ -337,8 +344,8 @@ export function AdminProductEditor({
             </span>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 rounded-2xl bg-ink/[0.045] px-3.5 py-3 transition focus-within:bg-ink/[0.07]">
+          <div className="mt-5 flex flex-wrap items-baseline gap-3">
+            <label className="flex items-baseline gap-1 rounded-lg bg-ink/[0.045] px-2 py-1 transition focus-within:bg-ink/[0.07]">
               <span className="text-[14px] text-mute">৳</span>
               <input
                 type="number"
@@ -346,10 +353,10 @@ export function AdminProductEditor({
                 step={1}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-28 border-0 bg-transparent p-0 text-2xl font-semibold text-ink outline-none"
+                className="w-28 border-0 bg-transparent p-0 text-2xl font-semibold leading-none text-ink outline-none"
               />
             </label>
-            <label className="flex items-center gap-1.5 rounded-2xl bg-ink/[0.045] px-3.5 py-3 text-mute transition focus-within:bg-ink/[0.07]">
+            <label className="flex items-baseline gap-1 rounded-lg bg-ink/[0.045] px-2 py-1 text-mute transition focus-within:bg-ink/[0.07]">
               <span className="text-[13px]">was ৳</span>
               <input
                 type="number"
@@ -358,21 +365,19 @@ export function AdminProductEditor({
                 value={compareAt}
                 onChange={(e) => setCompareAt(e.target.value)}
                 placeholder="—"
-                className="w-24 border-0 bg-transparent p-0 text-[16px] text-mute line-through outline-none"
+                className="w-24 border-0 bg-transparent p-0 text-[16px] leading-none text-mute line-through outline-none"
               />
             </label>
           </div>
 
           <label className="mt-5 block max-w-md">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-              Description
-            </span>
+            <span className="sr-only">Description</span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={4}
+              rows={3}
               placeholder="Product description"
-              className={`${softFieldClassName} mt-1.5 resize-y text-[15px] leading-relaxed text-mute focus:text-ink`}
+              className={`${pdpFieldClassName} resize-y text-[15px] leading-relaxed text-mute focus:text-ink`}
             />
           </label>
 
@@ -458,7 +463,7 @@ export function AdminProductEditor({
               step={0.01}
               value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)}
-              className={`${softFieldClassName} mt-1.5`}
+              className={`${pdpFieldClassName} mt-1.5`}
             />
           </label>
         </motion.div>
