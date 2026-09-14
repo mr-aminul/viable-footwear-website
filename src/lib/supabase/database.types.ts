@@ -344,7 +344,16 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      admin_sales_analytics: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
+      admin_logistics_analytics: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+    }
     Enums: {
       user_role: UserRole
       media_type: 'image' | 'video'

@@ -1,12 +1,13 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { requireRole } from '@/lib/auth/session'
 import {
   getSalesAnalytics,
   parseRangePreset,
+  type DateRangePreset,
 } from '@/lib/orders/analytics'
 import { getLogisticsAnalytics } from '@/lib/orders/logistics'
 import { LogisticsDashboard } from '@/components/admin/LogisticsDashboard'
-import { SalesAnalyticsDashboard } from '@/components/admin/SalesAnalyticsDashboard'
+import { SalesAnalyticsDashboardLazy } from '@/components/admin/SalesAnalyticsDashboardLazy'
 import { AdminPageHeader } from '@/components/admin/ui'
 
 export const metadata = {
@@ -19,15 +20,9 @@ type Props = {
 }
 
 export default async function AnalyticsPage({ searchParams }: Props) {
-  await requireRole(['admin', 'manager'])
   const params = await searchParams
   const tab = params.tab === 'logistics' ? 'logistics' : 'sales'
   const days = parseRangePreset(params.range)
-
-  const [sales, logistics] = await Promise.all([
-    tab === 'sales' ? getSalesAnalytics(days) : Promise.resolve(null),
-    tab === 'logistics' ? getLogisticsAnalytics() : Promise.resolve(null),
-  ])
 
   return (
     <>
@@ -49,14 +44,25 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         />
       </div>
 
-      {tab === 'sales' && sales ? (
-        <SalesAnalyticsDashboard data={sales} />
-      ) : null}
-      {tab === 'logistics' && logistics ? (
-        <LogisticsDashboard data={logistics} />
-      ) : null}
+      <Suspense fallback={<AnalyticsBodyFallback />}>
+        {tab === 'sales' ? (
+          <SalesAnalyticsSection days={days} />
+        ) : (
+          <LogisticsAnalyticsSection />
+        )}
+      </Suspense>
     </>
   )
+}
+
+async function SalesAnalyticsSection({ days }: { days: DateRangePreset }) {
+  const sales = await getSalesAnalytics(days)
+  return <SalesAnalyticsDashboardLazy data={sales} />
+}
+
+async function LogisticsAnalyticsSection() {
+  const logistics = await getLogisticsAnalytics()
+  return <LogisticsDashboard data={logistics} />
 }
 
 function TabLink({
@@ -80,5 +86,18 @@ function TabLink({
     >
       {label}
     </Link>
+  )
+}
+
+function AnalyticsBodyFallback() {
+  return (
+    <div className="mt-6 animate-pulse space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="h-28 rounded-2xl bg-white/80" />
+        <div className="h-28 rounded-2xl bg-white/80" />
+        <div className="h-28 rounded-2xl bg-white/80" />
+      </div>
+      <div className="h-72 rounded-2xl bg-white/80" />
+    </div>
   )
 }

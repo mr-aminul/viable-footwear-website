@@ -10,13 +10,22 @@ import type { AdminProductView } from '@/lib/catalog/queries'
 type AdminProductCardProps = {
   product: AdminProductView
   index?: number
+  selected?: boolean
+  selectionDisabled?: boolean
+  onSelectedChange?: (checked: boolean) => void
 }
 
 /**
  * Storefront-matching product tile for the admin Products grid.
  * Links into the visual editor instead of the public PDP.
  */
-export function AdminProductCard({ product, index = 0 }: AdminProductCardProps) {
+export function AdminProductCard({
+  product,
+  index = 0,
+  selected = false,
+  selectionDisabled = false,
+  onSelectedChange,
+}: AdminProductCardProps) {
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -31,7 +40,10 @@ export function AdminProductCard({ product, index = 0 }: AdminProductCardProps) 
         delay: index * 0.04,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift"
+      className={[
+        'group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift',
+        selected ? 'ring-2 ring-navy/40' : '',
+      ].join(' ')}
     >
       <Link
         href={`/admin/catalog/products/${product.id}`}
@@ -39,13 +51,38 @@ export function AdminProductCard({ product, index = 0 }: AdminProductCardProps) 
         aria-label={`Edit ${product.name}`}
       />
 
+      {onSelectedChange ? (
+        <label
+          className="absolute left-3 top-3 z-30 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white/95 shadow-sm"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-cloud accent-navy disabled:opacity-40"
+            checked={selected}
+            disabled={selectionDisabled}
+            onChange={(e) => onSelectedChange(e.target.checked)}
+            aria-label={`Select ${product.name}`}
+          />
+        </label>
+      ) : null}
+
       {!product.active ? (
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
+        <span
+          className={[
+            'absolute top-3 z-10 rounded-full bg-ink/80 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white',
+            onSelectedChange ? 'left-14' : 'left-3',
+          ].join(' ')}
+        >
           Draft
         </span>
       ) : (
         <span
-          className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
+          className={[
+            'absolute top-3 z-10 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider',
+            productBadgeClassName(product.badge),
+            onSelectedChange ? 'left-14' : 'left-3',
+          ].join(' ')}
         >
           {product.badge}
         </span>

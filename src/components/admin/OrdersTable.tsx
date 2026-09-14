@@ -14,7 +14,7 @@ import {
   pathaoStatusLabel,
   storeStatusLabel,
 } from '@/lib/orders/status-labels'
-import type { OrderRow } from '@/lib/orders/types'
+import type { AdminOrderListRow } from '@/lib/orders/types'
 import { OrderAdminActions } from '@/components/admin/OrderAdminActions'
 import {
   OrderConfirmDialog,
@@ -22,11 +22,11 @@ import {
 } from '@/components/admin/OrderConfirmDialog'
 import { adminButtonClassName } from '@/components/admin/ui'
 
-function canDispatchOrder(order: OrderRow) {
+function canDispatchOrder(order: AdminOrderListRow) {
   return !order.pathao_consignment_id && order.status !== 'cancelled'
 }
 
-function canCancelOrder(order: OrderRow) {
+function canCancelOrder(order: AdminOrderListRow) {
   return order.status !== 'cancelled' || isPathaoShipmentStranded(order)
 }
 
@@ -40,7 +40,7 @@ type DialogState = {
   variant: Extract<OrderConfirmDialogVariant, 'cancel' | 'delete'>
 } | null
 
-export function OrdersTable({ orders }: { orders: OrderRow[] }) {
+export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkSummary, setBulkSummary] = useState<string | null>(null)
@@ -49,7 +49,7 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
   const [pending, startTransition] = useTransition()
 
   const ordersById = useMemo(() => {
-    const map = new Map<string, OrderRow>()
+    const map = new Map<string, AdminOrderListRow>()
     for (const order of orders) map.set(order.id, order)
     return map
   }, [orders])
@@ -58,7 +58,7 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
     () =>
       [...selected]
         .map((id) => ordersById.get(id))
-        .filter((order): order is OrderRow => Boolean(order)),
+        .filter((order): order is AdminOrderListRow => Boolean(order)),
     [selected, ordersById],
   )
 

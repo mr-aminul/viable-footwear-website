@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { pathaoStatusLabel } from '@/lib/orders/status-labels'
 import { pathaoTrackingUrl } from '@/lib/orders/pathao-tracking'
 import type { OrderStatus, PaymentMethod } from '@/lib/supabase/database.types'
@@ -78,6 +79,16 @@ type OrderLogisticsRow = {
   created_at: string
 }
 
+type LogisticsRpcPayload = {
+  bucketCounts: Partial<Record<LogisticsBucketKey, number>>
+  pathaoBreakdown: { label: string; count: number }[]
+  cod: CodSnapshot
+  needsShipping: NeedsShippingRow[]
+  activeShipments: Array<Omit<ActiveShipmentRow, 'trackingUrl'> & {
+    trackingUrl?: string | null
+  }>
+}
+
 function normalizePathaoKey(raw: string | null | undefined): string {
   const text = (raw ?? '').trim().toLowerCase()
   if (!text) return 'submitted'
@@ -144,12 +155,67 @@ const BUCKET_META: { key: LogisticsBucketKey; label: string }[] = [
   { key: 'stranded', label: 'Stranded on Pathao' },
 ]
 
-/**
- * Live logistics snapshot for fulfillment (not date-bounded).
- * Caps at 2000 recent non-pending orders for free-tier safety.
- */
-export async function getLogisticsAnalytics(): Promise<LogisticsAnalytics> {
-  const supabase = await createClient()
+function isMissingRpcError(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  return (
+    error.code === 'PGRST202' ||
+    error.code === '42883' ||
+    /could not find the function|function .* does not exist/i.test(
+      error.message ?? '',
+    )
+  )
+}
+
+function mapRpcPayload(payload: LogisticsRpcPayload): LogisticsAnalytics {
+  const counts = payload.bucketCounts ?? {}
+  return {
+    buckets: BUCKET_META.map((meta) => ({
+      key: meta.key,
+      label: meta.label,
+      count: Number(counts[meta.key]) || 0,
+    })),
+    pathaoBreakdown: (payload.pathaoBreakdown ?? [])
+      .map((row) => ({
+        label: row.label,
+        count: Number(row.count) || 0,
+      }))
+      .sort((a, b) => b.count - a.count),
+    cod: {
+      outstandingCount: Number(payload.cod?.outstandingCount) || 0,
+      outstandingAmount: Number(payload.cod?.outstandingAmount) || 0,
+      collectedCount: Number(payload.cod?.collectedCount) || 0,
+      collectedAmount: Number(payload.cod?.collectedAmount) || 0,
+    },
+    needsShipping: (payload.needsShipping ?? []).map((row) => ({
+      ...row,
+      total: Number(row.total) || 0,
+    })),
+    activeShipments: (payload.activeShipments ?? []).map((row) => ({
+      ...row,
+      total: Number(row.total) || 0,
+      trackingUrl:
+        row.trackingUrl ??
+        pathaoTrackingUrl(row.pathaoConsignmentId, row.phone),
+    })),
+  }
+}
+
+async function fetchLogisticsViaRpc(): Promise<LogisticsAnalytics | null> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase.rpc('admin_logistics_analytics')
+
+  if (error) {
+    if (isMissingRpcError(error)) return null
+    console.error('[logistics] rpc', error)
+    return null
+  }
+
+  if (!data || typeof data !== 'object') return null
+  return mapRpcPayload(data as LogisticsRpcPayload)
+}
+
+async function fetchLogisticsLegacy(): Promise<LogisticsAnalytics> {
+  const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('orders')
     .select(
@@ -254,4 +320,20 @@ export async function getLogisticsAnalytics(): Promise<LogisticsAnalytics> {
     needsShipping,
     activeShipments,
   }
+}
+
+/**
+ * Live logistics snapshot for fulfillment (not date-bounded).
+ * Prefers Postgres RPC; falls back to capped row scan until migration is applied.
+ */
+export async function getLogisticsAnalytics(): Promise<LogisticsAnalytics> {
+  return unstable_cache(
+    async () => {
+      const viaRpc = await fetchLogisticsViaRpc()
+      if (viaRpc) return viaRpc
+      return fetchLogisticsLegacy()
+    },
+    ['admin-logistics-analytics'],
+    { revalidate: 20, tags: ['admin-orders-badge'] },
+  )()
 }

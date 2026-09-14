@@ -1,5 +1,13 @@
+import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import type { OrderItemRow, OrderWithItems } from '@/lib/orders/types'
+import { ADMIN_ORDERS_BADGE_TAG } from '@/lib/orders/cache-tags'
+import type {
+  AdminOrderListRow,
+  OrderItemRow,
+  OrderWithItems,
+} from '@/lib/orders/types'
 import type {
   OrderStatus,
   PaymentMethod,
@@ -19,9 +27,12 @@ export type ListOrdersFilters = {
   limit?: number
 }
 
-/** Orders ready to send to Pathao (no consignment yet, not cancelled / unpaid). */
-export async function countUndispatchedOrders(): Promise<number> {
-  const supabase = await createClient()
+/** Columns the admin orders table actually renders. */
+const ORDER_LIST_SELECT =
+  'id, order_number, status, payment_method, full_name, phone, city_name, total, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
+
+async function fetchUndispatchedOrderCount(): Promise<number> {
+  const supabase = createServiceClient()
   const { count, error } = await supabase
     .from('orders')
     .select('id', { count: 'exact', head: true })
@@ -37,40 +48,59 @@ export async function countUndispatchedOrders(): Promise<number> {
   return count ?? 0
 }
 
+/**
+ * Orders ready to send to Pathao (no consignment yet, not cancelled / unpaid).
+ * Short Data Cache + tag so layout/nav never waits on a live count query.
+ */
+export const countUndispatchedOrders = cache(async (): Promise<number> => {
+  return unstable_cache(
+    fetchUndispatchedOrderCount,
+    ['admin-undispatched-orders-count'],
+    { revalidate: 30, tags: [ADMIN_ORDERS_BADGE_TAG] },
+  )()
+})
+
 /** Distinct city names for the orders filter dropdown. */
 export async function listOrderCityNames(): Promise<string[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('orders')
-    .select('city_name')
-    .order('city_name', { ascending: true })
-    .limit(500)
+  return unstable_cache(
+    async () => {
+      const supabase = createServiceClient()
+      const { data, error } = await supabase
+        .from('orders')
+        .select('city_name')
+        .order('city_name', { ascending: true })
+        .limit(500)
 
-  if (error || !data) {
-    console.error('[orders] cities', error)
-    return []
-  }
+      if (error || !data) {
+        console.error('[orders] cities', error)
+        return []
+      }
 
-  const seen = new Set<string>()
-  const cities: string[] = []
-  for (const row of data) {
-    const name = row.city_name?.trim()
-    if (!name || seen.has(name)) continue
-    seen.add(name)
-    cities.push(name)
-  }
-  return cities
+      const seen = new Set<string>()
+      const cities: string[] = []
+      for (const row of data) {
+        const name = row.city_name?.trim()
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        cities.push(name)
+      }
+      return cities
+    },
+    ['admin-order-city-names'],
+    { revalidate: 60, tags: [ADMIN_ORDERS_BADGE_TAG] },
+  )()
 }
 
+/** Slim list for the admin table — no line items. */
 export async function listOrders(
   filters: ListOrdersFilters = {},
-): Promise<OrderWithItems[]> {
+): Promise<AdminOrderListRow[]> {
   const supabase = await createClient()
   const limit = filters.limit ?? 100
 
   let query = supabase
     .from('orders')
-    .select('*')
+    .select(ORDER_LIST_SELECT)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -105,29 +135,7 @@ export async function listOrders(
     return []
   }
 
-  const ids = orders.map((o) => o.id)
-  if (ids.length === 0) return []
-
-  const { data: items, error: itemsError } = await supabase
-    .from('order_items')
-    .select('*')
-    .in('order_id', ids)
-
-  if (itemsError) {
-    console.error('[orders] items list', itemsError)
-  }
-
-  const byOrder = new Map<string, OrderItemRow[]>()
-  for (const item of items ?? []) {
-    const list = byOrder.get(item.order_id) ?? []
-    list.push(item)
-    byOrder.set(item.order_id, list)
-  }
-
-  return orders.map((order) => ({
-    ...order,
-    items: byOrder.get(order.id) ?? [],
-  }))
+  return orders as AdminOrderListRow[]
 }
 
 export async function getOrderById(
@@ -147,7 +155,7 @@ export async function getOrderById(
     .select('*')
     .eq('order_id', order.id)
 
-  return { ...order, items: items ?? [] }
+  return { ...order, items: (items as OrderItemRow[] | null) ?? [] }
 }
 
 export async function getPaymentAttemptsForOrder(

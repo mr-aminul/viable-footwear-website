@@ -1,3 +1,5 @@
+import { unstable_cache } from 'next/cache'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { OrderStatus, PaymentMethod } from '@/lib/supabase/database.types'
 
@@ -50,6 +52,22 @@ export type SalesAnalytics = {
   statusFunnel: StatusFunnelRow[]
 }
 
+type OrderLite = {
+  id: string
+  status: OrderStatus
+  payment_method: PaymentMethod
+  total: number
+  created_at: string
+}
+
+type SalesRpcPayload = {
+  kpis: SalesKpis
+  series: Array<{ date: string; orders: number; gmv: number }>
+  paymentMix: Array<{ method: PaymentMethod; count: number; gmv: number }>
+  statusFunnel: Array<{ status: OrderStatus; count: number }>
+  topProducts: TopProductRow[]
+}
+
 /** Orders that contribute to GMV (exclude unpaid drafts and cancellations). */
 const GMV_STATUSES = new Set<OrderStatus>([
   'paid',
@@ -59,14 +77,6 @@ const GMV_STATUSES = new Set<OrderStatus>([
   'delivered',
   'returned',
 ])
-
-type OrderLite = {
-  id: string
-  status: OrderStatus
-  payment_method: PaymentMethod
-  total: number
-  created_at: string
-}
 
 function startOfUtcDay(d: Date): Date {
   return new Date(
@@ -134,11 +144,109 @@ function statusLabel(status: OrderStatus): string {
   }
 }
 
-export async function getSalesAnalytics(
+function dayLabel(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00.000Z`)
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+}
+
+function emptyKpis(): SalesKpis {
+  return {
+    orderCount: 0,
+    gmv: 0,
+    aov: 0,
+    paidCount: 0,
+    codCount: 0,
+    paidGmv: 0,
+    codGmv: 0,
+  }
+}
+
+function mapRpcPayload(
   days: DateRangePreset,
+  range: ReturnType<typeof resolveAnalyticsRange>,
+  payload: SalesRpcPayload,
+): SalesAnalytics {
+  const kpis = payload.kpis ?? emptyKpis()
+  return {
+    from: range.from,
+    to: range.to,
+    days,
+    kpis: {
+      orderCount: Number(kpis.orderCount) || 0,
+      gmv: Number(kpis.gmv) || 0,
+      aov: Number(kpis.aov) || 0,
+      paidCount: Number(kpis.paidCount) || 0,
+      codCount: Number(kpis.codCount) || 0,
+      paidGmv: Number(kpis.paidGmv) || 0,
+      codGmv: Number(kpis.codGmv) || 0,
+    },
+    series: (payload.series ?? []).map((point) => ({
+      date: point.date,
+      label: dayLabel(point.date),
+      orders: Number(point.orders) || 0,
+      gmv: Number(point.gmv) || 0,
+    })),
+    paymentMix: (payload.paymentMix ?? []).map((slice) => ({
+      method: slice.method,
+      label: paymentLabel(slice.method),
+      count: Number(slice.count) || 0,
+      gmv: Number(slice.gmv) || 0,
+    })),
+    statusFunnel: (payload.statusFunnel ?? []).map((row) => ({
+      status: row.status,
+      label: statusLabel(row.status),
+      count: Number(row.count) || 0,
+    })),
+    topProducts: (payload.topProducts ?? []).map((row) => ({
+      productName: row.productName,
+      quantity: Number(row.quantity) || 0,
+      revenue: Number(row.revenue) || 0,
+    })),
+  }
+}
+
+function isMissingRpcError(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  return (
+    error.code === 'PGRST202' ||
+    error.code === '42883' ||
+    /could not find the function|function .* does not exist/i.test(
+      error.message ?? '',
+    )
+  )
+}
+
+/** Preferred path: one Postgres RPC round-trip. */
+async function fetchSalesAnalyticsViaRpc(
+  days: DateRangePreset,
+  range: ReturnType<typeof resolveAnalyticsRange>,
+): Promise<SalesAnalytics | null> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase.rpc('admin_sales_analytics', {
+    p_from: range.fromIso,
+    p_to: range.toIso,
+  })
+
+  if (error) {
+    if (isMissingRpcError(error)) return null
+    console.error('[analytics] rpc', error)
+    return null
+  }
+
+  if (!data || typeof data !== 'object') return null
+  return mapRpcPayload(days, range, data as SalesRpcPayload)
+}
+
+/** Fallback when the migration has not been applied yet. */
+async function fetchSalesAnalyticsLegacy(
+  days: DateRangePreset,
+  range: ReturnType<typeof resolveAnalyticsRange>,
 ): Promise<SalesAnalytics> {
-  const range = resolveAnalyticsRange(days)
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: orders, error } = await supabase
     .from('orders')
@@ -179,11 +287,7 @@ export async function getSalesAnalytics(
     const key = toIsoDate(cursor)
     dayMap.set(key, {
       date: key,
-      label: cursor.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        timeZone: 'UTC',
-      }),
+      label: dayLabel(key),
       orders: 0,
       gmv: 0,
     })
@@ -271,6 +375,22 @@ export async function getSalesAnalytics(
     topProducts,
     statusFunnel,
   }
+}
+
+export async function getSalesAnalytics(
+  days: DateRangePreset,
+): Promise<SalesAnalytics> {
+  const range = resolveAnalyticsRange(days)
+
+  return unstable_cache(
+    async () => {
+      const viaRpc = await fetchSalesAnalyticsViaRpc(days, range)
+      if (viaRpc) return viaRpc
+      return fetchSalesAnalyticsLegacy(days, range)
+    },
+    ['admin-sales-analytics', String(days), range.from, range.to],
+    { revalidate: 30, tags: ['admin-orders-badge'] },
+  )()
 }
 
 export type OrdersCsvRow = {

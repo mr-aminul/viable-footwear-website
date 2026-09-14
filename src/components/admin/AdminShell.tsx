@@ -13,18 +13,57 @@ import { AdminStaffProvider } from '@/components/admin/AdminStaffContext'
  */
 export function AdminShell({
   profile,
-  undispatchedOrderCount = 0,
   children,
 }: {
   profile: StaffProfile
-  undispatchedOrderCount?: number
   children: React.ReactNode
 }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [undispatchedOrderCount, setUndispatchedOrderCount] = useState(0)
 
   useEffect(() => {
     setMobileOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
+    async function loadBadge() {
+      try {
+        const res = await fetch('/api/admin/orders/undispatched-count', {
+          signal: controller.signal,
+          credentials: 'same-origin',
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as { count?: number }
+        if (!cancelled && typeof data.count === 'number') {
+          setUndispatchedOrderCount(data.count)
+        }
+      } catch {
+        // Ignore abort / network errors — badge is non-critical.
+      }
+    }
+
+    void loadBadge()
+
+    const onFocus = () => void loadBadge()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadBadge()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    const interval = window.setInterval(() => void loadBadge(), 45_000)
+
+    return () => {
+      cancelled = true
+      controller.abort()
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.clearInterval(interval)
+    }
   }, [pathname])
 
   useEffect(() => {

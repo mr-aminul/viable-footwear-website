@@ -4,6 +4,11 @@
  * @see https://developer.pathao.com (API docs)
  */
 
+import fs from 'node:fs'
+import https from 'node:https'
+import path from 'node:path'
+import tls from 'node:tls'
+import { URL } from 'node:url'
 import {
   resolvePathaoConfig,
   type PathaoConfig,
@@ -11,6 +16,158 @@ import {
 
 const TOKEN_PATH = '/aladdin/api/v1/issue-token'
 const ORDERS_PATH = '/aladdin/api/v1/orders'
+
+let cachedHttpsAgent: https.Agent | null | undefined
+
+/**
+ * Optional TLS overrides for local networks that intercept HTTPS
+ * (corporate proxy / "Forward Trust" CA). Production Vercel does not need these.
+ *
+ * PATHAO_CA_FILE — path to a PEM CA to trust (relative to project root or absolute)
+ * PATHAO_TLS_INSECURE=1 — disable TLS verification (local debugging only)
+ */
+function getPathaoHttpsAgent(): https.Agent | undefined {
+  if (cachedHttpsAgent !== undefined) {
+    return cachedHttpsAgent ?? undefined
+  }
+
+  const insecure =
+    process.env.PATHAO_TLS_INSECURE === '1' ||
+    process.env.PATHAO_TLS_INSECURE === 'true'
+  if (insecure) {
+    cachedHttpsAgent = new https.Agent({ rejectUnauthorized: false })
+    return cachedHttpsAgent
+  }
+
+  const caFile = process.env.PATHAO_CA_FILE?.trim()
+  if (!caFile) {
+    cachedHttpsAgent = null
+    return undefined
+  }
+
+  const absolute = path.isAbsolute(caFile)
+    ? caFile
+    : path.join(process.cwd(), caFile)
+  if (!fs.existsSync(absolute)) {
+    cachedHttpsAgent = null
+    throw new Error(
+      `PATHAO_CA_FILE not found: ${absolute}. Remove the env var or place the PEM there.`,
+    )
+  }
+
+  const extraCa = fs.readFileSync(absolute)
+  cachedHttpsAgent = new https.Agent({
+    ca: [...tls.rootCertificates, extraCa],
+  })
+  return cachedHttpsAgent
+}
+
+function formatPathaoNetworkError(err: unknown): Error {
+  const cause =
+    err && typeof err === 'object' && 'cause' in err
+      ? (err as { cause?: unknown }).cause
+      : undefined
+  const causeObj =
+    cause && typeof cause === 'object'
+      ? (cause as { code?: string; message?: string })
+      : null
+  const code = causeObj?.code
+  const detail =
+    code ||
+    causeObj?.message ||
+    (err instanceof Error ? err.message : String(err))
+
+  if (
+    code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+    code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+    String(detail).includes('certificate')
+  ) {
+    return new Error(
+      `Pathao TLS failed (${detail}). Your network is intercepting HTTPS. Set PATHAO_CA_FILE to your proxy CA PEM (local), or cancel from production.`,
+    )
+  }
+
+  return new Error(`Pathao request failed: ${detail}`)
+}
+
+/** fetch() with optional Pathao TLS agent + clearer network errors. */
+async function pathaoFetch(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const agent = getPathaoHttpsAgent()
+
+  if (!agent) {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      throw formatPathaoNetworkError(err)
+    }
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    try {
+      const parsed = new URL(url)
+      const method = (init.method || 'GET').toUpperCase()
+      const headerBag = new Headers(init.headers)
+      const headers: Record<string, string> = {}
+      headerBag.forEach((value, key) => {
+        headers[key] = value
+      })
+
+      const body =
+        typeof init.body === 'string'
+          ? init.body
+          : init.body != null
+            ? String(init.body)
+            : undefined
+      if (body != null && !headers['content-length'] && !headers['Content-Length']) {
+        headers['Content-Length'] = String(Buffer.byteLength(body))
+      }
+
+      const req = https.request(
+        {
+          protocol: parsed.protocol,
+          hostname: parsed.hostname,
+          port: parsed.port || 443,
+          path: `${parsed.pathname}${parsed.search}`,
+          method,
+          headers,
+          agent,
+        },
+        (res) => {
+          const chunks: Buffer[] = []
+          res.on('data', (chunk: Buffer) => chunks.push(chunk))
+          res.on('end', () => {
+            const buffer = Buffer.concat(chunks)
+            const responseHeaders = new Headers()
+            for (const [key, value] of Object.entries(res.headers)) {
+              if (value == null) continue
+              if (Array.isArray(value)) {
+                for (const item of value) responseHeaders.append(key, item)
+              } else {
+                responseHeaders.set(key, value)
+              }
+            }
+            resolve(
+              new Response(buffer, {
+                status: res.statusCode ?? 0,
+                statusText: res.statusMessage,
+                headers: responseHeaders,
+              }),
+            )
+          })
+        },
+      )
+
+      req.on('error', (err) => reject(formatPathaoNetworkError(err)))
+      if (body != null) req.write(body)
+      req.end()
+    } catch (err) {
+      reject(formatPathaoNetworkError(err))
+    }
+  })
+}
 
 export interface PathaoTokenResponse {
   token_type: string
@@ -116,7 +273,7 @@ export async function getPathaoAccessToken(
 ): Promise<string> {
   const config = await getConfig(override)
 
-  const res = await fetch(`${config.baseUrl}${TOKEN_PATH}`, {
+  const res = await pathaoFetch(`${config.baseUrl}${TOKEN_PATH}`, {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
@@ -162,7 +319,7 @@ export async function createPathaoOrder(
   const config = await getConfig()
   const token = await getPathaoAccessToken(config)
 
-  const res = await fetch(`${config.baseUrl}${ORDERS_PATH}`, {
+  const res = await pathaoFetch(`${config.baseUrl}${ORDERS_PATH}`, {
     method: 'POST',
     cache: 'no-store',
     headers: {
@@ -227,7 +384,7 @@ export async function cancelPathaoOrder(
   const config = await getConfig()
   const token = await getPathaoAccessToken(config)
 
-  const res = await fetch(
+  const res = await pathaoFetch(
     `${config.baseUrl}${ORDERS_PATH}/${encodeURIComponent(trimmedId)}/cancel`,
     {
       method: 'PUT',
@@ -281,7 +438,7 @@ async function pathaoGet<T>(
 ): Promise<T> {
   const config = await getConfig(override)
   const token = await getPathaoAccessToken(config)
-  const res = await fetch(`${config.baseUrl}${path}`, {
+  const res = await pathaoFetch(`${config.baseUrl}${path}`, {
     method: 'GET',
     cache: 'no-store',
     headers: {
@@ -355,15 +512,18 @@ export async function getPathaoPrice(
     recipient_zone: params.recipient_zone,
   }
 
-  const res = await fetch(`${config.baseUrl}/aladdin/api/v1/merchant/price-plan`, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+  const res = await pathaoFetch(
+    `${config.baseUrl}/aladdin/api/v1/merchant/price-plan`,
+    {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  })
+  )
 
   const text = await res.text()
   let response: {

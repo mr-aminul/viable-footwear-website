@@ -4,11 +4,29 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { revalidateStorefront } from '@/lib/catalog/cache-tags'
 import { normalizeProductBadge } from '@/lib/catalog/badge'
-import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
+import {
+  PRODUCT_IMAGE_BUCKET,
+  PRODUCT_VIDEO_BUCKET,
+  RELATED_PRODUCTS_DISPLAY_CAP,
+} from '@/lib/catalog/constants'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
+
+const BULK_PRODUCT_ACTION_LIMIT = 50
+
+type BulkProductFailure = {
+  productId: string
+  productName: string | null
+  error: string
+}
+
+export type BulkProductActionResult = {
+  okCount: number
+  failCount: number
+  failures: BulkProductFailure[]
+}
 
 function readString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? '').trim()
@@ -566,20 +584,196 @@ export async function updateProduct(
 export async function deactivateProduct(
   productId: string,
 ): Promise<ActionResult> {
+  return setProductActive(productId, false)
+}
+
+/**
+ * Publish or unpublish a product. Publishing requires at least one active variant.
+ */
+export async function setProductActive(
+  productId: string,
+  active: boolean,
+): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  const { data: existing, error: loadError } = await supabase
     .from('products')
-    .update({ active: false })
+    .select('id, slug, active')
     .eq('id', productId)
-    .select('slug')
-    .single()
+    .maybeSingle()
+
+  if (loadError || !existing) {
+    return { ok: false, error: loadError?.message ?? 'Product not found.' }
+  }
+
+  if (existing.active === active) return { ok: true }
+
+  if (active) {
+    const activeVariants = await countActiveVariants(productId)
+    if (activeVariants < 1) {
+      return {
+        ok: false,
+        error: 'Add at least one active size/color variant before publishing.',
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from('products')
+    .update({ active })
+    .eq('id', productId)
 
   if (error) return { ok: false, error: error.message }
 
-  revalidateProductSurfaces(data.slug)
+  revalidateProductSurfaces(existing.slug)
+  revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
+}
+
+/**
+ * Permanently delete a product, its media files, and related references.
+ */
+export async function deleteProduct(productId: string): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const { data: product, error: loadError } = await supabase
+    .from('products')
+    .select('id, slug, name')
+    .eq('id', productId)
+    .maybeSingle()
+
+  if (loadError || !product) {
+    return { ok: false, error: loadError?.message ?? 'Product not found.' }
+  }
+
+  const { data: mediaRows } = await supabase
+    .from('product_media')
+    .select('media_type, storage_path')
+    .eq('product_id', productId)
+
+  const imagePaths: string[] = []
+  const videoPaths: string[] = []
+  for (const row of mediaRows ?? []) {
+    if (
+      row.storage_path.startsWith('/') ||
+      row.storage_path.startsWith('http')
+    ) {
+      continue
+    }
+    if (row.media_type === 'video') videoPaths.push(row.storage_path)
+    else imagePaths.push(row.storage_path)
+  }
+
+  // Strip this product from other products' related lists before delete.
+  const { data: relatedOwners } = await supabase
+    .from('products')
+    .select('id, related_product_ids, slug')
+    .contains('related_product_ids', [productId])
+
+  for (const owner of relatedOwners ?? []) {
+    const nextIds = (owner.related_product_ids ?? []).filter(
+      (id) => id !== productId,
+    )
+    await supabase
+      .from('products')
+      .update({ related_product_ids: nextIds })
+      .eq('id', owner.id)
+    revalidateProductSurfaces(owner.slug)
+  }
+
+  const { error } = await supabase.from('products').delete().eq('id', productId)
+  if (error) return { ok: false, error: error.message }
+
+  if (imagePaths.length > 0) {
+    await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(imagePaths)
+  }
+  if (videoPaths.length > 0) {
+    await supabase.storage.from(PRODUCT_VIDEO_BUCKET).remove(videoPaths)
+  }
+
+  revalidateProductSurfaces(product.slug)
+  revalidateTag(`admin-product-${productId}`)
+  return { ok: true }
+}
+
+async function runBulkProductAction(
+  productIds: string[],
+  runOne: (productId: string) => Promise<ActionResult>,
+): Promise<ActionResult<BulkProductActionResult>> {
+  await requireRole(['admin', 'manager'])
+
+  const uniqueIds = [
+    ...new Set(productIds.map((id) => id.trim()).filter(Boolean)),
+  ]
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: 'No products selected.' }
+  }
+  if (uniqueIds.length > BULK_PRODUCT_ACTION_LIMIT) {
+    return {
+      ok: false,
+      error: `Select at most ${BULK_PRODUCT_ACTION_LIMIT} products at a time.`,
+    }
+  }
+
+  const supabase = await createClient()
+  const { data: productRows } = await supabase
+    .from('products')
+    .select('id, name')
+    .in('id', uniqueIds)
+  const nameById = new Map((productRows ?? []).map((row) => [row.id, row.name]))
+
+  const failures: BulkProductFailure[] = []
+  let okCount = 0
+
+  for (const productId of uniqueIds) {
+    const result = await runOne(productId)
+    if (result.ok) {
+      okCount += 1
+      continue
+    }
+    failures.push({
+      productId,
+      productName: nameById.get(productId) ?? null,
+      error: result.error,
+    })
+  }
+
+  revalidatePath('/admin/catalog')
+  revalidatePath('/admin/catalog/products')
+  revalidateTag('admin-products')
+
+  return {
+    ok: true,
+    data: {
+      okCount,
+      failCount: failures.length,
+      failures,
+    },
+  }
+}
+
+/** Soft-archive (unpublish) many products. */
+export async function archiveProducts(
+  productIds: string[],
+): Promise<ActionResult<BulkProductActionResult>> {
+  return runBulkProductAction(productIds, (id) => setProductActive(id, false))
+}
+
+/** Publish or unpublish many products. */
+export async function setProductsActive(
+  productIds: string[],
+  active: boolean,
+): Promise<ActionResult<BulkProductActionResult>> {
+  return runBulkProductAction(productIds, (id) => setProductActive(id, active))
+}
+
+/** Permanently delete many products. Continues after individual failures. */
+export async function deleteProducts(
+  productIds: string[],
+): Promise<ActionResult<BulkProductActionResult>> {
+  return runBulkProductAction(productIds, deleteProduct)
 }
 
 /**

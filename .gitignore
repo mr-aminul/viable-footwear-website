@@ -32,3 +32,4 @@ dist-ssr
 next-env.d.ts
 *.tsbuildinfo
 supabase/.temp/
+certs/

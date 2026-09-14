@@ -16,7 +16,6 @@ import {
 } from '@/lib/orders/status-labels'
 import { AdminPageHeader } from '@/components/admin/ui'
 import { OrderAdminActions } from '@/components/admin/OrderAdminActions'
-import { OrderStatusControl } from '@/components/admin/OrderStatusControl'
 
 export const metadata = {
   title: 'Order detail',
@@ -283,24 +282,6 @@ export default async function OrderDetailPage({
           </dl>
         </section>
       </div>
-
-      <section className="mt-6 rounded-2xl border border-cloud bg-white p-5">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wider text-mute">
-          Status
-        </h2>
-        <p className="mt-2 text-[14px] text-ink">
-          Current: <span className="font-semibold">{storeStatusLabel(order.status)}</span>
-        </p>
-        <div className="mt-4 max-w-md">
-          <OrderStatusControl orderId={order.id} status={order.status} />
-        </div>
-        {order.pathao_consignment_id ? (
-          <p className="mt-3 text-[12px] text-mute">
-            Prefer Sync Pathao for in-transit / delivered updates when a
-            consignment exists.
-          </p>
-        ) : null}
-      </section>
 
       {paymentAttempts.length > 0 ? (
         <section className="mt-6 overflow-x-auto rounded-2xl border border-cloud bg-white">

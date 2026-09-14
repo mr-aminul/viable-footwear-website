@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath } from 'next/cache'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
+import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
 import { listActiveCampaignsForCheckout } from '@/lib/campaigns/queries'
 import { pickCampaignDelivery } from '@/lib/campaigns/rules'
 import { isBkashConfigured } from '@/lib/integrations/bkash-settings'
@@ -404,8 +404,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      revalidatePath('/admin', 'layout')
-      revalidatePath('/admin/orders')
+      revalidateAdminOrders()
 
       const omsOrder = orderPayloadFromRow({
         id: insertedOrder.id,

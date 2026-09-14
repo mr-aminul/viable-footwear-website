@@ -1,6 +1,5 @@
 import { AdminShell } from '@/components/admin/AdminShell'
 import { requireRole } from '@/lib/auth/session'
-import { countUndispatchedOrders } from '@/lib/orders/queries'
 
 export const metadata = {
   robots: { index: false, follow: false },
@@ -8,6 +7,7 @@ export const metadata = {
 
 /**
  * Shared authenticated shell — persists across admin navigations.
+ * Badge count is fetched client-side so layout stays auth-only and warm.
  */
 export default async function AdminPanelLayout({
   children,
@@ -15,13 +15,5 @@ export default async function AdminPanelLayout({
   children: React.ReactNode
 }) {
   const session = await requireRole(['admin', 'manager'])
-  const undispatchedOrderCount = await countUndispatchedOrders()
-  return (
-    <AdminShell
-      profile={session.profile}
-      undispatchedOrderCount={undispatchedOrderCount}
-    >
-      {children}
-    </AdminShell>
-  )
+  return <AdminShell profile={session.profile}>{children}</AdminShell>
 }

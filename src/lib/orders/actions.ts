@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
 import { resolvePathaoConfig } from '@/lib/integrations/pathao-settings'
@@ -15,19 +14,10 @@ import {
   normalizePathaoPhone,
 } from '@/lib/pathao'
 import type { OrderStatus } from '@/lib/supabase/database.types'
-import { canTransitionStatus } from '@/lib/orders/status-transitions'
-import {
-  isPathaoShipmentStranded,
-  storeStatusLabel,
-} from '@/lib/orders/status-labels'
+import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
+import { isPathaoShipmentStranded } from '@/lib/orders/status-labels'
 import { parsePathaoHistory } from '@/lib/orders/pathao-history'
 import { createClient } from '@/lib/supabase/server'
-
-function revalidateAdminOrders(orderId?: string) {
-  revalidatePath('/admin', 'layout')
-  revalidatePath('/admin/orders')
-  if (orderId) revalidatePath(`/admin/orders/${orderId}`)
-}
 
 async function assertPathaoConfigured(): Promise<ActionResult | null> {
   try {
@@ -640,57 +630,4 @@ export async function reactivateOrderForResend(
     ok: true,
     data: { orderId: order.id, orderNumber: order.order_number },
   }
-}
-
-/**
- * Manual status update along the allowed fulfillment graph.
- * Prefer Pathao sync for shipped/delivered when a consignment exists.
- */
-export async function updateOrderStatus(
-  orderId: string,
-  nextStatus: OrderStatus,
-): Promise<ActionResult<{ status: OrderStatus }>> {
-  const session = await requireRole(['admin', 'manager'])
-
-  const supabase = await createClient()
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('id, status')
-    .eq('id', orderId)
-    .maybeSingle()
-
-  if (error || !order) return { ok: false, error: 'Order not found.' }
-
-  const current = order.status as OrderStatus
-  if (!canTransitionStatus(current, nextStatus)) {
-    return {
-      ok: false,
-      error: `Cannot move from ${storeStatusLabel(current)} to ${storeStatusLabel(nextStatus)}.`,
-    }
-  }
-
-  const { error: updateError } = await supabase
-    .from('orders')
-    .update({
-      status: nextStatus,
-      ...(nextStatus === 'paid' && { paid_at: new Date().toISOString() }),
-    })
-    .eq('id', orderId)
-
-  if (updateError) {
-    return { ok: false, error: 'Could not update order status.' }
-  }
-
-  console.info(
-    '[orders] status change',
-    {
-      orderId,
-      from: current,
-      to: nextStatus,
-      by: session.profile.email,
-    },
-  )
-
-  revalidateAdminOrders(orderId)
-  return { ok: true, data: { status: nextStatus } }
 }

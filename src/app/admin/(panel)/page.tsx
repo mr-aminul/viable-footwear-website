@@ -9,9 +9,17 @@ export const metadata = {
 }
 
 /**
- * Tiny server wrapper — dashboard body is client-side (no per-nav data fetch).
+ * Shell streams immediately; KPI data loads inside Suspense.
  */
-export default async function AdminDashboardPage() {
+export default function AdminDashboardPage() {
+  return (
+    <Suspense fallback={<DashboardFallback />}>
+      <DashboardData />
+    </Suspense>
+  )
+}
+
+async function DashboardData() {
   const [pendingDispatchCount, sales7] = await Promise.all([
     countUndispatchedOrders(),
     getSalesAnalytics(7),
@@ -20,15 +28,13 @@ export default async function AdminDashboardPage() {
   const todayPoint = sales7.series.find((d) => d.date === sales7.to)
 
   return (
-    <Suspense fallback={<DashboardFallback />}>
-      <AdminDashboard
-        pendingDispatchCount={pendingDispatchCount}
-        sales7DayGmv={sales7.kpis.gmv}
-        sales7DayOrders={sales7.kpis.orderCount}
-        ordersToday={todayPoint?.orders ?? 0}
-        gmvToday={todayPoint?.gmv ?? 0}
-      />
-    </Suspense>
+    <AdminDashboard
+      pendingDispatchCount={pendingDispatchCount}
+      sales7DayGmv={sales7.kpis.gmv}
+      sales7DayOrders={sales7.kpis.orderCount}
+      ordersToday={todayPoint?.orders ?? 0}
+      gmvToday={todayPoint?.gmv ?? 0}
+    />
   )
 }
 
