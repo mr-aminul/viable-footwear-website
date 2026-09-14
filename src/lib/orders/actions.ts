@@ -8,7 +8,6 @@ import {
   emitOmsWebhook,
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
-import { generateOrderNumber } from '@/lib/orders/order-number'
 import {
   cancelPathaoOrder,
   createPathaoOrder,
@@ -17,7 +16,11 @@ import {
 } from '@/lib/pathao'
 import type { OrderStatus } from '@/lib/supabase/database.types'
 import { canTransitionStatus } from '@/lib/orders/status-transitions'
-import { storeStatusLabel } from '@/lib/orders/status-labels'
+import {
+  isPathaoShipmentStranded,
+  storeStatusLabel,
+} from '@/lib/orders/status-labels'
+import { parsePathaoHistory } from '@/lib/orders/pathao-history'
 import { createClient } from '@/lib/supabase/server'
 
 function revalidateAdminOrders(orderId?: string) {
@@ -564,103 +567,78 @@ export async function deleteOrders(
 }
 
 /**
- * Re-create a cancelled order with the same customer, address, and items
- * so it can be sent to Pathao again.
+ * Reopen a cancelled order for Pathao again on the same row.
+ * Archives any previous consignment into pathao_history first.
  */
-export async function duplicateOrder(
+export async function reactivateOrderForResend(
   orderId: string,
-): Promise<ActionResult<{ newOrderId: string; orderNumber: string }>> {
+): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
   await requireRole(['admin', 'manager'])
 
   const supabase = await createClient()
-  const { data: source, error } = await supabase
+  const { data: order, error } = await supabase
     .from('orders')
     .select(
-      'full_name, email, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, subtotal, shipping, total, payment_method, pathao_delivery_fee, campaign_id, status',
+      'id, order_number, status, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, pathao_history',
     )
     .eq('id', orderId)
     .maybeSingle()
 
-  if (error || !source) return { ok: false, error: 'Order not found.' }
+  if (error || !order) return { ok: false, error: 'Order not found.' }
 
-  if (source.status !== 'cancelled') {
+  if (order.status !== 'cancelled') {
     return {
       ok: false,
-      error: 'Only cancelled orders can be re-created for Pathao resend.',
+      error: 'Only cancelled orders can be reopened for Pathao resend.',
     }
   }
 
-  const { data: sourceItems, error: itemsError } = await supabase
-    .from('order_items')
-    .select(
-      'product_id, variant_id, product_name, size_eu, color, sku, unit_price, quantity, weight_kg',
-    )
-    .eq('order_id', orderId)
-
-  if (itemsError) {
-    return { ok: false, error: 'Failed to load order items.' }
+  if (
+    isPathaoShipmentStranded({
+      status: order.status,
+      pathao_consignment_id: order.pathao_consignment_id,
+      pathao_cancelled_at: order.pathao_cancelled_at,
+    })
+  ) {
+    return {
+      ok: false,
+      error:
+        'Cancel the Pathao shipment first, then use Resend to reopen this order.',
+    }
   }
 
-  const { data: newOrder, error: insertError } = await supabase
+  const history = parsePathaoHistory(order.pathao_history)
+  const consignmentId = order.pathao_consignment_id?.trim() || null
+  if (consignmentId) {
+    history.push({
+      consignment_id: consignmentId,
+      status: order.pathao_status,
+      error: order.pathao_error,
+      cancelled_at: order.pathao_cancelled_at,
+      archived_at: new Date().toISOString(),
+    })
+  }
+
+  const { error: updateError } = await supabase
     .from('orders')
-    .insert({
-      order_number: generateOrderNumber(),
-      email: source.email,
-      full_name: source.full_name,
-      phone: source.phone,
-      secondary_phone: source.secondary_phone,
-      address: source.address,
-      city_id: source.city_id,
-      zone_id: source.zone_id,
-      area_id: source.area_id,
-      city_name: source.city_name,
-      zone_name: source.zone_name,
-      area_name: source.area_name,
-      subtotal: source.subtotal,
-      shipping: source.shipping,
-      total: source.total,
-      payment_method: source.payment_method,
-      pathao_delivery_fee: source.pathao_delivery_fee,
-      campaign_id: source.campaign_id,
+    .update({
       status: 'awaiting_fulfillment',
       pathao_consignment_id: null,
       pathao_status: null,
       pathao_error: null,
       pathao_cancelled_at: null,
+      pathao_history: history,
     })
-    .select('id, order_number')
-    .single()
+    .eq('id', orderId)
 
-  if (insertError || !newOrder) {
-    return { ok: false, error: 'Failed to re-create order.' }
+  if (updateError) {
+    return { ok: false, error: 'Failed to reopen order for resend.' }
   }
 
-  if (sourceItems && sourceItems.length > 0) {
-    const { error: itemsInsertError } = await supabase.from('order_items').insert(
-      sourceItems.map((item) => ({
-        order_id: newOrder.id,
-        product_id: item.product_id,
-        variant_id: item.variant_id,
-        product_name: item.product_name,
-        size_eu: item.size_eu,
-        color: item.color,
-        sku: item.sku,
-        unit_price: item.unit_price,
-        quantity: item.quantity,
-        weight_kg: item.weight_kg,
-      })),
-    )
-
-    if (itemsInsertError) {
-      await supabase.from('orders').delete().eq('id', newOrder.id)
-      return { ok: false, error: 'Failed to copy order items.' }
-    }
-  }
-
-  revalidateAdminOrders(newOrder.id)
+  revalidateAdminOrders(orderId)
   return {
     ok: true,
-    data: { newOrderId: newOrder.id, orderNumber: newOrder.order_number },
+    data: { orderId: order.id, orderNumber: order.order_number },
   }
 }
 

@@ -11,6 +11,15 @@ export type OrderStatus =
   | 'returned'
 export type PaymentMethod = 'cod' | 'bkash' | 'nagad'
 
+/** Snapshot of a Pathao consignment archived when Resend reopens the order. */
+export type PathaoHistoryEntry = {
+  consignment_id: string
+  status: string | null
+  error: string | null
+  cancelled_at: string | null
+  archived_at: string
+}
+
 export type Json =
   | string
   | number
@@ -235,6 +244,7 @@ export interface Database {
           pathao_status: string | null
           pathao_error: string | null
           pathao_cancelled_at: string | null
+          pathao_history: PathaoHistoryEntry[]
           campaign_id: string | null
           notes: string | null
           paid_at: string | null
@@ -266,6 +276,7 @@ export interface Database {
           pathao_status?: string | null
           pathao_error?: string | null
           pathao_cancelled_at?: string | null
+          pathao_history?: PathaoHistoryEntry[]
           campaign_id?: string | null
           notes?: string | null
           paid_at?: string | null

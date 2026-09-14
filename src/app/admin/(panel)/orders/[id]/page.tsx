@@ -8,6 +8,7 @@ import {
   getPaymentAttemptsForOrder,
 } from '@/lib/orders/queries'
 import { pathaoTrackingUrl } from '@/lib/orders/pathao-tracking'
+import { parsePathaoHistory } from '@/lib/orders/pathao-history'
 import {
   isPathaoShipmentStranded,
   pathaoStatusLabel,
@@ -38,6 +39,7 @@ export default async function OrderDetailPage({
   ])
 
   const stranded = isPathaoShipmentStranded(order)
+  const pathaoHistory = parsePathaoHistory(order.pathao_history)
   const trackingUrl = order.pathao_consignment_id
     ? pathaoTrackingUrl(order.pathao_consignment_id, order.phone)
     : null
@@ -225,6 +227,55 @@ export default async function OrderDetailPage({
               <p className="mt-2 rounded-xl bg-spark/5 px-3 py-2 text-[12px] text-spark">
                 {order.pathao_error}
               </p>
+            ) : null}
+            {pathaoHistory.length > 0 ? (
+              <div className="mt-4 border-t border-cloud pt-3">
+                <dt className="text-mute">Previous Pathao consignments</dt>
+                <dd className="mt-2 space-y-2">
+                  {[...pathaoHistory].reverse().map((entry) => {
+                    const pastTracking = pathaoTrackingUrl(
+                      entry.consignment_id,
+                      order.phone,
+                    )
+                    return (
+                      <div
+                        key={`${entry.consignment_id}-${entry.archived_at}`}
+                        className="rounded-xl bg-mist/60 px-3 py-2 text-[12px]"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="font-mono font-medium text-ink">
+                            {entry.consignment_id}
+                          </span>
+                          <span className="text-mute">
+                            {pathaoStatusLabel(entry.status)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-mute">
+                          Archived{' '}
+                          {new Date(entry.archived_at).toLocaleString('en-BD')}
+                          {entry.cancelled_at
+                            ? ` · Cancelled ${new Date(entry.cancelled_at).toLocaleString('en-BD')}`
+                            : ''}
+                        </p>
+                        {entry.error ? (
+                          <p className="mt-1 text-spark">{entry.error}</p>
+                        ) : null}
+                        {pastTracking ? (
+                          <a
+                            href={pastTracking}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 font-semibold text-navy hover:underline"
+                          >
+                            Open tracking
+                            <ExternalLink className="h-3 w-3" aria-hidden />
+                          </a>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </dd>
+              </div>
             ) : null}
             {order.notes ? (
               <p className="mt-2 text-[12px] text-mute">{order.notes}</p>

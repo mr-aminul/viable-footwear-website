@@ -113,16 +113,16 @@ const COPY: Record<
     loadingLabel: 'Sending…',
   },
   recreate: {
-    title: 'Re-create this order?',
+    title: 'Resend this order?',
     description: (order) =>
-      `Create a new order for ${order.full_name} using the same items and delivery details as ${order.order_number}. The new order will be ready to send to Pathao.`,
-    bulkTitle: () => 'Re-create orders?',
-    bulkDescription: () => 'Bulk re-create is not supported.',
+      `Reopen ${order.order_number} for ${order.full_name} so it can be sent to Pathao again. The previous Pathao consignment (if any) is kept in history on this same order.`,
+    bulkTitle: () => 'Resend orders?',
+    bulkDescription: () => 'Bulk resend is not supported.',
     confirmWordClass: '',
     confirmVariant: 'primary',
-    confirmLabel: 'Re-create order',
-    bulkConfirmLabel: () => 'Re-create order',
-    loadingLabel: 'Re-creating…',
+    confirmLabel: 'Resend order',
+    bulkConfirmLabel: () => 'Resend order',
+    loadingLabel: 'Reopening…',
   },
 }
 

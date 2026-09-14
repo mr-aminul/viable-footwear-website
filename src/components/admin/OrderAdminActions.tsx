@@ -12,7 +12,7 @@ import {
   cancelOrder,
   deleteOrder,
   dispatchOrderToPathao,
-  duplicateOrder,
+  reactivateOrderForResend,
   syncPathaoOrderStatus,
 } from '@/lib/orders/actions'
 import { isPathaoShipmentStranded } from '@/lib/orders/status-labels'
@@ -109,7 +109,7 @@ export function OrderAdminActions({
     pathaoMode === 'sent'
       ? 'Already sent to Pathao'
       : pathaoMode === 'recreate'
-        ? 'Re-create as a new order for the same customer'
+        ? 'Reopen this order so it can be sent to Pathao again'
         : 'Send to Pathao'
   const cancelTitle = stranded
     ? 'Cancel Pathao shipment for this order'
@@ -243,13 +243,15 @@ export function OrderAdminActions({
 
             if (dialog.variant === 'recreate') {
               runAction('recreate', async () => {
-                const result = await duplicateOrder(order.id)
+                const result = await reactivateOrderForResend(order.id)
                 if (!result.ok) {
                   setError(result.error)
                   return
                 }
                 setDialog(null)
-                router.push(`/admin/orders/${result.data?.newOrderId}`)
+                setNotice(
+                  `Order ${result.data?.orderNumber ?? order.order_number} reopened for Pathao.`,
+                )
                 router.refresh()
               })
               return
