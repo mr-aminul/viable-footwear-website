@@ -108,7 +108,7 @@ function GalleryThumb({
         cursor: 'grabbing',
       }}
       className={[
-        'group/thumb relative h-16 w-16 shrink-0 rounded-xl border bg-white outline-none',
+        'group/thumb relative aspect-square w-full shrink-0 rounded-xl border bg-white outline-none',
         canDrag ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-pointer',
         isSelected ? 'border-navy' : 'border-cloud',
       ].join(' ')}
@@ -268,110 +268,112 @@ export function AdminProductGallery({
         onChange={onFileChange}
       />
 
-      <div className="relative">
-        <div className="group relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
-          <img
-            src={current?.url ?? placeholderSrc}
-            alt={current?.alt || productName}
-            className="h-full w-full object-contain"
-          />
+      <div className="flex gap-3">
+        <div className="flex w-16 shrink-0 flex-col gap-2">
+          <Reorder.Group
+            axis="y"
+            values={images}
+            onReorder={(next) => {
+              imagesRef.current = next
+              setImages(next)
+            }}
+            as="div"
+            className="flex max-h-[min(100vw-2rem,36rem)] flex-col gap-2 overflow-y-auto"
+          >
+              {images.map((img, i) => {
+                const isSelected = selectedId ? selectedId === img.id : i === 0
+                return (
+                  <GalleryThumb
+                    key={img.id}
+                    image={img}
+                    index={i}
+                    isSelected={isSelected}
+                    canDrag={canDrag}
+                    pending={pending}
+                    onSelect={() => setSelectedId(img.id)}
+                    onRemove={() => removeMedia(img.id)}
+                    onDragStart={() => {
+                      orderBeforeDragRef.current = imagesRef.current
+                    }}
+                    onDragEnd={() => {
+                      const next = imagesRef.current
+                      if (!sameOrder(next, orderBeforeDragRef.current)) {
+                        persistOrder(next)
+                      }
+                    }}
+                  />
+                )
+              })}
+            </Reorder.Group>
 
-          {isDraft ? (
-            <span className="absolute right-4 top-4 z-10 rounded-md bg-ink/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">
-              Draft
-            </span>
-          ) : null}
-
-          <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-ink/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
             <button
               type="button"
               disabled={pending}
               onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-card transition hover:bg-mist disabled:opacity-60"
+              className="flex aspect-square w-full shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-cloud bg-white text-mute transition hover:border-navy/40 hover:text-navy disabled:opacity-60"
+              aria-label="Add media"
             >
-              {pending ? (
-                'Uploading…'
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Upload
-                </>
-              )}
+              <ImagePlus className="h-4 w-4" />
+              <span className="text-[10px] font-semibold">Add</span>
             </button>
-            {currentIsReal ? (
+          </div>
+
+        <div className="relative min-w-0 flex-1">
+          <div className="group relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
+            <img
+              src={current?.url ?? placeholderSrc}
+              alt={current?.alt || productName}
+              className="h-full w-full object-contain"
+            />
+
+            {isDraft ? (
+              <span className="absolute right-4 top-4 z-10 rounded-md bg-ink/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">
+                Draft
+              </span>
+            ) : null}
+
+            <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-ink/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => removeMedia(current.id)}
-                className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-[13px] font-semibold text-spark shadow-card transition hover:bg-white disabled:opacity-60"
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-card transition hover:bg-mist disabled:opacity-60"
               >
-                <Trash2 className="h-4 w-4" />
-                Remove
+                {pending ? (
+                  'Uploading…'
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </>
+                )}
               </button>
-            ) : null}
+              {currentIsReal ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => removeMedia(current.id)}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-[13px] font-semibold text-spark shadow-card transition hover:bg-white disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove
+                </button>
+              ) : null}
+            </div>
           </div>
+
+          {onBadgeChange ? (
+            <div className="absolute left-4 top-4 z-30">
+              <BadgePicker value={badge} onChange={onBadgeChange} />
+            </div>
+          ) : (
+            <span
+              className={`absolute left-4 top-4 z-10 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${productBadgeClassName(normalizeProductBadge(badge))}`}
+            >
+              {normalizeProductBadge(badge)}
+            </span>
+          )}
         </div>
-
-        {onBadgeChange ? (
-          <div className="absolute left-4 top-4 z-30">
-            <BadgePicker value={badge} onChange={onBadgeChange} />
-          </div>
-        ) : (
-          <span
-            className={`absolute left-4 top-4 z-10 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${productBadgeClassName(normalizeProductBadge(badge))}`}
-          >
-            {normalizeProductBadge(badge)}
-          </span>
-        )}
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <Reorder.Group
-          axis="x"
-          values={images}
-          onReorder={(next) => {
-            imagesRef.current = next
-            setImages(next)
-          }}
-          as="div"
-          className="flex gap-2"
-        >
-          {images.map((img, i) => {
-            const isSelected = selectedId ? selectedId === img.id : i === 0
-            return (
-              <GalleryThumb
-                key={img.id}
-                image={img}
-                index={i}
-                isSelected={isSelected}
-                canDrag={canDrag}
-                pending={pending}
-                onSelect={() => setSelectedId(img.id)}
-                onRemove={() => removeMedia(img.id)}
-                onDragStart={() => {
-                  orderBeforeDragRef.current = imagesRef.current
-                }}
-                onDragEnd={() => {
-                  const next = imagesRef.current
-                  if (!sameOrder(next, orderBeforeDragRef.current)) {
-                    persistOrder(next)
-                  }
-                }}
-              />
-            )
-          })}
-        </Reorder.Group>
-
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => fileRef.current?.click()}
-          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-cloud bg-white text-mute transition hover:border-navy/40 hover:text-navy disabled:opacity-60"
-          aria-label="Add media"
-        >
-          <ImagePlus className="h-4 w-4" />
-          <span className="text-[10px] font-semibold">Add</span>
-        </button>
       </div>
 
       {images.length > 1 ? (

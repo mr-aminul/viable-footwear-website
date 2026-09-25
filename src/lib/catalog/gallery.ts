@@ -1,3 +1,5 @@
+import { colorwayKey } from '@/lib/catalog/colorway'
+
 /**
  * Normalize a hex swatch for storage / matching (#RRGGBB uppercase).
  */
@@ -11,11 +13,7 @@ export function normalizeColorHex(
   return null
 }
 
-/** Stable key for a colorway — color name, not hex swatch. */
-export function colorwayKey(color: string | null | undefined): string {
-  const name = color?.trim().toLowerCase()
-  return name || 'default'
-}
+export { colorwayKey }
 
 export type ColorTaggedImage = {
   url: string

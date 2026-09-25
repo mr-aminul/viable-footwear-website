@@ -14,7 +14,8 @@ import {
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import { productBadgeClassName } from '@/lib/catalog/badge'
-import { galleryForColorway, colorwayKey } from '@/lib/catalog/gallery'
+import { galleryForColorway } from '@/lib/catalog/gallery'
+import { colorwayKey } from '@/lib/catalog/colorway'
 import { formatSizeLabel } from '@/lib/catalog/sizing'
 import type { Product } from '@/lib/catalog/types'
 import { enterTransition } from '@/lib/motion'
@@ -189,36 +190,45 @@ export function ProductPage({
           transition={enterTransition(reduceMotion)}
           className="space-y-3"
         >
-          <div className="relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
-            <img
-              src={gallery[Math.min(imageIndex, gallery.length - 1)] ?? product.image}
-              alt={product.name}
-              className="h-full w-full object-contain"
-            />
-            {product.badge && (
-              <span
-                className={`absolute left-4 top-4 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
-              >
-                {product.badge}
-              </span>
-            )}
-          </div>
-          {gallery.length > 1 ? (
-            <div className="flex gap-2 overflow-x-auto">
-              {gallery.map((src, i) => (
-                <button
-                  key={src + i}
-                  type="button"
-                  onClick={() => setImageIndex(i)}
-                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border bg-white ${
-                    imageIndex === i ? 'border-navy' : 'border-cloud'
-                  }`}
+          <div className="flex gap-3">
+            {gallery.length > 1 ? (
+              <div className="flex max-h-[min(100vw-2rem,36rem)] w-16 shrink-0 flex-col gap-2 overflow-y-auto md:max-h-[min(100%,28rem)] lg:max-h-none lg:self-stretch">
+                {gallery.map((src, i) => (
+                  <button
+                    key={src + i}
+                    type="button"
+                    onClick={() => setImageIndex(i)}
+                    className={`aspect-square w-full shrink-0 overflow-hidden rounded-xl border bg-white ${
+                      imageIndex === i ? 'border-navy' : 'border-cloud'
+                    }`}
+                  >
+                    <img
+                      src={src}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="relative min-w-0 flex-1 aspect-square overflow-hidden rounded-[1.5rem] bg-white">
+              <img
+                src={
+                  gallery[Math.min(imageIndex, gallery.length - 1)] ??
+                  product.image
+                }
+                alt={product.name}
+                className="h-full w-full object-contain"
+              />
+              {product.badge && (
+                <span
+                  className={`absolute left-4 top-4 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
                 >
-                  <img src={src} alt="" className="h-full w-full object-contain" />
-                </button>
-              ))}
+                  {product.badge}
+                </span>
+              )}
             </div>
-          ) : null}
+          </div>
           {product.videoUrl ? (
             <video
               controls

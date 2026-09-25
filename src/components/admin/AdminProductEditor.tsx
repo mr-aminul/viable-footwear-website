@@ -20,7 +20,7 @@ import {
   type GalleryMedia,
 } from '@/components/admin/AdminProductGallery'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
-import { colorwayKey } from '@/lib/catalog/gallery'
+import { colorwayKey } from '@/lib/catalog/colorway'
 import {
   VariantsEditor,
   buildVariantsPayload,
