@@ -11,14 +11,53 @@ export function normalizeColorHex(
   return null
 }
 
+/** Stable key for a colorway — color name, not hex swatch. */
+export function colorwayKey(color: string | null | undefined): string {
+  const name = color?.trim().toLowerCase()
+  return name || 'default'
+}
+
 export type ColorTaggedImage = {
   url: string
   colorHex: string | null
 }
 
+export type ColorwayVariantImage = {
+  color: string | null
+  imageUrl: string | null
+}
+
 /**
- * Gallery for a selected colorway: color-tagged images first, then shared
- * (untagged). Falls back to all images if nothing matches.
+ * Gallery for a selected colorway: variant photos for that color first,
+ * then any remaining product gallery images as fallback.
+ */
+export function galleryForColorway(
+  variants: ColorwayVariantImage[],
+  images: Array<{ url: string }>,
+  selectedColorKey: string | null | undefined,
+  fallbackImage: string,
+): string[] {
+  if (selectedColorKey) {
+    const fromVariants = [
+      ...new Set(
+        variants
+          .filter(
+            (v) =>
+              colorwayKey(v.color) === selectedColorKey && Boolean(v.imageUrl),
+          )
+          .map((v) => v.imageUrl as string),
+      ),
+    ]
+    if (fromVariants.length > 0) return fromVariants
+  }
+
+  if (images.length > 0) return images.map((img) => img.url)
+  return [fallbackImage]
+}
+
+/**
+ * @deprecated Prefer galleryForColorway — images are per-variant, not hex-tagged.
+ * Kept for any leftover callers that still match on color_hex.
  */
 export function galleryForColor(
   images: ColorTaggedImage[],

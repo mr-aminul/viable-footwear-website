@@ -10,7 +10,6 @@ import type { ProductBadge } from '@/lib/catalog/constants'
 import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
-import { parseProductWidths } from '@/lib/catalog/sizing'
 import type {
   CategoryView,
   Product,
@@ -32,6 +31,7 @@ function parseBadge(value: string | null): ProductBadge {
 
 function mapVariants(
   rows: VariantRow[],
+  mediaById: Map<string, string>,
   activeOnly = true,
 ): ProductVariantView[] {
   return rows
@@ -42,6 +42,7 @@ function mapVariants(
       sizeEu: Number(v.size_eu),
       color: v.color,
       colorHex: normalizeColorHex(v.color_hex) ?? v.color_hex,
+      imageUrl: v.media_id ? (mediaById.get(v.media_id) ?? null) : null,
       stock: v.stock,
       sku: v.sku,
     }))
@@ -61,10 +62,14 @@ function mapProduct(
     url: resolveMediaUrl(m.storage_path, 'image'),
     colorHex: normalizeColorHex(m.color_hex),
   }))
+  const mediaById = new Map(
+    imageRows.map((m) => [m.id, resolveMediaUrl(m.storage_path, 'image')]),
+  )
 
   const video = media.find((m) => m.media_type === 'video')
   const variantViews = mapVariants(
     variants,
+    mediaById,
     !options?.includeInactiveVariants,
   )
   const sizes = [...new Set(variantViews.map((v) => v.sizeEu))].sort(
@@ -73,7 +78,7 @@ function mapProduct(
   const colors = [
     ...new Set(
       variantViews
-        .map((v) => v.colorHex || v.color)
+        .map((v) => v.color?.trim())
         .filter((c): c is string => Boolean(c)),
     ),
   ]
@@ -102,7 +107,6 @@ function mapProduct(
     fitNote: row.fit_note?.trim() || undefined,
     materials: row.materials?.trim() || undefined,
     careInfo: row.care_info?.trim() || undefined,
-    widths: parseProductWidths(row.widths ?? []),
     featured: row.featured,
     weightKg: Number(row.weight_kg),
     seoTitle: row.seo_title ?? undefined,
@@ -653,7 +657,7 @@ export function getCatalogCounts() {
 }
 
 const ADMIN_PRODUCT_DETAIL_SELECT =
-  'id, name, slug, description, subtitle, fit_note, materials, care_info, widths, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
+  'id, name, slug, description, subtitle, fit_note, materials, care_info, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
 
 /**
  * Cached product core row for the admin edit page.
@@ -680,7 +684,7 @@ export function getAdminProductVariants(productId: string) {
       const admin = createServiceClient()
       const { data } = await admin
         .from('product_variants')
-        .select('id, size_eu, color, color_hex, sku, stock, active')
+        .select('id, size_eu, color, color_hex, sku, stock, active, media_id')
         .eq('product_id', productId)
         .order('size_eu', { ascending: true })
       return data ?? []

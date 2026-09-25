@@ -11,7 +11,6 @@ import {
   RELATED_PRODUCTS_DISPLAY_CAP,
 } from '@/lib/catalog/constants'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
-import { parseProductWidths } from '@/lib/catalog/sizing'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
@@ -56,6 +55,7 @@ type VariantInput = {
   size_eu: number
   color?: string | null
   color_hex?: string | null
+  media_id?: string | null
   sku?: string | null
   stock: number
   active: boolean
@@ -86,6 +86,10 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
         color_hex:
           typeof row.color_hex === 'string'
             ? normalizeColorHex(row.color_hex)
+            : null,
+        media_id:
+          typeof row.media_id === 'string' && row.media_id.length > 0
+            ? row.media_id
             : null,
         sku: typeof row.sku === 'string' ? row.sku : null,
         stock,
@@ -448,12 +452,6 @@ export async function createProduct(
   const fitNote = readString(formData, 'fit_note') || null
   const materials = readString(formData, 'materials')
   const careInfo = readString(formData, 'care_info')
-  const widths = parseProductWidths(
-    readString(formData, 'widths')
-      .split(',')
-      .map((w) => w.trim())
-      .filter(Boolean),
-  )
   const price = readNumber(formData, 'price')
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
@@ -490,7 +488,6 @@ export async function createProduct(
       fit_note: fitNote,
       materials,
       care_info: careInfo,
-      widths,
       price,
       compare_at: compareAt,
       weight_kg: weightKg,
@@ -532,12 +529,6 @@ export async function updateProduct(
   const fitNote = readString(formData, 'fit_note') || null
   const materials = readString(formData, 'materials')
   const careInfo = readString(formData, 'care_info')
-  const widths = parseProductWidths(
-    readString(formData, 'widths')
-      .split(',')
-      .map((w) => w.trim())
-      .filter(Boolean),
-  )
   const price = readNumber(formData, 'price')
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
@@ -590,7 +581,6 @@ export async function updateProduct(
       fit_note: fitNote,
       materials,
       care_info: careInfo,
-      widths,
       price,
       compare_at: compareAt,
       weight_kg: weightKg,
@@ -867,6 +857,7 @@ export async function saveProductVariants(
             size_eu: variant.size_eu,
             color: variant.color,
             color_hex: variant.color_hex,
+            media_id: variant.media_id ?? null,
             sku: variant.sku,
             stock: variant.stock,
             active: variant.active,
@@ -891,6 +882,7 @@ export async function saveProductVariants(
         size_eu: variant.size_eu,
         color: variant.color,
         color_hex: variant.color_hex,
+        media_id: variant.media_id ?? null,
         sku: variant.sku,
         stock: variant.stock,
         active: variant.active,

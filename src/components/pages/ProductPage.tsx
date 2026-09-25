@@ -14,9 +14,9 @@ import {
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import { productBadgeClassName } from '@/lib/catalog/badge'
-import { galleryForColor } from '@/lib/catalog/gallery'
-import { formatSizeLabel, widthLabel } from '@/lib/catalog/sizing'
-import type { Product, ProductWidth } from '@/lib/catalog/types'
+import { galleryForColorway, colorwayKey } from '@/lib/catalog/gallery'
+import { formatSizeLabel } from '@/lib/catalog/sizing'
+import type { Product } from '@/lib/catalog/types'
 import { enterTransition } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { ProductAccordion } from '@/components/ProductAccordion'
@@ -25,27 +25,6 @@ import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
 import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
 
 type SizeUnit = 'EU' | 'UK'
-
-function WidthGlyph({ width, active }: { width: ProductWidth; active: boolean }) {
-  const fill = active ? 'currentColor' : 'none'
-  const stroke = 'currentColor'
-  return (
-    <svg
-      viewBox="0 0 32 40"
-      className="h-8 w-6"
-      aria-hidden
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={1.5}
-    >
-      {width === 'normal' ? (
-        <path d="M16 3c5.5 0 10 5.2 10 12.5 0 5.2-2.2 9.4-5.2 14.2-1.4 2.2-2.6 4.4-2.9 6.3h-3.8c-.3-1.9-1.5-4.1-2.9-6.3C8.2 24.9 6 20.7 6 15.5 6 8.2 10.5 3 16 3z" />
-      ) : (
-        <path d="M16 5c4.2 0 7.5 4.2 7.5 10 0 4.4-1.8 7.8-4.2 11.8-1.1 1.8-2 3.5-2.3 5.2h-2c-.3-1.7-1.2-3.4-2.3-5.2C10.3 22.8 8.5 19.4 8.5 15 8.5 9.2 11.8 5 16 5z" />
-      )}
-    </svg>
-  )
-}
 
 export function ProductPage({
   product,
@@ -57,7 +36,6 @@ export function ProductPage({
   const { addToCart, toggleWishlist, isWishlisted } = useCart()
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<number | null>(null)
-  const [width, setWidth] = useState<ProductWidth | null>(null)
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('EU')
   const [colorIndex, setColorIndex] = useState(0)
   const [imageIndex, setImageIndex] = useState(0)
@@ -66,27 +44,31 @@ export function ProductPage({
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
 
   const colorOptions = useMemo(() => {
-    const unique = new Map<string, { hex: string; name: string | null }>()
+    const unique = new Map<
+      string,
+      { name: string | null; thumb: string | null }
+    >()
     for (const variant of product.variants) {
-      const key = variant.colorHex || variant.color || 'default'
-      if (!unique.has(key)) {
+      const key = colorwayKey(variant.color)
+      const existing = unique.get(key)
+      if (!existing) {
         unique.set(key, {
-          hex: variant.colorHex || variant.color || '#1A3668',
-          name: variant.color,
+          name: variant.color?.trim() || null,
+          thumb: variant.imageUrl,
         })
+      } else if (!existing.thumb && variant.imageUrl) {
+        existing.thumb = variant.imageUrl
       }
     }
     if (unique.size === 0 && product.colors.length > 0) {
-      product.colors.forEach((c, i) =>
-        unique.set(String(i), { hex: c, name: null }),
+      product.colors.forEach((c) =>
+        unique.set(colorwayKey(c), { name: c, thumb: null }),
       )
     }
     return [...unique.entries()].map(([key, value]) => ({
       key,
-      hex: value.hex,
       name: value.name,
-      thumb:
-        galleryForColor(product.images, value.hex)[0] ?? product.image,
+      thumb: value.thumb,
     }))
   }, [product])
 
@@ -95,8 +77,7 @@ export function ProductPage({
     if (!selectedColor) return product.sizes
     const matched = product.variants
       .filter((v) => {
-        const key = v.colorHex || v.color || 'default'
-        return key === selectedColor.key && v.stock > 0
+        return colorwayKey(v.color) === selectedColor.key && v.stock > 0
       })
       .map((v) => v.sizeEu)
     return matched.length > 0
@@ -105,11 +86,13 @@ export function ProductPage({
   }, [product, selectedColor])
 
   const gallery = useMemo(() => {
-    const urls = galleryForColor(product.images, selectedColor?.hex ?? null)
-    return urls.length > 0 ? urls : [product.image]
-  }, [product.images, product.image, selectedColor])
-
-  const offersWidth = (product.widths?.length ?? 0) > 0
+    return galleryForColorway(
+      product.variants,
+      product.images,
+      selectedColor?.key ?? null,
+      product.image,
+    )
+  }, [product.images, product.image, product.variants, selectedColor])
 
   useEffect(() => {
     setImageIndex(0)
@@ -128,10 +111,6 @@ export function ProductPage({
   }, [product.id, product.name, product.category, product.categoryLabel, product.price])
 
   const handleAdd = () => {
-    if (offersWidth && width == null) {
-      setError('Select a width')
-      return
-    }
     if (size == null) {
       setError('Select a size')
       return
@@ -139,10 +118,9 @@ export function ProductPage({
 
     const variant =
       product.variants.find((v) => {
-        const key = v.colorHex || v.color || 'default'
         return (
           v.sizeEu === size &&
-          (!selectedColor || key === selectedColor.key) &&
+          (!selectedColor || colorwayKey(v.color) === selectedColor.key) &&
           v.stock > 0
         )
       }) ??
@@ -161,11 +139,7 @@ export function ProductPage({
       item_category: product.categoryLabel || product.category,
       price: product.price,
       quantity: 1,
-      item_variant: [
-        selectedColor?.name,
-        width ? widthLabel(width) : null,
-        `EU ${size}`,
-      ]
+      item_variant: [selectedColor?.name, `EU ${size}`]
         .filter(Boolean)
         .join(' / '),
     })
@@ -174,13 +148,7 @@ export function ProductPage({
   }
 
   const ctaLabel =
-    offersWidth && width == null
-      ? 'Choose width'
-      : size == null
-        ? 'Choose size'
-        : added
-          ? 'Added'
-          : 'Add to bag'
+    size == null ? 'Choose size' : added ? 'Added' : 'Add to bag'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12 lg:px-8">
@@ -336,13 +304,9 @@ export function ProductPage({
                         className="h-full w-full object-contain"
                       />
                     ) : (
-                      <span
-                        className="block h-full w-full"
-                        style={{
-                          backgroundColor: c.hex,
-                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-                        }}
-                      />
+                      <span className="flex h-full w-full items-center justify-center bg-mist text-[10px] font-semibold uppercase text-mute">
+                        {(c.name ?? '?').slice(0, 2)}
+                      </span>
                     )}
                   </button>
                 ))}
@@ -357,49 +321,6 @@ export function ProductPage({
             </div>
           ) : null}
 
-          {offersWidth ? (
-            <div className="mt-7">
-              <div className="flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-ink">
-                  Width
-                  <span className="font-normal text-mute">
-                    : {width ? widthLabel(width) : 'Please select'}
-                  </span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setSizeGuideOpen(true)}
-                  className="text-[12px] font-medium text-navy underline-offset-2 hover:underline"
-                >
-                  Size guide
-                </button>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {(product.widths ?? []).map((w) => {
-                  const active = width === w
-                  return (
-                    <button
-                      key={w}
-                      type="button"
-                      onClick={() => {
-                        setWidth(w)
-                        setError('')
-                      }}
-                      className={`flex items-center justify-center gap-3 rounded-xl border px-4 py-3.5 text-[13px] font-medium transition ${
-                        active
-                          ? 'border-navy bg-navy text-white'
-                          : 'border-cloud bg-white text-ink hover:border-navy/40'
-                      }`}
-                    >
-                      <WidthGlyph width={w} active={active} />
-                      {widthLabel(w)}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
-
           <div className="mt-7">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[13px] font-semibold text-ink">
@@ -409,15 +330,13 @@ export function ProductPage({
                 </span>
               </p>
               <div className="flex items-center gap-3">
-                {!offersWidth ? (
-                  <button
-                    type="button"
-                    onClick={() => setSizeGuideOpen(true)}
-                    className="text-[12px] font-medium text-navy underline-offset-2 hover:underline"
-                  >
-                    Size guide
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSizeGuideOpen(true)}
+                  className="text-[12px] font-medium text-navy underline-offset-2 hover:underline"
+                >
+                  Size guide
+                </button>
                 <div
                   role="group"
                   aria-label="Size unit"

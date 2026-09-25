@@ -1,22 +1,3 @@
-import type { ProductWidth } from '@/lib/catalog/types'
-
-const WIDTH_VALUES = new Set<ProductWidth>(['normal', 'narrow'])
-
-export function parseProductWidths(raw: string[] | null | undefined): ProductWidth[] {
-  if (!raw?.length) return []
-  const seen = new Set<ProductWidth>()
-  for (const value of raw) {
-    const key = value.trim().toLowerCase() as ProductWidth
-    if (WIDTH_VALUES.has(key)) seen.add(key)
-  }
-  // Stable order: normal then narrow
-  return (['normal', 'narrow'] as const).filter((w) => seen.has(w))
-}
-
-export function widthLabel(width: ProductWidth): string {
-  return width === 'normal' ? 'Normal' : 'Narrow'
-}
-
 /**
  * Approximate EU → UK adults conversion used for the size-unit toggle.
  * Display-only; stock matching stays on EU sizes.

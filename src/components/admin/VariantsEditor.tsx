@@ -11,13 +11,8 @@ import {
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { ImageOff, ImagePlus, Trash2 } from 'lucide-react'
-import {
-  clearColorwayMedia,
-  updateMediaColor,
-  uploadProductMedia,
-} from '@/lib/catalog/actions/media'
+import { uploadProductMedia } from '@/lib/catalog/actions/media'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
-import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { Field, inputClassName } from '@/components/admin/ui'
 
@@ -27,6 +22,7 @@ export type VariantDraft = {
   size_eu: string
   color: string
   color_hex: string
+  media_id: string | null
   sku: string
   stock: string
   active: boolean
@@ -35,7 +31,6 @@ export type VariantDraft = {
 export type VariantImageOption = {
   id: string
   url: string
-  colorHex: string | null
 }
 
 export function createEmptyVariantDraft(): VariantDraft {
@@ -43,7 +38,8 @@ export function createEmptyVariantDraft(): VariantDraft {
     key: crypto.randomUUID(),
     size_eu: '40',
     color: '',
-    color_hex: '#1A3668',
+    color_hex: '',
+    media_id: null,
     sku: '',
     stock: '0',
     active: true,
@@ -57,6 +53,7 @@ export function buildVariantsPayload(rows: VariantDraft[]): string {
       size_eu: Number(row.size_eu),
       color: row.color || null,
       color_hex: row.color_hex || null,
+      media_id: row.media_id || null,
       sku: row.sku || null,
       stock: Number(row.stock),
       active: row.active,
@@ -64,13 +61,9 @@ export function buildVariantsPayload(rows: VariantDraft[]): string {
   )
 }
 
-function normalizeHex(value: string): string {
-  return normalizeColorHex(value) ?? '#1A3668'
-}
-
 /**
- * Variant table — edits only; parent Save product persists size/color/stock.
- * Images are tagged to a colorway immediately (gallery pool + multi-select).
+ * Variant table — edits only; parent Save product persists size/color/stock/image.
+ * Each row can pick its own gallery image (typically the photo for that color).
  */
 export function VariantsEditor({
   productId,
@@ -83,16 +76,31 @@ export function VariantsEditor({
   onChange: (rows: VariantDraft[]) => void
   images: VariantImageOption[]
 }) {
+  const setMediaId = (rowKey: string, mediaId: string | null) => {
+    const source = rows.find((r) => r.key === rowKey)
+    if (!source) return
+    const colorKey = source.color.trim().toLowerCase()
+    onChange(
+      rows.map((r) => {
+        if (r.key === rowKey) return { ...r, media_id: mediaId }
+        // Same color name shares the photo across sizes
+        if (colorKey && r.color.trim().toLowerCase() === colorKey) {
+          return { ...r, media_id: mediaId }
+        }
+        return r
+      }),
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <table className="w-full min-w-[820px] text-left text-[13px]">
+        <table className="w-full min-w-[760px] text-left text-[13px]">
           <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
             <tr>
-              <th className="px-3 py-3">Images</th>
+              <th className="px-3 py-3">Image</th>
               <th className="px-3 py-3">Size EU</th>
               <th className="px-3 py-3">Color</th>
-              <th className="px-3 py-3">Swatch</th>
               <th className="px-3 py-3">SKU</th>
               <th className="px-3 py-3">Stock</th>
               <th className="px-3 py-3">Active</th>
@@ -105,8 +113,9 @@ export function VariantsEditor({
                 <td className="px-3 py-2">
                   <VariantImagePicker
                     productId={productId}
-                    colorHex={normalizeHex(row.color_hex)}
+                    mediaId={row.media_id}
                     images={images}
+                    onSelect={(mediaId) => setMediaId(row.key, mediaId)}
                   />
                 </td>
                 <td className="px-3 py-2">
@@ -138,18 +147,6 @@ export function VariantsEditor({
                     }
                     className={inputClassName}
                     placeholder="Navy"
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <VariantColorSwatch
-                    value={row.color_hex}
-                    onChange={(hex) =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key ? { ...r, color_hex: hex } : r,
-                        ),
-                      )
-                    }
                   />
                 </td>
                 <td className="px-3 py-2">
@@ -229,8 +226,9 @@ export function VariantsEditor({
       </div>
 
       <p className="text-[13px] text-mute">
-        Images are shared by color swatch (all sizes of the same color). Upload
-        here or in the gallery above, then multi-select in the picker.
+        Upload a photo for each color (e.g. Navy, Black). Sizes of the same
+        color share that photo. Shoppers pick colors by image — no swatches.
+        Save product to keep assignments.
       </p>
 
       <AdminActionButton
@@ -253,12 +251,14 @@ export function VariantsEditor({
 
 function VariantImagePicker({
   productId,
-  colorHex,
+  mediaId,
   images,
+  onSelect,
 }: {
   productId: string
-  colorHex: string
+  mediaId: string | null
   images: VariantImageOption[]
+  onSelect: (mediaId: string | null) => void
 }) {
   const router = useRouter()
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -271,10 +271,7 @@ function VariantImagePicker({
     null,
   )
 
-  const selected = images.filter(
-    (img) => normalizeColorHex(img.colorHex) === colorHex,
-  )
-  const preview = selected.slice(0, 3)
+  const selected = images.find((img) => img.id === mediaId) ?? null
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return
@@ -318,35 +315,6 @@ function VariantImagePicker({
     }
   }, [open])
 
-  const refresh = () => router.refresh()
-
-  const toggleImage = (mediaId: string, currentlySelected: boolean) => {
-    setError(null)
-    startTransition(async () => {
-      const result = await updateMediaColor(
-        mediaId,
-        currentlySelected ? null : colorHex,
-      )
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      refresh()
-    })
-  }
-
-  const clearAll = () => {
-    setError(null)
-    startTransition(async () => {
-      const result = await clearColorwayMedia(productId, colorHex)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      refresh()
-    })
-  }
-
   const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -356,13 +324,15 @@ function VariantImagePicker({
       const prepared = await prepareMediaFileForUpload(file)
       const formData = new FormData()
       formData.set('file', prepared.file)
-      formData.set('color_hex', colorHex)
       const result = await uploadProductMedia(productId, formData)
       if (!result.ok) {
         setError(result.error)
         return
       }
-      refresh()
+      if (result.data?.id) {
+        onSelect(result.data.id)
+      }
+      router.refresh()
     })
   }
 
@@ -371,7 +341,7 @@ function VariantImagePicker({
       <button
         ref={triggerRef}
         type="button"
-        aria-label="Choose color images"
+        aria-label="Choose variant image"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((prev) => !prev)}
@@ -382,27 +352,17 @@ function VariantImagePicker({
             : 'border-cloud hover:border-navy/40',
         ].join(' ')}
       >
-        {preview.length > 0 ? (
-          preview.map((img) => (
-            <span
-              key={img.id}
-              className="h-9 w-9 overflow-hidden rounded-lg bg-mist/50"
-            >
-              <img
-                src={img.url}
-                alt=""
-                className="h-full w-full object-contain"
-              />
-            </span>
-          ))
+        {selected ? (
+          <span className="h-9 w-9 overflow-hidden rounded-lg bg-mist/50">
+            <img
+              src={selected.url}
+              alt=""
+              className="h-full w-full object-contain"
+            />
+          </span>
         ) : (
           <span className="px-2 text-[10px] font-semibold text-mute">Pick</span>
         )}
-        {selected.length > 3 ? (
-          <span className="pr-1 text-[10px] font-semibold text-mute">
-            +{selected.length - 3}
-          </span>
-        ) : null}
       </button>
 
       {open && panelPos
@@ -410,7 +370,7 @@ function VariantImagePicker({
             <div
               ref={panelRef}
               role="dialog"
-              aria-label="Color gallery images"
+              aria-label="Variant image"
               style={{ top: panelPos.top, left: panelPos.left }}
               className="fixed z-[80] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl bg-ink p-3 shadow-lift"
             >
@@ -422,25 +382,18 @@ function VariantImagePicker({
                 onChange={onUpload}
               />
 
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                  Color images
-                </p>
-                <span
-                  className="h-3 w-3 rounded-full ring-1 ring-white/30"
-                  style={{ backgroundColor: colorHex }}
-                  aria-hidden
-                />
-              </div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                Variant image
+              </p>
 
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={pending || selected.length === 0}
-                  onClick={clearAll}
+                  disabled={pending || !mediaId}
+                  onClick={() => onSelect(null)}
                   className={[
                     'flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed text-[10px] font-semibold transition',
-                    selected.length === 0
+                    !mediaId
                       ? 'border-white bg-white/10 text-white'
                       : 'border-white/25 text-white/70 hover:border-white/50 hover:text-white disabled:opacity-40',
                   ].join(' ')}
@@ -450,11 +403,7 @@ function VariantImagePicker({
                 </button>
 
                 {images.map((img, index) => {
-                  const isSelected =
-                    normalizeColorHex(img.colorHex) === colorHex
-                  const otherColor =
-                    img.colorHex &&
-                    normalizeColorHex(img.colorHex) !== colorHex
+                  const isSelected = img.id === mediaId
                   return (
                     <button
                       key={img.id}
@@ -462,7 +411,7 @@ function VariantImagePicker({
                       disabled={pending}
                       aria-pressed={isSelected}
                       aria-label={`Image ${index + 1}${isSelected ? ', selected' : ''}`}
-                      onClick={() => toggleImage(img.id, isSelected)}
+                      onClick={() => onSelect(isSelected ? null : img.id)}
                       className={[
                         'relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border bg-white transition disabled:opacity-60',
                         isSelected
@@ -475,16 +424,6 @@ function VariantImagePicker({
                         alt=""
                         className="h-full w-full object-contain"
                       />
-                      {otherColor ? (
-                        <span
-                          className="absolute bottom-1 left-1 h-2 w-2 rounded-full ring-1 ring-white"
-                          style={{
-                            backgroundColor:
-                              normalizeColorHex(img.colorHex) ?? '#888',
-                          }}
-                          title="Tagged to another color"
-                        />
-                      ) : null}
                     </button>
                   )
                 })}
@@ -494,7 +433,7 @@ function VariantImagePicker({
                   disabled={pending}
                   onClick={() => fileRef.current?.click()}
                   className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-white/30 text-white/80 transition hover:border-white/60 hover:text-white disabled:opacity-60"
-                  aria-label="Upload image for this color"
+                  aria-label="Upload image for this variant"
                 >
                   <ImagePlus className="h-4 w-4" />
                   <span className="text-[10px] font-semibold">
@@ -507,7 +446,7 @@ function VariantImagePicker({
                 <p className="mt-2 text-[11px] text-spark-soft">{error}</p>
               ) : (
                 <p className="mt-2 text-[11px] text-white/50">
-                  Tap to select multiple. Uploads also appear in the gallery.
+                  One image per variant. Uploads also appear in the gallery.
                 </p>
               )}
             </div>,
@@ -515,40 +454,5 @@ function VariantImagePicker({
           )
         : null}
     </>
-  )
-}
-
-function VariantColorSwatch({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (hex: string) => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const hex = normalizeHex(value)
-
-  return (
-    <div className="relative inline-flex items-center">
-      <button
-        type="button"
-        aria-label={`Pick color ${hex}`}
-        title={hex}
-        onClick={() => inputRef.current?.click()}
-        className="h-9 w-9 rounded-full border-2 border-navy/20 transition hover:scale-105"
-        style={{
-          backgroundColor: hex,
-          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-        }}
-      />
-      <input
-        ref={inputRef}
-        type="color"
-        value={hex}
-        onChange={(e) => onChange(e.target.value.toUpperCase())}
-        className="pointer-events-none absolute h-0 w-0 opacity-0"
-        tabIndex={-1}
-      />
-    </div>
   )
 }

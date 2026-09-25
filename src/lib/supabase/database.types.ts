@@ -97,7 +97,6 @@ export interface Database {
           fit_note: string | null
           materials: string
           care_info: string
-          widths: string[]
           price: number
           compare_at: number | null
           weight_kg: number
@@ -122,7 +121,6 @@ export interface Database {
           fit_note?: string | null
           materials?: string
           care_info?: string
-          widths?: string[]
           price: number
           compare_at?: number | null
           weight_kg?: number

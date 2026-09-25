@@ -50,6 +50,7 @@ export default async function ProductAdminEditPage({ params }: Props) {
         size_eu: String(v.size_eu),
         color: v.color ?? '',
         color_hex: v.color_hex ?? '',
+        media_id: v.media_id ?? null,
         sku: v.sku ?? '',
         stock: String(v.stock),
         active: v.active,

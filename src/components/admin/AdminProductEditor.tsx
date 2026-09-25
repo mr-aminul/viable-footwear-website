@@ -11,9 +11,7 @@ import {
   updateProduct,
 } from '@/lib/catalog/actions/products'
 import { slugify } from '@/lib/catalog/slug'
-import { widthLabel } from '@/lib/catalog/sizing'
 import { adminProductPath } from '@/lib/admin/paths'
-import type { ProductWidth } from '@/lib/catalog/types'
 import type { AdminProductView, RelatedPickerProduct } from '@/lib/catalog/queries'
 import { normalizeProductBadge } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
@@ -22,7 +20,7 @@ import {
   type GalleryMedia,
 } from '@/components/admin/AdminProductGallery'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
-import { galleryForColor } from '@/lib/catalog/gallery'
+import { colorwayKey } from '@/lib/catalog/gallery'
 import {
   VariantsEditor,
   buildVariantsPayload,
@@ -81,7 +79,6 @@ export function AdminProductEditor({
   const [fitNote, setFitNote] = useState(product.fitNote ?? '')
   const [materials, setMaterials] = useState(product.materials ?? '')
   const [careInfo, setCareInfo] = useState(product.careInfo ?? '')
-  const [widths, setWidths] = useState<ProductWidth[]>(product.widths ?? [])
   const [price, setPrice] = useState(String(product.price))
   const [compareAt, setCompareAt] = useState(
     product.compareAt != null ? String(product.compareAt) : '',
@@ -103,58 +100,10 @@ export function AdminProductEditor({
   const [relatedIds, setRelatedIds] = useState<string[]>(initialRelatedIds)
 
   const [size, setSize] = useState<number | null>(null)
-  const [widthPreview, setWidthPreview] = useState<ProductWidth | null>(null)
   const [colorIndex, setColorIndex] = useState(0)
 
   const categoryLabel =
     categories.find((c) => c.id === categoryId)?.name ?? product.categoryLabel
-
-  const toggleWidth = (value: ProductWidth) => {
-    setWidths((current) =>
-      current.includes(value)
-        ? current.filter((w) => w !== value)
-        : [...current, value],
-    )
-  }
-
-  const colorOptions = useMemo(() => {
-    const unique = new Map<string, { hex: string; name: string | null }>()
-    for (const variant of product.variants) {
-      const key = variant.colorHex || variant.color || 'default'
-      if (!unique.has(key)) {
-        unique.set(key, {
-          hex: variant.colorHex || variant.color || '#1A3668',
-          name: variant.color,
-        })
-      }
-    }
-    if (unique.size === 0 && product.colors.length > 0) {
-      product.colors.forEach((c, i) =>
-        unique.set(String(i), { hex: c, name: null }),
-      )
-    }
-    return [...unique.entries()].map(([key, value]) => ({
-      key,
-      hex: value.hex,
-      name: value.name,
-      thumb:
-        galleryForColor(product.images, value.hex)[0] ?? product.image,
-    }))
-  }, [product])
-
-  const selectedColor = colorOptions[colorIndex]
-  const sizesForColor = useMemo(() => {
-    if (!selectedColor) return product.sizes
-    const matched = product.variants
-      .filter((v) => {
-        const key = v.colorHex || v.color || 'default'
-        return key === selectedColor.key && v.stock > 0
-      })
-      .map((v) => v.sizeEu)
-    return matched.length > 0
-      ? [...new Set(matched)].sort((a, b) => a - b)
-      : product.sizes
-  }, [product, selectedColor])
 
   const variantImageOptions = useMemo(
     () =>
@@ -164,10 +113,62 @@ export function AdminProductEditor({
         .map((m) => ({
           id: m.id,
           url: resolveMediaUrl(m.storage_path, 'image'),
-          colorHex: m.color_hex ?? null,
         })),
     [media],
   )
+
+  const colorOptions = useMemo(() => {
+    const unique = new Map<
+      string,
+      { name: string | null; thumb: string | null }
+    >()
+    for (const row of variantRows) {
+      if (!row.active) continue
+      const key = colorwayKey(row.color)
+      const thumb =
+        variantImageOptions.find((img) => img.id === row.media_id)?.url ?? null
+      const existing = unique.get(key)
+      if (!existing) {
+        unique.set(key, {
+          name: row.color.trim() || null,
+          thumb,
+        })
+      } else if (!existing.thumb && thumb) {
+        existing.thumb = thumb
+      }
+    }
+    return [...unique.entries()].map(([key, value]) => ({
+      key,
+      name: value.name,
+      thumb: value.thumb,
+    }))
+  }, [variantRows, variantImageOptions])
+
+  const selectedColor = colorOptions[colorIndex]
+  const sizesForColor = useMemo(() => {
+    if (!selectedColor) {
+      return [
+        ...new Set(
+          variantRows
+            .filter((r) => r.active)
+            .map((r) => Number(r.size_eu))
+            .filter((n) => Number.isFinite(n)),
+        ),
+      ].sort((a, b) => a - b)
+    }
+    const matched = variantRows
+      .filter(
+        (r) =>
+          r.active &&
+          colorwayKey(r.color) === selectedColor.key &&
+          Number(r.stock) > 0,
+      )
+      .map((r) => Number(r.size_eu))
+      .filter((n) => Number.isFinite(n))
+    return matched.length > 0
+      ? [...new Set(matched)].sort((a, b) => a - b)
+      : product.sizes
+  }, [variantRows, selectedColor, product.sizes])
 
   const save = () => {
     setError(null)
@@ -180,7 +181,6 @@ export function AdminProductEditor({
     formData.set('fit_note', fitNote)
     formData.set('materials', materials)
     formData.set('care_info', careInfo)
-    formData.set('widths', widths.join(','))
     formData.set('price', price)
     formData.set('compare_at', compareAt)
     formData.set('weight_kg', weightKg)
@@ -453,13 +453,9 @@ export function AdminProductEditor({
                         className="h-full w-full object-contain"
                       />
                     ) : (
-                      <span
-                        className="block h-full w-full"
-                        style={{
-                          backgroundColor: c.hex,
-                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-                        }}
-                      />
+                      <span className="flex h-full w-full items-center justify-center bg-mist text-[10px] font-semibold uppercase text-mute">
+                        {(c.name ?? '?').slice(0, 2)}
+                      </span>
                     )}
                   </button>
                 ))}
@@ -481,43 +477,6 @@ export function AdminProductEditor({
               />
             </div>
           </label>
-
-          <div className="mt-7">
-            <p className="text-[13px] font-semibold text-ink">
-              Width options
-              <span className="ml-1 font-normal text-mute">
-                (enable if product offers them)
-              </span>
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(['normal', 'narrow'] as const).map((w) => {
-                const enabled = widths.includes(w)
-                const previewActive = widthPreview === w
-                return (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => {
-                      toggleWidth(w)
-                      setWidthPreview(w)
-                    }}
-                    className={`rounded-xl border px-4 py-3.5 text-[13px] font-medium transition ${
-                      enabled
-                        ? previewActive
-                          ? 'border-navy bg-navy text-white'
-                          : 'border-navy/40 bg-white text-ink'
-                        : 'border-dashed border-cloud bg-white text-mute'
-                    }`}
-                  >
-                    {widthLabel(w)}
-                    <span className="mt-0.5 block text-[11px] font-normal opacity-70">
-                      {enabled ? 'Offered' : 'Not offered'}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
 
           <div className="mt-7">
             <p className="text-[13px] font-semibold text-ink">Size (EU)</p>

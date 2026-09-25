@@ -1,6 +1,5 @@
 /**
  * Adult foot length chart by EU size (mm).
- * Single row per size — no narrow/normal width split.
  */
 export type SizeChartRow = {
   eu: number
