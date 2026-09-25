@@ -4,9 +4,12 @@ import {
   isAccessTokenFresh,
   readAccessTokenInfo,
 } from '@/lib/auth/access-token'
+import { isAdminPath } from '@/lib/admin/paths'
 
 /**
- * Refresh auth cookies and gate /admin (except login).
+ * Refresh auth cookies and gate admin surfaces:
+ * - classic /admin/* (except login)
+ * - suffix pages like /product/[slug]/admin
  *
  * Fast path: if the access token is still fresh, skip the Auth API hop.
  * Slow path: call getUser() to refresh / validate when near expiry or missing.
@@ -16,9 +19,10 @@ export async function middleware(request: NextRequest) {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const path = request.nextUrl.pathname
   const isLogin = path.startsWith('/admin/login')
+  const needsAuth = isAdminPath(path) && !isLogin
 
   if (!url || !anon) {
-    if (path.startsWith('/admin') && !isLogin) {
+    if (needsAuth) {
       const login = request.nextUrl.clone()
       login.pathname = '/admin/login'
       login.searchParams.set('error', 'missing_supabase_env')
@@ -64,7 +68,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (path.startsWith('/admin') && !isLogin && !user) {
+  if (needsAuth && !user) {
     const login = request.nextUrl.clone()
     login.pathname = '/admin/login'
     login.searchParams.set('next', path)
@@ -82,5 +86,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/product/:slug/admin'],
 }

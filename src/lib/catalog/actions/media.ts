@@ -2,6 +2,7 @@
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { adminProductPath } from '@/lib/admin/paths'
 import { revalidateStorefront } from '@/lib/catalog/cache-tags'
 import {
   ALLOWED_IMAGE_TYPES,
@@ -18,11 +19,12 @@ import type { ActionResult } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
 
 function revalidateProduct(productId: string, slug?: string) {
-  revalidatePath(`/admin/catalog/products/${productId}`)
+  if (slug) revalidatePath(adminProductPath(slug))
   revalidatePath('/admin/catalog')
   revalidateStorefront(slug)
   revalidateTag('admin-products')
   revalidateTag(`admin-product-${productId}`)
+  if (slug) revalidateTag(`admin-product-slug-${slug}`)
 }
 
 function extensionFor(type: string): string {
@@ -66,14 +68,18 @@ export async function uploadProductMedia(
       return { ok: false, error: 'Video must be MP4 or WebM.' }
     }
     if (file.size > VIDEO_MAX_BYTES) {
-      return { ok: false, error: 'Video must be 50MB or smaller.' }
+      return {
+        ok: false,
+        error:
+          'Video must be 12MB or smaller. Compress it first (or use a shorter clip) — videos are stored as uploaded.',
+      }
     }
   } else {
     if (!(ALLOWED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
       return { ok: false, error: 'Image must be JPEG, PNG, WebP, or GIF.' }
     }
     if (file.size > IMAGE_MAX_BYTES) {
-      return { ok: false, error: 'Image must be 8MB or smaller.' }
+      return { ok: false, error: 'Image must be 20MB or smaller.' }
     }
   }
 
@@ -113,6 +119,12 @@ export async function uploadProductMedia(
         uploadBody = optimized.buffer
         contentType = optimized.contentType
         ext = optimized.extension
+      } else if (file.type === 'image/gif' && originalBytes.byteLength > 2 * 1024 * 1024) {
+        return {
+          ok: false,
+          error:
+            'Animated GIFs over 2MB are not allowed. Convert to MP4/WebM or use a still image.',
+        }
       }
     } catch {
       // Fall back to the original file if decode/encode fails.

@@ -9,6 +9,7 @@ import {
   Plug,
   ShoppingBag,
   Store,
+  Ticket,
   Users,
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
@@ -37,6 +38,7 @@ export default function AdminDashboard({
   const links: QuickLink[] = [
     { href: '/admin/catalog', label: 'Products', icon: Package },
     { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
+    { href: '/admin/promotions', label: 'Promotions', icon: Ticket },
     { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/', label: 'View storefront', icon: Store },
     ...(profile.role === 'admin'

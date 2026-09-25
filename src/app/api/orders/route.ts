@@ -3,6 +3,7 @@ import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
 import { listActiveCampaignsForCheckout } from '@/lib/campaigns/queries'
 import { pickCampaignDelivery } from '@/lib/campaigns/rules'
+import { resolvePromoForCheckout } from '@/lib/promotions/queries'
 import { isBkashConfigured } from '@/lib/integrations/bkash-settings'
 import { isNagadConfigured } from '@/lib/integrations/nagad-settings'
 import {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       zone_name?: string
       area_name?: string
       payment_method?: 'cod' | 'bkash' | 'nagad'
+      promo_code?: string
       items?: LineInput[]
     }
 
@@ -294,6 +296,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const promoResult = await resolvePromoForCheckout({
+      code: body.promo_code,
+      lines: orderItemsPayload.map((item) => ({
+        productId: item.product_id,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+      })),
+    })
+    if (!promoResult.ok) {
+      return NextResponse.json(
+        { success: false, error: promoResult.error },
+        { status: 400, headers: NO_STORE_HEADERS },
+      )
+    }
+    const promoApplied = promoResult.applied
+    const discountAmount = promoApplied?.discountAmount ?? 0
+    const goodsAfterPromo = Math.max(0, subtotal - discountAmount)
+
     const campaigns = await listActiveCampaignsForCheckout()
     const match = pickCampaignDelivery(campaigns, {
       subtotal,
@@ -333,8 +353,8 @@ export async function POST(request: NextRequest) {
       paymentMethod === 'bkash' || paymentMethod === 'nagad'
 
     const { shipping, total } = isPrepaid
-      ? computePrepaidCheckoutTotals(subtotal, deliveryAfterCampaign)
-      : computeCodCheckoutTotals(subtotal, deliveryAfterCampaign)
+      ? computePrepaidCheckoutTotals(goodsAfterPromo, deliveryAfterCampaign)
+      : computeCodCheckoutTotals(goodsAfterPromo, deliveryAfterCampaign)
 
     const orderNumber = generateOrderNumber()
 
@@ -360,6 +380,15 @@ export async function POST(request: NextRequest) {
         total,
         pathao_delivery_fee: pathaoDeliveryFee,
         campaign_id: match?.campaignId ?? null,
+        ...(promoApplied
+          ? {
+              promo_code_id: promoApplied.promoId,
+              promo_code: promoApplied.code,
+              discount_amount: discountAmount,
+            }
+          : discountAmount > 0
+            ? { discount_amount: discountAmount }
+            : {}),
       })
       .select('id, order_number')
       .single()

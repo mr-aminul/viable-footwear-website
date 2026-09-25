@@ -10,11 +10,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Soft-nav revisits reuse the client RSC cache (mutations still router.refresh).
+    // Soft-nav revisits reuse the client RSC cache (mutations still router.refresh).
   experimental: {
     staleTimes: {
       dynamic: 30,
       static: 180,
+    },
+    // Images are client-compressed then server-optimized; videos capped at 12MB.
+    serverActions: {
+      bodySizeLimit: '15mb',
     },
   },
 }

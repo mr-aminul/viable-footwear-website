@@ -185,6 +185,11 @@ export function CheckoutPage() {
   const [shippingPrice, setShippingPrice] = useState<number | null>(null)
   const [campaignLabel, setCampaignLabel] = useState<string | null>(null)
   const [campaignDiscount, setCampaignDiscount] = useState<number | null>(null)
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [appliedPromoCode, setAppliedPromoCode] = useState('')
+  const [promoLabel, setPromoLabel] = useState<string | null>(null)
+  const [promoDiscount, setPromoDiscount] = useState<number | null>(null)
+  const [promoError, setPromoError] = useState<string | null>(null)
   const [shippingPriceLoading, setShippingPriceLoading] = useState(false)
   const [shippingPriceError, setShippingPriceError] = useState<string | null>(
     null,
@@ -439,7 +444,14 @@ export function CheckoutPage() {
   }, [gatewaysChecked, bkashAvailable, nagadAvailable, paymentMethod])
 
   const loadShippingPrice = useCallback(
-    (cityId: string, zoneId: string, itemWeight: number, subtotal: number) => {
+    (
+      cityId: string,
+      zoneId: string,
+      itemWeight: number,
+      subtotal: number,
+      promoCode: string,
+      cartItems: Array<{ productId: string; quantity: number }>,
+    ) => {
       if (!cityId || !zoneId) {
         setShippingPrice(null)
         setQuoteCodTotal(null)
@@ -448,6 +460,9 @@ export function CheckoutPage() {
         setQuotePrepaidShipping(null)
         setCampaignLabel(null)
         setCampaignDiscount(null)
+        setPromoLabel(null)
+        setPromoDiscount(null)
+        setPromoError(null)
         setShippingPriceError(null)
         return
       }
@@ -459,6 +474,9 @@ export function CheckoutPage() {
       setQuotePrepaidShipping(null)
       setCampaignLabel(null)
       setCampaignDiscount(null)
+      setPromoLabel(null)
+      setPromoDiscount(null)
+      setPromoError(null)
       setShippingPriceError(null)
       fetch('/api/pathao/price', {
         method: 'POST',
@@ -469,6 +487,11 @@ export function CheckoutPage() {
           zone_id: Number(zoneId),
           item_weight: itemWeight,
           subtotal,
+          promo_code: promoCode || undefined,
+          items: cartItems.map((item) => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+          })),
         }),
       })
         .then((r) => r.json())
@@ -492,6 +515,15 @@ export function CheckoutPage() {
                   ? j.campaign.discount
                   : null,
               )
+            }
+            if (j.promo?.code) {
+              setPromoLabel(String(j.promo.title || j.promo.code))
+              setPromoDiscount(
+                typeof j.promo.discount === 'number' ? j.promo.discount : null,
+              )
+              setPromoError(null)
+            } else if (typeof j.promoError === 'string' && j.promoError) {
+              setPromoError(j.promoError)
             }
             setShippingPriceError(null)
           } else if (j.success && typeof j.price === 'number') {
@@ -527,6 +559,11 @@ export function CheckoutPage() {
         formData.zoneId,
         cartWeightKg,
         cartTotal,
+        appliedPromoCode,
+        items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        })),
       )
     } else {
       setShippingPrice(null)
@@ -536,6 +573,9 @@ export function CheckoutPage() {
       setQuotePrepaidShipping(null)
       setCampaignLabel(null)
       setCampaignDiscount(null)
+      setPromoLabel(null)
+      setPromoDiscount(null)
+      setPromoError(null)
       setShippingPriceError(null)
     }
   }, [
@@ -543,6 +583,8 @@ export function CheckoutPage() {
     formData.zoneId,
     cartWeightKg,
     cartTotal,
+    appliedPromoCode,
+    items,
     loadShippingPrice,
   ])
 
@@ -663,6 +705,9 @@ export function CheckoutPage() {
             quantity: item.quantity,
           })),
           payment_method: paymentMethod,
+          ...(appliedPromoCode
+            ? { promo_code: appliedPromoCode }
+            : {}),
         }),
       })
       const data = (await res.json()) as {
@@ -1326,6 +1371,111 @@ export function CheckoutPage() {
                 {formatPrice(cartTotal)}
               </span>
             </div>
+
+            <div className="rounded-xl border border-cloud bg-mist/40 p-3">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-mute">
+                Promo code
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-lg border border-cloud bg-white px-3 py-2 text-[13px] uppercase tracking-wide text-ink outline-none focus:border-navy"
+                  value={promoCodeInput}
+                  onChange={(e) =>
+                    setPromoCodeInput(e.target.value.toUpperCase())
+                  }
+                  placeholder="Enter code"
+                  autoCapitalize="characters"
+                  disabled={loading}
+                />
+                {appliedPromoCode ? (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg px-3 text-[13px] font-semibold text-navy hover:underline"
+                    onClick={() => {
+                      setPromoCodeInput('')
+                      setAppliedPromoCode('')
+                      setPromoLabel(null)
+                      setPromoDiscount(null)
+                      setPromoError(null)
+                    }}
+                    disabled={loading}
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg bg-navy px-3 py-2 text-[13px] font-semibold text-white hover:bg-navy-soft disabled:opacity-50"
+                    onClick={async () => {
+                      const next = promoCodeInput.trim().toUpperCase()
+                      if (!next) {
+                        setPromoError('Enter a promo code.')
+                        return
+                      }
+                      setPromoError(null)
+                      try {
+                        const res = await fetch('/api/promotions/validate', {
+                          method: 'POST',
+                          cache: 'no-store',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            promo_code: next,
+                            items: items.map((item) => ({
+                              product_id: item.product.id,
+                              quantity: item.quantity,
+                            })),
+                          }),
+                        })
+                        const j = (await res.json()) as {
+                          success?: boolean
+                          error?: string
+                          promo?: {
+                            title?: string
+                            code?: string
+                            discount?: number
+                          }
+                        }
+                        if (!res.ok || !j.success || !j.promo) {
+                          setAppliedPromoCode('')
+                          setPromoLabel(null)
+                          setPromoDiscount(null)
+                          setPromoError(j.error || 'Invalid promo code.')
+                          return
+                        }
+                        setAppliedPromoCode(String(j.promo.code || next))
+                        setPromoLabel(
+                          String(j.promo.title || j.promo.code || next),
+                        )
+                        setPromoDiscount(
+                          typeof j.promo.discount === 'number'
+                            ? j.promo.discount
+                            : null,
+                        )
+                        setPromoError(null)
+                      } catch {
+                        setPromoError('Could not validate promo code.')
+                      }
+                    }}
+                    disabled={loading || !promoCodeInput.trim()}
+                  >
+                    Apply
+                  </button>
+                )}
+              </div>
+              {promoError ? (
+                <p className="mt-2 text-[12px] text-spark">{promoError}</p>
+              ) : null}
+            </div>
+
+            {promoLabel && promoDiscount != null && promoDiscount > 0 ? (
+              <div className="flex justify-between text-[13px] text-navy">
+                <span>Promo ({appliedPromoCode})</span>
+                <span className="tabular-nums">
+                  −{formatPrice(promoDiscount)}
+                </span>
+              </div>
+            ) : null}
+
             <div className="flex justify-between text-mute">
               <span>
                 {paymentMethod === 'cod' ? 'Delivery charge' : 'Delivery'}

@@ -16,6 +16,7 @@ import {
   reorderProductMedia,
   uploadProductMedia,
 } from '@/lib/catalog/actions/media'
+import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { normalizeProductBadge, productBadgeClassName } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
@@ -217,9 +218,10 @@ export function AdminProductGallery({
 
   const runUpload = (file: File) => {
     setError(null)
-    const formData = new FormData()
-    formData.set('file', file)
     startTransition(async () => {
+      const prepared = await prepareMediaFileForUpload(file)
+      const formData = new FormData()
+      formData.set('file', prepared.file)
       const result = await uploadProductMedia(productId, formData)
       if (!result.ok) {
         setError(result.error)
@@ -253,6 +255,10 @@ export function AdminProductGallery({
   return (
     <div className="space-y-3">
       <FormError message={error} />
+      <p className="text-[12px] leading-relaxed text-mute">
+        Images are auto-compressed to WebP (~400KB). Videos max 12MB — compress
+        externally if needed.
+      </p>
 
       <input
         ref={fileRef}

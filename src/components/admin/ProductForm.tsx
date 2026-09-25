@@ -7,6 +7,7 @@ import {
   deactivateProduct,
   updateProduct,
 } from '@/lib/catalog/actions/products'
+import { adminProductPath } from '@/lib/admin/paths'
 import { slugify } from '@/lib/catalog/slug'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import {
@@ -65,7 +66,8 @@ export function ProductForm({
       }
 
       if (!isEdit && result.data?.id) {
-        router.push(`/admin/catalog/products/${result.data.id}`)
+        const nextSlug = String(formData.get('slug') ?? slug).trim() || slug
+        router.push(adminProductPath(nextSlug))
         router.refresh()
         return
       }

@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { isAdminPath } from '@/lib/admin/paths'
 import { createClient } from '@/lib/supabase/server'
 
 export async function signInWithPassword(formData: FormData) {
@@ -19,7 +20,7 @@ export async function signInWithPassword(formData: FormData) {
     redirect(`/admin/login?error=${encodeURIComponent(error.message)}`)
   }
 
-  redirect(next.startsWith('/admin') ? next : '/admin')
+  redirect(isAdminPath(next) ? next : '/admin')
 }
 
 export async function signOut() {

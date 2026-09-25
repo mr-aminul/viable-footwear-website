@@ -4,13 +4,16 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Heart, Star, Truck } from 'lucide-react'
+import { ArrowLeft, Heart, Info, RotateCcw, Star, Truck } from 'lucide-react'
 import {
   saveProductVariants,
   saveRelatedProducts,
   updateProduct,
 } from '@/lib/catalog/actions/products'
 import { slugify } from '@/lib/catalog/slug'
+import { widthLabel } from '@/lib/catalog/sizing'
+import { adminProductPath } from '@/lib/admin/paths'
+import type { ProductWidth } from '@/lib/catalog/types'
 import type { AdminProductView, RelatedPickerProduct } from '@/lib/catalog/queries'
 import { normalizeProductBadge } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
@@ -19,6 +22,7 @@ import {
   type GalleryMedia,
 } from '@/components/admin/AdminProductGallery'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
+import { galleryForColor } from '@/lib/catalog/gallery'
 import {
   VariantsEditor,
   buildVariantsPayload,
@@ -27,6 +31,7 @@ import {
 } from '@/components/admin/VariantsEditor'
 import { RelatedProductsPicker } from '@/components/admin/RelatedProductsPicker'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { ProductAccordion } from '@/components/ProductAccordion'
 import {
   FormError,
   FormSuccess,
@@ -72,6 +77,11 @@ export function AdminProductEditor({
   const [slug, setSlug] = useState(product.slug)
   const [slugTouched, setSlugTouched] = useState(true)
   const [description, setDescription] = useState(product.description)
+  const [subtitle, setSubtitle] = useState(product.subtitle ?? '')
+  const [fitNote, setFitNote] = useState(product.fitNote ?? '')
+  const [materials, setMaterials] = useState(product.materials ?? '')
+  const [careInfo, setCareInfo] = useState(product.careInfo ?? '')
+  const [widths, setWidths] = useState<ProductWidth[]>(product.widths ?? [])
   const [price, setPrice] = useState(String(product.price))
   const [compareAt, setCompareAt] = useState(
     product.compareAt != null ? String(product.compareAt) : '',
@@ -93,20 +103,43 @@ export function AdminProductEditor({
   const [relatedIds, setRelatedIds] = useState<string[]>(initialRelatedIds)
 
   const [size, setSize] = useState<number | null>(null)
+  const [widthPreview, setWidthPreview] = useState<ProductWidth | null>(null)
   const [colorIndex, setColorIndex] = useState(0)
 
+  const categoryLabel =
+    categories.find((c) => c.id === categoryId)?.name ?? product.categoryLabel
+
+  const toggleWidth = (value: ProductWidth) => {
+    setWidths((current) =>
+      current.includes(value)
+        ? current.filter((w) => w !== value)
+        : [...current, value],
+    )
+  }
+
   const colorOptions = useMemo(() => {
-    const unique = new Map<string, string>()
+    const unique = new Map<string, { hex: string; name: string | null }>()
     for (const variant of product.variants) {
       const key = variant.colorHex || variant.color || 'default'
       if (!unique.has(key)) {
-        unique.set(key, variant.colorHex || variant.color || '#1A3668')
+        unique.set(key, {
+          hex: variant.colorHex || variant.color || '#1A3668',
+          name: variant.color,
+        })
       }
     }
     if (unique.size === 0 && product.colors.length > 0) {
-      product.colors.forEach((c, i) => unique.set(String(i), c))
+      product.colors.forEach((c, i) =>
+        unique.set(String(i), { hex: c, name: null }),
+      )
     }
-    return [...unique.entries()].map(([key, hex]) => ({ key, hex }))
+    return [...unique.entries()].map(([key, value]) => ({
+      key,
+      hex: value.hex,
+      name: value.name,
+      thumb:
+        galleryForColor(product.images, value.hex)[0] ?? product.image,
+    }))
   }, [product])
 
   const selectedColor = colorOptions[colorIndex]
@@ -122,9 +155,6 @@ export function AdminProductEditor({
       ? [...new Set(matched)].sort((a, b) => a - b)
       : product.sizes
   }, [product, selectedColor])
-
-  const categoryLabel =
-    categories.find((c) => c.id === categoryId)?.name ?? product.categoryLabel
 
   const variantImageOptions = useMemo(
     () =>
@@ -146,6 +176,11 @@ export function AdminProductEditor({
     formData.set('name', name)
     formData.set('slug', slug)
     formData.set('description', description)
+    formData.set('subtitle', subtitle)
+    formData.set('fit_note', fitNote)
+    formData.set('materials', materials)
+    formData.set('care_info', careInfo)
+    formData.set('widths', widths.join(','))
     formData.set('price', price)
     formData.set('compare_at', compareAt)
     formData.set('weight_kg', weightKg)
@@ -182,7 +217,11 @@ export function AdminProductEditor({
       }
 
       setSuccess('Product saved.')
-      router.refresh()
+      if (slug !== product.slug) {
+        router.replace(adminProductPath(slug))
+      } else {
+        router.refresh()
+      }
     })
   }
 
@@ -321,6 +360,13 @@ export function AdminProductEditor({
             placeholder="Product name"
           />
 
+          <input
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
+            className={`${pdpFieldClassName} mt-1 text-[15px] text-mute`}
+            placeholder="Subtitle (e.g. suede)"
+          />
+
           <div className="mt-2 flex min-w-0 items-center gap-1.5">
             <span className="shrink-0 text-[12px] text-mute">/</span>
             <input
@@ -369,45 +415,109 @@ export function AdminProductEditor({
               />
             </label>
           </div>
-
-          <label className="mt-5 block max-w-md">
-            <span className="sr-only">Description</span>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Product description"
-              className={`${pdpFieldClassName} resize-y text-[15px] leading-relaxed text-mute focus:text-ink`}
-            />
-          </label>
+          <p className="mt-1 text-[12px] text-mute">
+            Incl. VAT · Free delivery across Bangladesh
+          </p>
 
           {colorOptions.length > 0 ? (
             <div className="mt-8">
-              <p className="text-[13px] font-semibold text-ink">Color</p>
-              <div className="mt-3 flex gap-2.5">
+              <p className="text-[13px] font-semibold text-ink">
+                Color
+                {selectedColor?.name ? (
+                  <span className="font-normal text-mute">
+                    : {selectedColor.name}
+                  </span>
+                ) : null}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2.5">
                 {colorOptions.map((c, i) => (
                   <button
                     key={c.key}
                     type="button"
-                    aria-label={`Color ${i + 1}`}
+                    aria-label={c.name ? `Color ${c.name}` : `Color ${i + 1}`}
+                    title={c.name ?? undefined}
                     onClick={() => {
                       setColorIndex(i)
                       setSize(null)
                     }}
-                    className={`h-9 w-9 rounded-full border-2 transition ${
+                    className={`h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
                       colorIndex === i
-                        ? 'scale-110 border-navy'
-                        : 'border-transparent'
+                        ? 'border-navy'
+                        : 'border-cloud hover:border-navy/40'
                     }`}
-                    style={{
-                      backgroundColor: c.hex,
-                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
-                    }}
-                  />
+                  >
+                    {c.thumb ? (
+                      <img
+                        src={c.thumb}
+                        alt=""
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <span
+                        className="block h-full w-full"
+                        style={{
+                          backgroundColor: c.hex,
+                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
+                        }}
+                      />
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
           ) : null}
+
+          <label className="mt-6 block">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+              Fit note (optional)
+            </span>
+            <div className="mt-1.5 flex items-start gap-2.5 rounded-xl bg-sky-50 px-3.5 py-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+              <input
+                value={fitNote}
+                onChange={(e) => setFitNote(e.target.value)}
+                placeholder="e.g. Customers report this model runs small"
+                className="w-full border-0 bg-transparent p-0 text-[13px] text-ink outline-none placeholder:text-mute"
+              />
+            </div>
+          </label>
+
+          <div className="mt-7">
+            <p className="text-[13px] font-semibold text-ink">
+              Width options
+              <span className="ml-1 font-normal text-mute">
+                (enable if product offers them)
+              </span>
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(['normal', 'narrow'] as const).map((w) => {
+                const enabled = widths.includes(w)
+                const previewActive = widthPreview === w
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => {
+                      toggleWidth(w)
+                      setWidthPreview(w)
+                    }}
+                    className={`rounded-xl border px-4 py-3.5 text-[13px] font-medium transition ${
+                      enabled
+                        ? previewActive
+                          ? 'border-navy bg-navy text-white'
+                          : 'border-navy/40 bg-white text-ink'
+                        : 'border-dashed border-cloud bg-white text-mute'
+                    }`}
+                  >
+                    {widthLabel(w)}
+                    <span className="mt-0.5 block text-[11px] font-normal opacity-70">
+                      {enabled ? 'Offered' : 'Not offered'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           <div className="mt-7">
             <p className="text-[13px] font-semibold text-ink">Size (EU)</p>
@@ -437,23 +547,80 @@ export function AdminProductEditor({
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <span className="inline-flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-full bg-navy/90 px-6 py-3.5 text-[14px] font-semibold text-white sm:flex-none">
-              Add to bag
-            </span>
             <span className="inline-flex h-[50px] w-[50px] items-center justify-center rounded-full border border-cloud">
               <Heart className="h-[18px] w-[18px]" />
             </span>
+            <span className="inline-flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-full bg-navy/90 px-6 py-3.5 text-[14px] font-semibold text-white sm:flex-none">
+              Add to bag
+            </span>
           </div>
 
-          <div className="mt-8 flex items-start gap-3 rounded-2xl bg-mist/80 px-4 py-4">
-            <Truck className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
-            <p className="text-[13px] leading-relaxed text-mute">
-              Delivery across Bangladesh. 24hrs within Dhaka, 48-72hrs outside
-              Dhaka!
-            </p>
+          <ul className="mt-8 space-y-3">
+            <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
+              <Truck className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              <span>
+                <span className="font-semibold text-ink">Delivery: </span>
+                24hrs within Dhaka, 48–72hrs outside Dhaka
+              </span>
+            </li>
+            <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
+              <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              <span>
+                <span className="font-semibold text-ink">Free returns: </span>
+                7-day return policy on unused pairs
+              </span>
+            </li>
+            <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
+              <Star className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              <span>
+                <span className="font-semibold text-ink">Authentic: </span>
+                Genuine footwear, curated for Bangladesh
+              </span>
+            </li>
+          </ul>
+
+          <div className="mt-10 border-t border-cloud">
+            <ProductAccordion title="Product description" defaultOpen>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                placeholder="Product description"
+                className={`${pdpFieldClassName} resize-y text-[14px] leading-relaxed text-mute focus:text-ink`}
+              />
+            </ProductAccordion>
+            <ProductAccordion title="Materials">
+              <textarea
+                value={materials}
+                onChange={(e) => setMaterials(e.target.value)}
+                rows={3}
+                placeholder="Upper, footbed, sole materials…"
+                className={`${pdpFieldClassName} resize-y text-[14px] leading-relaxed text-mute focus:text-ink`}
+              />
+            </ProductAccordion>
+            <ProductAccordion title="Care & safety">
+              <textarea
+                value={careInfo}
+                onChange={(e) => setCareInfo(e.target.value)}
+                rows={3}
+                placeholder="Care instructions, manufacturer notes…"
+                className={`${pdpFieldClassName} resize-y text-[14px] leading-relaxed text-mute focus:text-ink`}
+              />
+            </ProductAccordion>
+            <ProductAccordion title="Reviews">
+              <p>
+                {product.rating.toFixed(1)} · {product.reviews} reviews
+                (storefront summary)
+              </p>
+            </ProductAccordion>
           </div>
 
-          <label className="mt-4 block max-w-xs">
+          <p className="mt-6 text-[13px] text-mute">
+            More from:{' '}
+            <span className="font-medium text-navy">{categoryLabel}</span>
+          </p>
+
+          <label className="mt-6 block max-w-xs">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
               Shipping weight (kg)
             </span>

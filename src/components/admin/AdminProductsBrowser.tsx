@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
+import { adminProductPath } from '@/lib/admin/paths'
 import {
   archiveProducts,
   deleteProducts,
@@ -417,7 +418,7 @@ export function AdminProductsBrowser({
                       />
                     </div>
                     <Link
-                      href={`/admin/catalog/products/${product.id}`}
+                      href={adminProductPath(product.slug)}
                       className="flex min-w-0 flex-1 items-center gap-3 transition hover:opacity-90 md:contents"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3 md:min-w-0">

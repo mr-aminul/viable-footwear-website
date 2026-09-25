@@ -6,6 +6,9 @@ export type ProductImage = {
   colorHex: string | null
 }
 
+/** Footbed width options shown on the PDP when the product offers them. */
+export type ProductWidth = 'normal' | 'narrow'
+
 /** Storefront-facing product (cart + cards + PDP). */
 export type Product = {
   id: string
@@ -26,6 +29,16 @@ export type Product = {
   variants: ProductVariantView[]
   badge: ProductBadge
   description: string
+  /** Material/style line under the title (e.g. “suede”). */
+  subtitle?: string
+  /** Sizing tip banner above width/size selectors. */
+  fitNote?: string
+  /** Materials accordion body. */
+  materials?: string
+  /** Care / manufacturer accordion body. */
+  careInfo?: string
+  /** Offered widths; empty hides the width selector. */
+  widths: ProductWidth[]
   featured?: boolean
   weightKg: number
   seoTitle?: string

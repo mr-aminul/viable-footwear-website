@@ -22,6 +22,7 @@ import {
 } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
 import { slugify } from '@/lib/catalog/slug'
+import { adminProductPath } from '@/lib/admin/paths'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { BadgePicker } from '@/components/admin/BadgePicker'
 import {
@@ -64,6 +65,7 @@ type SheetRow = {
   status: 'idle' | 'ok' | 'error'
   message?: string
   createdId?: string
+  createdSlug?: string
 }
 
 /**
@@ -544,6 +546,7 @@ export function BulkProductsSheet({
                   ? `Created · ${variants} variants`
                   : 'Created',
               createdId: outcome.id,
+              createdSlug: outcome.slug,
             }
           }
           return {
@@ -551,6 +554,7 @@ export function BulkProductsSheet({
             status: 'error' as const,
             message: outcome.error ?? 'Failed',
             createdId: undefined,
+            createdSlug: undefined,
           }
         })
 
@@ -796,9 +800,9 @@ export function BulkProductsSheet({
                     <div
                       className={`flex min-w-0 items-center px-2 text-[12px] ${cellShellClassName}`}
                     >
-                      {row.status === 'ok' && row.createdId ? (
+                      {row.status === 'ok' && row.createdSlug ? (
                         <Link
-                          href={`/admin/catalog/products/${row.createdId}`}
+                          href={adminProductPath(row.createdSlug)}
                           className="truncate font-semibold text-navy hover:underline"
                         >
                           {row.message ?? 'Created · Edit'}

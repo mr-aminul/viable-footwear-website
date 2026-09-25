@@ -10,6 +10,7 @@ import type { ProductBadge } from '@/lib/catalog/constants'
 import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
+import { parseProductWidths } from '@/lib/catalog/sizing'
 import type {
   CategoryView,
   Product,
@@ -97,6 +98,11 @@ function mapProduct(
     variants: variantViews,
     badge: parseBadge(row.badge),
     description: row.description,
+    subtitle: row.subtitle?.trim() || undefined,
+    fitNote: row.fit_note?.trim() || undefined,
+    materials: row.materials?.trim() || undefined,
+    careInfo: row.care_info?.trim() || undefined,
+    widths: parseProductWidths(row.widths ?? []),
     featured: row.featured,
     weightKg: Number(row.weight_kg),
     seoTitle: row.seo_title ?? undefined,
@@ -558,6 +564,72 @@ export function listRelatedPickerProducts(excludeProductId: string) {
 }
 
 /**
+ * Full catalog for promo product multi-select (same shape as related picker).
+ */
+export function listPromoPickerProducts() {
+  return unstable_cache(
+    async (): Promise<RelatedPickerProduct[]> => {
+      const admin = createServiceClient()
+      const [{ data: products }, { data: categories }, { data: media }] =
+        await Promise.all([
+          admin
+            .from('products')
+            .select('id, name, price, compare_at, badge, active, category_id')
+            .order('name', { ascending: true }),
+          admin
+            .from('categories')
+            .select('id, name, sort_order')
+            .order('sort_order', { ascending: true }),
+          admin
+            .from('product_media')
+            .select('product_id, storage_path, sort_order')
+            .eq('media_type', 'image')
+            .order('sort_order', { ascending: true }),
+        ])
+
+      const categoryById = new Map(
+        (categories ?? []).map((c) => [
+          c.id,
+          { name: c.name, sort: c.sort_order },
+        ]),
+      )
+
+      const primaryImageByProduct = new Map<string, string>()
+      for (const row of media ?? []) {
+        if (primaryImageByProduct.has(row.product_id)) continue
+        primaryImageByProduct.set(
+          row.product_id,
+          resolveMediaUrl(row.storage_path, 'image'),
+        )
+      }
+
+      return (products ?? []).map((row) => {
+        const category = row.category_id
+          ? categoryById.get(row.category_id)
+          : undefined
+        return {
+          id: row.id,
+          name: row.name,
+          price: Number(row.price),
+          compareAt:
+            row.compare_at != null ? Number(row.compare_at) : undefined,
+          image:
+            primaryImageByProduct.get(row.id) ??
+            '/images/products/product-foam-cream.png',
+          badge: parseBadge(row.badge),
+          active: row.active,
+          categoryId: row.category_id,
+          categoryLabel: category?.name ?? 'Uncategorized',
+          categorySort: category?.sort ?? 9999,
+        }
+      })
+    },
+    ['promo-picker-products'],
+    { revalidate: 30, tags: ['admin-products'] },
+  )()
+}
+
+/**
  * Catalog home KPI counts (cached ~30s).
  */
 export function getCatalogCounts() {
@@ -581,7 +653,7 @@ export function getCatalogCounts() {
 }
 
 const ADMIN_PRODUCT_DETAIL_SELECT =
-  'id, name, slug, description, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
+  'id, name, slug, description, subtitle, fit_note, materials, care_info, widths, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
 
 /**
  * Cached product core row for the admin edit page.
@@ -799,6 +871,39 @@ export function getAdminProductView(id: string) {
     },
     [`admin-product-view-${id}`],
     { revalidate: 15, tags: ['admin-products', `admin-product-${id}`] },
+  )()
+}
+
+/**
+ * Same as getAdminProductView, keyed by storefront slug.
+ */
+export function getAdminProductViewBySlug(slug: string) {
+  return unstable_cache(
+    async (): Promise<AdminProductView | null> => {
+      const admin = createServiceClient()
+      const { data } = await admin
+        .from('products')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle()
+
+      if (!data) return null
+
+      const [product] = await loadProductBundles([data], {
+        client: admin,
+        includeInactiveVariants: true,
+      })
+      if (!product) return null
+
+      return {
+        ...product,
+        active: data.active,
+        categoryId: data.category_id,
+        relatedProductIds: data.related_product_ids ?? [],
+      }
+    },
+    [`admin-product-view-slug-${slug}`],
+    { revalidate: 15, tags: ['admin-products', `admin-product-slug-${slug}`] },
   )()
 }
 

@@ -7,17 +7,35 @@ export const MAX_PRODUCT_IMAGES = 12
 /** Max optional product videos. */
 export const MAX_PRODUCT_VIDEOS = 1
 
-export const IMAGE_MAX_BYTES = 8 * 1024 * 1024
-export const VIDEO_MAX_BYTES = 50 * 1024 * 1024
-
-/** Longest edge after upload optimization (retina-friendly for PDP). */
-export const IMAGE_OPTIMIZE_MAX_EDGE = 2048
+/**
+ * Max original image the browser may pick (phone camera dumps).
+ * Client compresses before the Server Action; server re-optimizes again.
+ */
+export const IMAGE_MAX_BYTES = 20 * 1024 * 1024
 
 /**
- * WebP quality for product images.
- * 85 keeps product photos looking sharp while cutting file size vs JPEG/PNG.
+ * Product videos are stored as uploaded — keep this low so Storage stays lean.
+ * Prefer short, already-compressed clips (or compress externally first).
  */
-export const IMAGE_OPTIMIZE_WEBP_QUALITY = 85
+export const VIDEO_MAX_BYTES = 12 * 1024 * 1024
+
+/** Longest edge after optimization (covers retina PDP without huge files). */
+export const IMAGE_OPTIMIZE_MAX_EDGE = 1600
+
+/** Starting WebP quality; server may step down to hit the byte target. */
+export const IMAGE_OPTIMIZE_WEBP_QUALITY = 78
+
+/** Floor quality when iterating toward the storage target. */
+export const IMAGE_OPTIMIZE_MIN_QUALITY = 55
+
+/** Soft target for stored product images (~400KB). */
+export const IMAGE_OPTIMIZE_TARGET_BYTES = 400 * 1024
+
+/** Client pre-compress longest edge (matches server). */
+export const CLIENT_IMAGE_MAX_EDGE = IMAGE_OPTIMIZE_MAX_EDGE
+
+/** Client pre-compress target before upload (~500KB keeps Server Action small). */
+export const CLIENT_IMAGE_TARGET_BYTES = 500 * 1024
 
 export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',

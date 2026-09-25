@@ -2,6 +2,7 @@
 
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { adminProductPath } from '@/lib/admin/paths'
 import { revalidateStorefront } from '@/lib/catalog/cache-tags'
 import { normalizeProductBadge } from '@/lib/catalog/badge'
 import {
@@ -10,6 +11,7 @@ import {
   RELATED_PRODUCTS_DISPLAY_CAP,
 } from '@/lib/catalog/constants'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
+import { parseProductWidths } from '@/lib/catalog/sizing'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
@@ -42,6 +44,9 @@ function readNumber(formData: FormData, key: string): number | null {
 function revalidateProductSurfaces(...slugs: Array<string | null | undefined>) {
   revalidatePath('/admin/catalog')
   revalidatePath('/admin/catalog/products')
+  for (const slug of slugs) {
+    if (slug) revalidatePath(adminProductPath(slug))
+  }
   revalidateStorefront(...slugs)
   revalidateTag('admin-products')
 }
@@ -129,6 +134,7 @@ export type BulkProductRowResult = {
   key: string
   ok: boolean
   id?: string
+  slug?: string
   error?: string
   /** How many variants were created for this product. */
   variantCount?: number
@@ -414,6 +420,7 @@ export async function bulkCreateProducts(
       key: row.key,
       ok: true,
       id: product.id,
+      slug,
       variantCount: expanded.variants.length,
     })
   }
@@ -430,13 +437,23 @@ export async function bulkCreateProducts(
  */
 export async function createProduct(
   formData: FormData,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; slug: string }>> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
   const name = readString(formData, 'name')
   const slug = readString(formData, 'slug') || slugify(name)
   const description = readString(formData, 'description')
+  const subtitle = readString(formData, 'subtitle') || null
+  const fitNote = readString(formData, 'fit_note') || null
+  const materials = readString(formData, 'materials')
+  const careInfo = readString(formData, 'care_info')
+  const widths = parseProductWidths(
+    readString(formData, 'widths')
+      .split(',')
+      .map((w) => w.trim())
+      .filter(Boolean),
+  )
   const price = readNumber(formData, 'price')
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
@@ -469,6 +486,11 @@ export async function createProduct(
       name,
       slug,
       description,
+      subtitle,
+      fit_note: fitNote,
+      materials,
+      care_info: careInfo,
+      widths,
       price,
       compare_at: compareAt,
       weight_kg: weightKg,
@@ -490,7 +512,7 @@ export async function createProduct(
   }
 
   revalidateProductSurfaces(slug)
-  return { ok: true, data: { id: data.id } }
+  return { ok: true, data: { id: data.id, slug } }
 }
 
 /**
@@ -506,6 +528,16 @@ export async function updateProduct(
   const name = readString(formData, 'name')
   const slug = readString(formData, 'slug')
   const description = readString(formData, 'description')
+  const subtitle = readString(formData, 'subtitle') || null
+  const fitNote = readString(formData, 'fit_note') || null
+  const materials = readString(formData, 'materials')
+  const careInfo = readString(formData, 'care_info')
+  const widths = parseProductWidths(
+    readString(formData, 'widths')
+      .split(',')
+      .map((w) => w.trim())
+      .filter(Boolean),
+  )
   const price = readNumber(formData, 'price')
   const compareAt = readNumber(formData, 'compare_at')
   const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
@@ -554,6 +586,11 @@ export async function updateProduct(
       name,
       slug,
       description,
+      subtitle,
+      fit_note: fitNote,
+      materials,
+      care_info: careInfo,
+      widths,
       price,
       compare_at: compareAt,
       weight_kg: weightKg,
@@ -574,7 +611,6 @@ export async function updateProduct(
   }
 
   revalidateProductSurfaces(slug, existing?.slug)
-  revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
 }
 
@@ -627,7 +663,6 @@ export async function setProductActive(
   if (error) return { ok: false, error: error.message }
 
   revalidateProductSurfaces(existing.slug)
-  revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
 }
 
@@ -878,7 +913,6 @@ export async function saveProductVariants(
   }
 
   revalidateProductSurfaces(product.slug)
-  revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
 }
 
@@ -941,6 +975,5 @@ export async function saveRelatedProducts(
   if (error) return { ok: false, error: error.message }
 
   revalidateProductSurfaces(product.slug)
-  revalidatePath(`/admin/catalog/products/${productId}`)
   return { ok: true }
 }

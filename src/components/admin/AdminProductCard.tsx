@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Heart, ShoppingBag, Star } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { formatPrice } from '@/lib/brand'
+import { adminProductPath } from '@/lib/admin/paths'
 import { productBadgeClassName } from '@/lib/catalog/badge'
 import type { AdminProductView } from '@/lib/catalog/queries'
 
@@ -46,7 +47,7 @@ export function AdminProductCard({
       ].join(' ')}
     >
       <Link
-        href={`/admin/catalog/products/${product.id}`}
+        href={adminProductPath(product.slug)}
         className="absolute inset-0 z-20"
         aria-label={`Edit ${product.name}`}
       />

@@ -150,6 +150,17 @@ export default async function OrderDetailPage({
                 {formatPrice(Number(order.subtotal))}
               </dd>
             </div>
+            {Number(order.discount_amount) > 0 ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-mute">
+                  Promo
+                  {order.promo_code ? ` (${order.promo_code})` : ''}
+                </dt>
+                <dd className="font-medium text-navy">
+                  −{formatPrice(Number(order.discount_amount))}
+                </dd>
+              </div>
+            ) : null}
             {pathaoBase != null ? (
               <div className="flex justify-between gap-4">
                 <dt className="text-mute">Pathao delivery (base)</dt>

@@ -16,6 +16,7 @@ import {
   updateMediaColor,
   uploadProductMedia,
 } from '@/lib/catalog/actions/media'
+import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { Field, inputClassName } from '@/components/admin/ui'
@@ -351,10 +352,11 @@ function VariantImagePicker({
     event.target.value = ''
     if (!file) return
     setError(null)
-    const formData = new FormData()
-    formData.set('file', file)
-    formData.set('color_hex', colorHex)
     startTransition(async () => {
+      const prepared = await prepareMediaFileForUpload(file)
+      const formData = new FormData()
+      formData.set('file', prepared.file)
+      formData.set('color_hex', colorHex)
       const result = await uploadProductMedia(productId, formData)
       if (!result.ok) {
         setError(result.error)

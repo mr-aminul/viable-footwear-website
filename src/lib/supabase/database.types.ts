@@ -93,6 +93,11 @@ export interface Database {
           name: string
           slug: string
           description: string
+          subtitle: string | null
+          fit_note: string | null
+          materials: string
+          care_info: string
+          widths: string[]
           price: number
           compare_at: number | null
           weight_kg: number
@@ -113,6 +118,11 @@ export interface Database {
           name: string
           slug: string
           description?: string
+          subtitle?: string | null
+          fit_note?: string | null
+          materials?: string
+          care_info?: string
+          widths?: string[]
           price: number
           compare_at?: number | null
           weight_kg?: number
@@ -204,6 +214,38 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['campaigns']['Insert']>
         Relationships: []
       }
+      promo_codes: {
+        Row: {
+          id: string
+          title: string
+          code: string
+          description: string
+          active: boolean
+          starts_at: string | null
+          ends_at: string | null
+          discount_type: 'percent' | 'flat'
+          discount_value: number
+          product_ids: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          code: string
+          description?: string
+          active?: boolean
+          starts_at?: string | null
+          ends_at?: string | null
+          discount_type: 'percent' | 'flat'
+          discount_value: number
+          product_ids?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['promo_codes']['Insert']>
+        Relationships: []
+      }
       integration_settings: {
         Row: {
           key: string
@@ -246,6 +288,9 @@ export interface Database {
           pathao_cancelled_at: string | null
           pathao_history: PathaoHistoryEntry[]
           campaign_id: string | null
+          promo_code_id: string | null
+          promo_code: string | null
+          discount_amount: number
           notes: string | null
           paid_at: string | null
           payment_trx_id: string | null
@@ -278,6 +323,9 @@ export interface Database {
           pathao_cancelled_at?: string | null
           pathao_history?: PathaoHistoryEntry[]
           campaign_id?: string | null
+          promo_code_id?: string | null
+          promo_code?: string | null
+          discount_amount?: number
           notes?: string | null
           paid_at?: string | null
           payment_trx_id?: string | null
