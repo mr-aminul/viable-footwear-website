@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
+  Boxes,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -37,6 +38,7 @@ type NavItem = {
 const nav: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/catalog', label: 'Products', icon: Package },
+  { href: '/admin/inventory', label: 'Inventory', icon: Boxes },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/promotions', label: 'Promotions', icon: Ticket },
   { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },

@@ -11,6 +11,7 @@ import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
 import { resolveMediaUrl } from '@/lib/catalog/media-url'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
 import type {
+  AdminInventoryRow,
   CategoryView,
   Product,
   ProductVariantView,
@@ -906,6 +907,262 @@ export function getAdminProductViewBySlug(slug: string) {
     },
     [`admin-product-view-slug-${slug}`],
     { revalidate: 15, tags: ['admin-products', `admin-product-slug-${slug}`] },
+  )()
+}
+
+export type AdminInventoryStockFilter = 'all' | 'in' | 'low' | 'out'
+
+export type AdminInventoryFilters = {
+  q?: string
+  stock?: AdminInventoryStockFilter
+  productStatus?: string
+  page: number
+  pageSize: number
+  /** Variants at or below this count (and above 0) count as low stock. */
+  lowStockThreshold?: number
+}
+
+export type AdminInventorySummary = {
+  totalVariants: number
+  inStock: number
+  lowStock: number
+  outOfStock: number
+}
+
+type InventoryProduct = {
+  id: string
+  name: string
+  slug: string
+  active: boolean
+}
+
+async function resolveInventorySearchProductIds(
+  admin: ReturnType<typeof createServiceClient>,
+  q: string,
+): Promise<string[]> {
+  const safe = q.replace(/[%_,.()]/g, '').trim()
+  if (!safe) return []
+
+  const { data } = await admin
+    .from('products')
+    .select('id')
+    .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%`)
+    .limit(200)
+
+  return (data ?? []).map((row) => row.id)
+}
+
+async function resolveProductIdsByStatus(
+  admin: ReturnType<typeof createServiceClient>,
+  productStatus?: string,
+): Promise<string[] | 'all'> {
+  if (productStatus !== 'active' && productStatus !== 'inactive') return 'all'
+
+  const { data, error } = await admin
+    .from('products')
+    .select('id')
+    .eq('active', productStatus === 'active')
+
+  if (error) {
+    console.error('[inventory] resolveProductIdsByStatus', error)
+    return []
+  }
+  return (data ?? []).map((row) => row.id)
+}
+
+async function loadProductsByIds(
+  admin: ReturnType<typeof createServiceClient>,
+  ids: string[],
+): Promise<Map<string, InventoryProduct>> {
+  if (ids.length === 0) return new Map()
+  const { data } = await admin
+    .from('products')
+    .select('id, name, slug, active')
+    .in('id', ids)
+  return new Map((data ?? []).map((row) => [row.id, row]))
+}
+
+/**
+ * Flat variant inventory for the admin Inventory page (cached ~15s).
+ */
+export function listAdminInventory(filters: AdminInventoryFilters) {
+  const threshold = Math.max(1, filters.lowStockThreshold ?? 5)
+  const from = (filters.page - 1) * filters.pageSize
+  const to = from + filters.pageSize - 1
+  const stock = filters.stock ?? 'all'
+  const cacheKey = [
+    'admin-inventory',
+    filters.q ?? '',
+    stock,
+    filters.productStatus ?? '',
+    String(threshold),
+    String(filters.page),
+    String(filters.pageSize),
+  ]
+
+  return unstable_cache(
+    async (): Promise<{ rows: AdminInventoryRow[]; total: number }> => {
+      const admin = createServiceClient()
+      const statusIds = await resolveProductIdsByStatus(
+        admin,
+        filters.productStatus,
+      )
+      if (statusIds !== 'all' && statusIds.length === 0) {
+        return { rows: [], total: 0 }
+      }
+
+      let query = admin
+        .from('product_variants')
+        .select(
+          'id, product_id, size_eu, color, color_hex, sku, stock, active',
+          { count: 'exact' },
+        )
+        .order('stock', { ascending: true })
+        .order('size_eu', { ascending: true })
+        .range(from, to)
+
+      if (statusIds !== 'all') {
+        query = query.in('product_id', statusIds)
+      }
+
+      if (stock === 'out') query = query.eq('stock', 0)
+      else if (stock === 'low') {
+        query = query.gt('stock', 0).lte('stock', threshold)
+      } else if (stock === 'in') {
+        query = query.gt('stock', threshold)
+      }
+
+      if (filters.q) {
+        const safe = filters.q.replace(/[%_,.()]/g, '').trim()
+        if (safe) {
+          const nameMatches = await resolveInventorySearchProductIds(admin, safe)
+          const allowed =
+            statusIds === 'all'
+              ? nameMatches
+              : nameMatches.filter((id) => statusIds.includes(id))
+          if (allowed.length > 0) {
+            query = query.or(
+              `sku.ilike.%${safe}%,product_id.in.(${allowed.join(',')})`,
+            )
+          } else {
+            query = query.ilike('sku', `%${safe}%`)
+          }
+        }
+      }
+
+      const { data, count, error } = await query
+      if (error) {
+        console.error('[inventory] listAdminInventory', error)
+        return { rows: [], total: 0 }
+      }
+
+      const productIds = [
+        ...new Set((data ?? []).map((row) => row.product_id)),
+      ]
+      const productsById = await loadProductsByIds(admin, productIds)
+
+      const rows: AdminInventoryRow[] = []
+      for (const row of data ?? []) {
+        const product = productsById.get(row.product_id)
+        if (!product) continue
+        rows.push({
+          variantId: row.id,
+          productId: product.id,
+          productName: product.name,
+          productSlug: product.slug,
+          productActive: product.active,
+          sizeEu: Number(row.size_eu),
+          color: row.color,
+          colorHex: normalizeColorHex(row.color_hex) ?? row.color_hex,
+          sku: row.sku,
+          stock: Number(row.stock),
+          variantActive: row.active,
+        })
+      }
+
+      return { rows, total: count ?? 0 }
+    },
+    cacheKey,
+    { revalidate: 15, tags: ['admin-products'] },
+  )()
+}
+
+/**
+ * Stock level counts for inventory header cards (ignores pagination / stock filter).
+ */
+export function getAdminInventorySummary(filters: {
+  q?: string
+  productStatus?: string
+  lowStockThreshold?: number
+}) {
+  const threshold = Math.max(1, filters.lowStockThreshold ?? 5)
+  const cacheKey = [
+    'admin-inventory-summary',
+    filters.q ?? '',
+    filters.productStatus ?? '',
+    String(threshold),
+  ]
+
+  return unstable_cache(
+    async (): Promise<AdminInventorySummary> => {
+      const admin = createServiceClient()
+      const statusIds = await resolveProductIdsByStatus(
+        admin,
+        filters.productStatus,
+      )
+      if (statusIds !== 'all' && statusIds.length === 0) {
+        return { totalVariants: 0, inStock: 0, lowStock: 0, outOfStock: 0 }
+      }
+
+      let query = admin.from('product_variants').select('stock')
+
+      if (statusIds !== 'all') {
+        query = query.in('product_id', statusIds)
+      }
+
+      if (filters.q) {
+        const safe = filters.q.replace(/[%_,.()]/g, '').trim()
+        if (safe) {
+          const nameMatches = await resolveInventorySearchProductIds(admin, safe)
+          const allowed =
+            statusIds === 'all'
+              ? nameMatches
+              : nameMatches.filter((id) => statusIds.includes(id))
+          if (allowed.length > 0) {
+            query = query.or(
+              `sku.ilike.%${safe}%,product_id.in.(${allowed.join(',')})`,
+            )
+          } else {
+            query = query.ilike('sku', `%${safe}%`)
+          }
+        }
+      }
+
+      const { data, error } = await query
+      if (error) {
+        console.error('[inventory] getAdminInventorySummary', error)
+        return { totalVariants: 0, inStock: 0, lowStock: 0, outOfStock: 0 }
+      }
+
+      let inStock = 0
+      let lowStock = 0
+      let outOfStock = 0
+      for (const row of data ?? []) {
+        const value = Number(row.stock)
+        if (value <= 0) outOfStock += 1
+        else if (value <= threshold) lowStock += 1
+        else inStock += 1
+      }
+
+      return {
+        totalVariants: (data ?? []).length,
+        inStock,
+        lowStock,
+        outOfStock,
+      }
+    },
+    cacheKey,
+    { revalidate: 15, tags: ['admin-products'] },
   )()
 }
 

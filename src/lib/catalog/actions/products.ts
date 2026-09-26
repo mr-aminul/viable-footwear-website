@@ -43,6 +43,7 @@ function readNumber(formData: FormData, key: string): number | null {
 function revalidateProductSurfaces(...slugs: Array<string | null | undefined>) {
   revalidatePath('/admin/catalog')
   revalidatePath('/admin/catalog/products')
+  revalidatePath('/admin/inventory')
   for (const slug of slugs) {
     if (slug) revalidatePath(adminProductPath(slug))
   }
@@ -994,6 +995,53 @@ export async function saveProductVariants(
 
   revalidateProductSurfaces(product.slug)
   revalidateTag(`admin-product-${productId}`)
+  return { ok: true }
+}
+
+/**
+ * Update a single variant's stock without touching other variant fields.
+ * Safe for the Inventory page — does not delete sibling variants.
+ */
+export async function updateVariantStock(
+  variantId: string,
+  stock: number,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+
+  const nextStock = Math.floor(Number(stock))
+  if (!Number.isFinite(nextStock) || nextStock < 0) {
+    return { ok: false, error: 'Stock must be a whole number zero or greater.' }
+  }
+
+  const supabase = await createClient()
+
+  const { data: variant, error: lookupError } = await supabase
+    .from('product_variants')
+    .select('id, product_id')
+    .eq('id', variantId)
+    .maybeSingle()
+
+  if (lookupError) return { ok: false, error: lookupError.message }
+  if (!variant) return { ok: false, error: 'Variant not found.' }
+
+  const { data: product, error: productError } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('id', variant.product_id)
+    .maybeSingle()
+
+  if (productError) return { ok: false, error: productError.message }
+  if (!product?.slug) return { ok: false, error: 'Product not found.' }
+
+  const { error } = await supabase
+    .from('product_variants')
+    .update({ stock: nextStock })
+    .eq('id', variantId)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidateProductSurfaces(product.slug)
+  revalidateTag(`admin-product-${variant.product_id}`)
   return { ok: true }
 }
 

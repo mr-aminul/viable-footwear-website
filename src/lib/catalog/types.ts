@@ -70,3 +70,18 @@ export type RelatedProductOption = {
   slug: string
   active: boolean
 }
+
+/** Flat variant row for the admin Inventory page. */
+export type AdminInventoryRow = {
+  variantId: string
+  productId: string
+  productName: string
+  productSlug: string
+  productActive: boolean
+  sizeEu: number
+  color: string | null
+  colorHex: string | null
+  sku: string | null
+  stock: number
+  variantActive: boolean
+}
