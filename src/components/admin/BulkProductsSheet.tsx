@@ -30,6 +30,7 @@ import {
   FormError,
   FormSuccess,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 
 type CategoryOption = { id: string; name: string }
 
@@ -357,6 +358,7 @@ export function BulkProductsSheet({
     () => rows.filter((row) => row.name.trim()).length,
     [rows],
   )
+  const isDirty = useMemo(() => rows.some((row) => isRowFilled(row)), [rows])
 
   const gridTemplate = useMemo(
     () =>
@@ -510,84 +512,93 @@ export function BulkProductsSheet({
     })
   }
 
-  const publishSheet = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
 
     const payload = rows.filter((row) => row.name.trim()).map(toBulkInput)
     if (payload.length === 0) {
       setError('Add a product name on at least one row.')
-      return
+      return false
     }
 
-    startTransition(async () => {
-      const result = await bulkCreateProducts(payload)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
+    const result = await bulkCreateProducts(payload)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
 
-      const byKey = new Map(
-        result.data!.results.map((item) => [item.key, item]),
-      )
+    const byKey = new Map(
+      result.data!.results.map((item) => [item.key, item]),
+    )
 
-      setRows((current) => {
-        const next = current.map((row) => {
-          if (!row.name.trim()) return row
-          const outcome = byKey.get(row.key)
-          if (!outcome) return row
-          if (outcome.ok) {
-            const variants = outcome.variantCount ?? 0
-            return {
-              ...row,
-              status: 'ok' as const,
-              message:
-                variants > 1
-                  ? `Created · ${variants} variants`
-                  : 'Created',
-              createdId: outcome.id,
-              createdSlug: outcome.slug,
-            }
-          }
+    setRows((current) => {
+      const next = current.map((row) => {
+        if (!row.name.trim()) return row
+        const outcome = byKey.get(row.key)
+        if (!outcome) return row
+        if (outcome.ok) {
+          const variants = outcome.variantCount ?? 0
           return {
             ...row,
-            status: 'error' as const,
-            message: outcome.error ?? 'Failed',
-            createdId: undefined,
-            createdSlug: undefined,
+            status: 'ok' as const,
+            message:
+              variants > 1
+                ? `Created · ${variants} variants`
+                : 'Created',
+            createdId: outcome.id,
+            createdSlug: outcome.slug,
           }
-        })
-
-        const remaining = next.filter((row) => row.status !== 'ok')
-        const blankPad =
-          remaining.filter((row) => row.name.trim()).length === 0
-            ? createBlankRows(INITIAL_BLANK_ROWS)
-            : createBlankRows(2)
-        return [
-          ...remaining.filter((row) => isRowFilled(row)),
-          ...blankPad,
-        ]
+        }
+        return {
+          ...row,
+          status: 'error' as const,
+          message: outcome.error ?? 'Failed',
+          createdId: undefined,
+          createdSlug: undefined,
+        }
       })
 
-      const created = result.data!.created
-      const failed = result.data!.results.filter((item) => !item.ok).length
-      const variantTotal = result.data!.results
-        .filter((item) => item.ok)
-        .reduce((sum, item) => sum + (item.variantCount ?? 0), 0)
+      const remaining = next.filter((row) => row.status !== 'ok')
+      const blankPad =
+        remaining.filter((row) => row.name.trim()).length === 0
+          ? createBlankRows(INITIAL_BLANK_ROWS)
+          : createBlankRows(2)
+      return [
+        ...remaining.filter((row) => isRowFilled(row)),
+        ...blankPad,
+      ]
+    })
 
-      if (created > 0 && failed === 0) {
-        setSuccess(
-          `Created ${created} product${created === 1 ? '' : 's'} (${variantTotal} variant${variantTotal === 1 ? '' : 's'}).`,
-        )
-      } else if (created > 0) {
-        setSuccess(
-          `Created ${created} product${created === 1 ? '' : 's'}. ${failed} row${failed === 1 ? '' : 's'} need fixes.`,
-        )
-      } else {
-        setError(
-          'No products were created. Fix the highlighted rows and try again.',
-        )
-      }
+    const created = result.data!.created
+    const failed = result.data!.results.filter((item) => !item.ok).length
+    const variantTotal = result.data!.results
+      .filter((item) => item.ok)
+      .reduce((sum, item) => sum + (item.variantCount ?? 0), 0)
+
+    if (created > 0 && failed === 0) {
+      setSuccess(
+        `Created ${created} product${created === 1 ? '' : 's'} (${variantTotal} variant${variantTotal === 1 ? '' : 's'}).`,
+      )
+      return true
+    }
+    if (created > 0) {
+      setSuccess(
+        `Created ${created} product${created === 1 ? '' : 's'}. ${failed} row${failed === 1 ? '' : 's'} need fixes.`,
+      )
+      return false
+    }
+    setError(
+      'No products were created. Fix the highlighted rows and try again.',
+    )
+    return false
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const publishSheet = () => {
+    startTransition(async () => {
+      await performSave()
     })
   }
 

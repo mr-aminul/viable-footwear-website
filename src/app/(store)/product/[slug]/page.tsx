@@ -81,14 +81,6 @@ export default async function ProductRoute({ params }: Props) {
           : 'https://schema.org/OutOfStock',
       url: `/product/${product.slug}`,
     },
-    aggregateRating:
-      product.reviews > 0
-        ? {
-            '@type': 'AggregateRating',
-            ratingValue: product.rating,
-            reviewCount: product.reviews,
-          }
-        : undefined,
   }
 
   return (

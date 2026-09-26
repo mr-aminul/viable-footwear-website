@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { PromoProductPicker } from '@/components/admin/PromoProductPicker'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   Field,
   FormError,
@@ -77,7 +78,38 @@ export function PromoForm({
 
   const isEdit = Boolean(initial?.id)
 
-  const save = () => {
+  const draft = useMemo(
+    () => ({
+      title,
+      code,
+      description,
+      active,
+      startsAt,
+      endsAt,
+      neverExpires,
+      discountType,
+      discountValue,
+      productIds,
+    }),
+    [
+      title,
+      code,
+      description,
+      active,
+      startsAt,
+      endsAt,
+      neverExpires,
+      discountType,
+      discountValue,
+      productIds,
+    ],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(draft),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
     const fd = new FormData()
@@ -95,21 +127,29 @@ export function PromoForm({
     fd.set('discount_value', discountValue)
     fd.set('product_ids', JSON.stringify(productIds))
 
-    startTransition(async () => {
-      const result = isEdit
-        ? await updatePromotion(initial!.id!, fd)
-        : await createPromotion(fd)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSuccess('Saved.')
-      if (!isEdit && result.data?.id) {
-        router.push(`/admin/promotions/${result.data.id}`)
-        router.refresh()
-        return
-      }
+    const result = isEdit
+      ? await updatePromotion(initial!.id!, fd)
+      : await createPromotion(fd)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(draft))
+    setSuccess('Saved.')
+    if (!isEdit && result.data?.id) {
+      router.push(`/admin/promotions/${result.data.id}`)
       router.refresh()
+      return true
+    }
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const save = () => {
+    startTransition(async () => {
+      await performSave()
     })
   }
 

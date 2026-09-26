@@ -91,8 +91,6 @@ function mapProduct(
     categoryLabel: category?.name ?? 'Footwear',
     price: Number(row.price),
     compareAt: row.compare_at != null ? Number(row.compare_at) : undefined,
-    rating: Number(row.rating),
-    reviews: row.reviews_count,
     image: images[0]?.url ?? '/images/products/product-foam-cream.png',
     images,
     videoUrl: video

@@ -8,6 +8,7 @@ import { MetaPixelSettingsForm } from '@/components/admin/MetaPixelSettingsForm'
 import { NagadSettingsForm } from '@/components/admin/NagadSettingsForm'
 import { OmsWebhookSettingsForm } from '@/components/admin/OmsWebhookSettingsForm'
 import { PathaoSettingsForm } from '@/components/admin/PathaoSettingsForm'
+import { useConfirmLeave } from '@/components/admin/unsaved-changes'
 import type { BkashSettingsView } from '@/lib/integrations/bkash-settings'
 import type {
   GtmSettingsView,
@@ -96,16 +97,21 @@ export function IntegrationsPanel({
 }) {
   const [openId, setOpenId] = useState<IntegrationId | null>(null)
   const titleId = useId()
+  const confirmLeave = useConfirmLeave()
   const openRow = INTEGRATIONS.find((row) => row.id === openId) ?? null
+
+  const closeDrawer = () => {
+    confirmLeave(() => setOpenId(null))
+  }
 
   useEffect(() => {
     if (!openId) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenId(null)
+      if (event.key === 'Escape') closeDrawer()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openId])
+  }, [openId, confirmLeave])
 
   useEffect(() => {
     if (!openId) return
@@ -126,7 +132,13 @@ export function IntegrationsPanel({
             <li key={row.id}>
               <button
                 type="button"
-                onClick={() => setOpenId(row.id)}
+                onClick={() => {
+                  if (openId && openId !== row.id) {
+                    confirmLeave(() => setOpenId(row.id))
+                    return
+                  }
+                  setOpenId(row.id)
+                }}
                 className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-mist/60"
               >
                 <div className="min-w-0 flex-1">
@@ -159,7 +171,7 @@ export function IntegrationsPanel({
         open={Boolean(openRow)}
         title={openRow?.name ?? ''}
         titleId={titleId}
-        onClose={() => setOpenId(null)}
+        onClose={closeDrawer}
       >
         {openId === 'pathao' ? (
           <PathaoSettingsForm initial={pathao} embedded />

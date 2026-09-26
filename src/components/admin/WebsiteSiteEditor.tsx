@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   Field,
   FormError,
@@ -46,16 +47,6 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
 
   const isDirty = JSON.stringify(content) !== savedSnapshot
 
-  useEffect(() => {
-    if (!isDirty) return
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty])
-
   const setBrand = <K extends keyof SiteContent['brand']>(
     key: K,
     value: SiteContent['brand'][K],
@@ -86,17 +77,24 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
     }))
   }
 
-  const onSave = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
+    const result = await saveSiteContent(content)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(content))
+    setSuccess('Site settings saved. Storefront will pick these up shortly.')
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const onSave = () => {
     startTransition(async () => {
-      const result = await saveSiteContent(content)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSavedSnapshot(JSON.stringify(content))
-      setSuccess('Site settings saved. Storefront will pick these up shortly.')
+      await performSave()
     })
   }
 

@@ -1307,7 +1307,7 @@ export function CheckoutPage() {
           ) : null}
         </div>
 
-        <aside className="h-fit rounded-2xl bg-mist/80 p-5 lg:sticky lg:top-28 lg:p-6">
+        <aside className="h-fit rounded-2xl border border-cloud bg-white p-5 lg:sticky lg:top-28 lg:p-6">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-[15px] font-semibold">Order summary</h2>
             <span className="text-[12px] font-medium text-mute">
@@ -1330,7 +1330,7 @@ export function CheckoutPage() {
               >
                 <Link
                   href={`/product/${item.product.slug}`}
-                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white"
+                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-mist/60"
                 >
                   <img
                     src={item.product.image}
@@ -1372,40 +1372,57 @@ export function CheckoutPage() {
               </span>
             </div>
 
-            <div className="rounded-xl border border-cloud bg-mist/40 p-3">
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-mute">
-                Promo code
-              </label>
-              <div className="mt-2 flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded-lg border border-cloud bg-white px-3 py-2 text-[13px] uppercase tracking-wide text-ink outline-none focus:border-navy"
-                  value={promoCodeInput}
-                  onChange={(e) =>
-                    setPromoCodeInput(e.target.value.toUpperCase())
-                  }
-                  placeholder="Enter code"
-                  autoCapitalize="characters"
+            {appliedPromoCode ? (
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-navy/10 text-navy">
+                    <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-ink">
+                      Promo applied
+                    </p>
+                    <p className="truncate text-[12px] text-mute">
+                      {appliedPromoCode}
+                      {promoLabel && promoLabel !== appliedPromoCode
+                        ? ` · ${promoLabel}`
+                        : null}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 text-[13px] font-medium text-mute underline-offset-2 hover:text-ink hover:underline"
+                  onClick={() => {
+                    setPromoCodeInput('')
+                    setAppliedPromoCode('')
+                    setPromoLabel(null)
+                    setPromoDiscount(null)
+                    setPromoError(null)
+                  }}
                   disabled={loading}
-                />
-                {appliedPromoCode ? (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-lg px-3 text-[13px] font-semibold text-navy hover:underline"
-                    onClick={() => {
-                      setPromoCodeInput('')
-                      setAppliedPromoCode('')
-                      setPromoLabel(null)
-                      setPromoDiscount(null)
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-lg border border-transparent bg-mist/50 px-3 py-2 text-[13px] uppercase tracking-wide text-ink outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-mute/70 focus:border-cloud focus:bg-white"
+                    value={promoCodeInput}
+                    onChange={(e) => {
                       setPromoError(null)
+                      setPromoCodeInput(e.target.value.toUpperCase())
                     }}
+                    placeholder="Promo code"
+                    autoCapitalize="characters"
+                    aria-label="Promo code"
                     disabled={loading}
-                  >
-                    Remove
-                  </button>
-                ) : (
+                  />
                   <button
                     type="button"
-                    className="shrink-0 rounded-lg bg-navy px-3 py-2 text-[13px] font-semibold text-white hover:bg-navy-soft disabled:opacity-50"
+                    className="shrink-0 rounded-lg px-3 py-2 text-[13px] font-semibold text-navy transition hover:bg-navy/5 disabled:opacity-40"
                     onClick={async () => {
                       const next = promoCodeInput.trim().toUpperCase()
                       if (!next) {
@@ -1460,12 +1477,12 @@ export function CheckoutPage() {
                   >
                     Apply
                   </button>
-                )}
+                </div>
+                {promoError ? (
+                  <p className="mt-1.5 text-[12px] text-spark">{promoError}</p>
+                ) : null}
               </div>
-              {promoError ? (
-                <p className="mt-2 text-[12px] text-spark">{promoError}</p>
-              ) : null}
-            </div>
+            )}
 
             {promoLabel && promoDiscount != null && promoDiscount > 0 ? (
               <div className="flex justify-between text-[13px] text-navy">

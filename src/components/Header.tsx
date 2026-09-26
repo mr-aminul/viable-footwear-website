@@ -9,7 +9,6 @@ import {
   Package,
   Search,
   ShoppingBag,
-  User,
   X,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
@@ -27,6 +26,17 @@ const links = [
   { to: '/about', label: 'About' },
   { to: '/shop?sale=1', label: 'Sale', accent: true },
 ]
+
+function isNavLinkActive(
+  href: string,
+  pathname: string,
+  searchParams: URLSearchParams,
+) {
+  const [path, query] = href.split('?')
+  if (pathname !== path) return false
+  if (!query) return !searchParams.toString()
+  return searchParams.toString().includes(query)
+}
 
 export function Header({
   announcement = null,
@@ -55,6 +65,9 @@ export function Header({
       : []),
   ]
 
+  const iconBtnClass =
+    'flex h-10 w-10 items-center justify-center rounded-full text-navy/70 transition hover:bg-navy/8 hover:text-navy'
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -79,14 +92,14 @@ export function Header({
       ) : null}
       <header
         className={`sticky top-0 z-50 border-b transition-all duration-300 ${scrolled
-            ? 'border-cloud/70 bg-paper/90 shadow-soft backdrop-blur-md'
-            : 'border-transparent bg-paper/95'
+          ? 'border-navy/15 bg-paper/90 shadow-soft backdrop-blur-md'
+          : 'border-navy/10 bg-paper/95'
           }`}
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 md:h-[4.5rem] md:px-6 lg:px-8">
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-ink lg:hidden"
+            className={`${iconBtnClass} lg:hidden`}
             aria-label="Open menu"
             onClick={() => setOpen(true)}
           >
@@ -96,26 +109,35 @@ export function Header({
           <BrandLogo />
 
           <nav className="hidden items-center gap-7 lg:flex">
-            {navLinks.map((link) => (
-              <Link
-                key={link.to + link.label}
-                href={link.to}
-                className={`text-[13px] font-medium tracking-wide transition hover:text-navy ${link.accent
-                    ? 'text-spark hover:text-spark-soft'
-                    : (pathname === link.to.split('?')[0] && (link.to.includes('?') ? searchParams.toString().includes(link.to.split('?')[1]) : !searchParams.toString()))
-                      ? 'text-navy'
-                      : 'text-ink/75'
-                  }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const active = isNavLinkActive(link.to, pathname, searchParams)
+              return (
+                <Link
+                  key={link.to + link.label}
+                  href={link.to}
+                  className={`relative text-[13px] tracking-wide transition ${link.accent
+                    ? 'font-semibold text-spark hover:text-spark-soft'
+                    : active
+                      ? 'font-semibold text-navy'
+                      : 'font-medium text-ink/70 hover:text-navy'
+                    }`}
+                >
+                  {link.label}
+                  {active && !link.accent ? (
+                    <span
+                      aria-hidden
+                      className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full bg-navy"
+                    />
+                  ) : null}
+                </Link>
+              )
+            })}
           </nav>
 
           <div className="flex items-center gap-0.5 md:gap-1">
             <Link
               href="/shop?focus=search"
-              className="hidden h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist sm:flex"
+              className={`${iconBtnClass} hidden sm:flex`}
               aria-label="Search"
             >
               <Search className="h-[18px] w-[18px]" />
@@ -123,7 +145,7 @@ export function Header({
             {showOrdersLink ? (
               <Link
                 href="/orders"
-                className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
+                className={`relative ${iconBtnClass}`}
                 aria-label="Your orders"
               >
                 <Package className="h-[18px] w-[18px]" />
@@ -134,7 +156,7 @@ export function Header({
             ) : null}
             <Link
               href="/wishlist"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
+              className={`relative ${iconBtnClass}`}
               aria-label="Wishlist"
             >
               <Heart className="h-[18px] w-[18px]" />
@@ -146,7 +168,7 @@ export function Header({
             </Link>
             <Link
               href="/cart"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
+              className={`relative ${iconBtnClass}`}
               aria-label="Cart"
             >
               <ShoppingBag className="h-[18px] w-[18px]" />
@@ -155,13 +177,6 @@ export function Header({
                   {cartCount}
                 </span>
               )}
-            </Link>
-            <Link
-              href="/admin/login"
-              className="hidden h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist md:flex"
-              aria-label="Staff account"
-            >
-              <User className="h-[18px] w-[18px]" />
             </Link>
           </div>
         </div>
@@ -185,28 +200,35 @@ export function Header({
               exit={reduceMotion ? undefined : { x: '-100%' }}
               transition={reduceMotion ? { duration: 0 } : drawerTransition}
             >
-              <div className="flex items-center justify-between border-b border-cloud px-5 py-4">
+              <div className="flex items-center justify-between border-b border-navy/10 px-5 py-4">
                 <BrandLogo heightClassName="h-7" />
                 <button
                   type="button"
                   aria-label="Close menu"
                   onClick={() => setOpen(false)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-mist"
+                  className={iconBtnClass}
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <nav className="flex flex-col gap-1 p-4">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.to + link.label}
-                    href={link.to}
-                    className={`rounded-xl px-4 py-3 text-[15px] font-medium ${link.accent ? 'text-spark' : 'text-ink'
-                      }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+                {navLinks.map((link) => {
+                  const active = isNavLinkActive(link.to, pathname, searchParams)
+                  return (
+                    <Link
+                      key={link.to + link.label}
+                      href={link.to}
+                      className={`rounded-xl px-4 py-3 text-[15px] ${link.accent
+                        ? 'font-semibold text-spark'
+                        : active
+                          ? 'bg-navy/8 font-semibold text-navy'
+                          : 'font-medium text-ink hover:bg-navy/5 hover:text-navy'
+                        }`}
+                    >
+                      {link.label}
+                    </Link>
+                  )
+                })}
               </nav>
             </motion.aside>
           </>

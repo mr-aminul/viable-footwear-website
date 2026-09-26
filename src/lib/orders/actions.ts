@@ -11,6 +11,7 @@ import {
   cancelPathaoOrder,
   createPathaoOrder,
   getPathaoOrderInfo,
+  isPathaoOrderNotFoundError,
   normalizePathaoPhone,
 } from '@/lib/pathao'
 import type { OrderStatus } from '@/lib/supabase/database.types'
@@ -323,8 +324,16 @@ export async function dispatchOrdersToPathao(
   return runBulkOrderAction(orderIds, dispatchOrderToPathao)
 }
 
+const TERMINAL_ORDER_STATUSES = new Set<OrderStatus>([
+  'delivered',
+  'returned',
+  'cancelled',
+])
+
 /**
  * Poll Pathao for the latest consignment status and update the order row.
+ * Treats Pathao "order not found" as cancelled when the store order is still active
+ * (common after canceling in Pathao's merchant panel).
  */
 export async function syncPathaoOrderStatus(
   orderId: string,
@@ -337,7 +346,7 @@ export async function syncPathaoOrderStatus(
   const { data: order, error } = await supabase
     .from('orders')
     .select(
-      'id, order_number, status, payment_method, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
+      'id, order_number, status, payment_method, payment_trx_id, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
     )
     .eq('id', orderId)
     .single()
@@ -354,6 +363,9 @@ export async function syncPathaoOrderStatus(
       info.order_status || info.order_status_slug || 'Unknown'
 
     const nextStatus = mapped ?? order.status
+    const becameCancelled =
+      nextStatus === 'cancelled' && order.status !== 'cancelled'
+
     const { error: updateError } = await supabase
       .from('orders')
       .update({
@@ -368,6 +380,16 @@ export async function syncPathaoOrderStatus(
 
     if (updateError) {
       return { ok: false, error: 'Could not save Pathao status.' }
+    }
+
+    if (becameCancelled && orderHeldStock(order)) {
+      const restored = await restoreOrderStock(supabase, order.id)
+      if (!restored.ok) {
+        return {
+          ok: false,
+          error: `Pathao status saved as cancelled, but stock restore failed: ${restored.error}`,
+        }
+      }
     }
 
     revalidateAdminOrders(order.id)
@@ -389,6 +411,43 @@ export async function syncPathaoOrderStatus(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
+    if (
+      isPathaoOrderNotFoundError(message) &&
+      !TERMINAL_ORDER_STATUSES.has(order.status)
+    ) {
+      const becameCancelled = order.status !== 'cancelled'
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          pathao_status: 'Cancelled',
+          pathao_error: null,
+          pathao_cancelled_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+
+      if (updateError) {
+        return { ok: false, error: 'Could not save Pathao cancelled status.' }
+      }
+
+      if (becameCancelled && orderHeldStock(order)) {
+        const restored = await restoreOrderStock(supabase, order.id)
+        if (!restored.ok) {
+          return {
+            ok: false,
+            error: `Marked cancelled (Pathao not found), but stock restore failed: ${restored.error}`,
+          }
+        }
+      }
+
+      revalidateAdminOrders(order.id)
+      return {
+        ok: true,
+        data: { status: 'cancelled', pathaoLabel: 'Cancelled' },
+      }
+    }
+
     await supabase
       .from('orders')
       .update({ pathao_error: message })
@@ -396,6 +455,49 @@ export async function syncPathaoOrderStatus(
     revalidateAdminOrders(orderId)
     return { ok: false, error: message }
   }
+}
+
+/**
+ * Sync Pathao status for many orders (e.g. logistics active list).
+ */
+export async function syncPathaoOrderStatuses(
+  orderIds: string[],
+): Promise<ActionResult<BulkOrderActionResult>> {
+  return runBulkOrderAction(orderIds, syncPathaoOrderStatus)
+}
+
+/**
+ * Sync every non-terminal Pathao consignment currently in the logistics active list.
+ */
+export async function syncActivePathaoShipments(): Promise<
+  ActionResult<BulkOrderActionResult>
+> {
+  await requireRole(['admin', 'manager'])
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id')
+    .not('pathao_consignment_id', 'is', null)
+    .neq('status', 'delivered')
+    .neq('status', 'returned')
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false })
+    .limit(BULK_ORDER_ACTION_LIMIT)
+
+  if (error) {
+    return { ok: false, error: 'Could not load active Pathao shipments.' }
+  }
+
+  const orderIds = (data ?? []).map((row) => row.id)
+  if (orderIds.length === 0) {
+    return {
+      ok: true,
+      data: { okCount: 0, failCount: 0, failures: [] },
+    }
+  }
+
+  return runBulkOrderAction(orderIds, syncPathaoOrderStatus)
 }
 
 /**

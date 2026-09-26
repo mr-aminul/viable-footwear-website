@@ -49,7 +49,6 @@ export function ShopPage({
     }
     if (sort === 'price-asc') list = [...list].sort((a, b) => a.price - b.price)
     if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price)
-    if (sort === 'rating') list = [...list].sort((a, b) => b.rating - a.rating)
     if (sort === 'featured') {
       list = [...list].sort(
         (a, b) => Number(b.featured) - Number(a.featured),
@@ -147,7 +146,6 @@ export function ShopPage({
             <option value="featured">Featured</option>
             <option value="price-asc">Price: Low–High</option>
             <option value="price-desc">Price: High–Low</option>
-            <option value="rating">Top rated</option>
           </select>
         </label>
       </div>

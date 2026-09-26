@@ -26,8 +26,9 @@ export type ColorwayVariantImage = {
 }
 
 /**
- * Gallery for a selected colorway: variant photos for that color first,
- * then any remaining product gallery images as fallback.
+ * Gallery for a selected colorway: that color’s variant photos first,
+ * then product gallery images that aren’t claimed by another colorway.
+ * (Previously returned only variant photos, which hid the left-side gallery.)
  */
 export function galleryForColorway(
   variants: ColorwayVariantImage[],
@@ -35,6 +36,8 @@ export function galleryForColorway(
   selectedColorKey: string | null | undefined,
   fallbackImage: string,
 ): string[] {
+  const galleryUrls = images.map((img) => img.url)
+
   if (selectedColorKey) {
     const fromVariants = [
       ...new Set(
@@ -46,10 +49,29 @@ export function galleryForColorway(
           .map((v) => v.imageUrl as string),
       ),
     ]
-    if (fromVariants.length > 0) return fromVariants
+
+    const otherColorImages = new Set(
+      variants
+        .filter(
+          (v) =>
+            colorwayKey(v.color) !== selectedColorKey && Boolean(v.imageUrl),
+        )
+        .map((v) => v.imageUrl as string),
+    )
+
+    const sharedGallery = galleryUrls.filter(
+      (url) => !otherColorImages.has(url),
+    )
+
+    if (fromVariants.length > 0) {
+      const rest = sharedGallery.filter((url) => !fromVariants.includes(url))
+      return [...fromVariants, ...rest]
+    }
+
+    if (sharedGallery.length > 0) return sharedGallery
   }
 
-  if (images.length > 0) return images.map((img) => img.url)
+  if (galleryUrls.length > 0) return galleryUrls
   return [fallbackImage]
 }
 

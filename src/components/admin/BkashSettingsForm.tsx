@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   saveBkashSettings,
   testBkashSettings,
@@ -32,6 +33,17 @@ export function BkashSettingsForm({
   const [appSecret, setAppSecret] = useState('')
   const [password, setPassword] = useState('')
 
+  const nonSecretDraft = useMemo(
+    () => ({ mode, username }),
+    [mode, username],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({ mode: initial.mode, username: initial.username }),
+  )
+  const hasSecretDraft = Boolean(appKey || appSecret || password)
+  const isDirty =
+    JSON.stringify(nonSecretDraft) !== savedSnapshot || hasSecretDraft
+
   const busy = pending || testing
 
   const formDataFromState = () => {
@@ -43,6 +55,25 @@ export function BkashSettingsForm({
     fd.set('password', password)
     return fd
   }
+
+  const performSave = async (): Promise<boolean> => {
+    setError(null)
+    setSuccess(null)
+    const result = await saveBkashSettings(formDataFromState())
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setAppKey('')
+    setAppSecret('')
+    setPassword('')
+    setSavedSnapshot(JSON.stringify(nonSecretDraft))
+    setSuccess('Saved. Checkout can offer bKash when configured.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
 
   return (
     <>
@@ -153,19 +184,8 @@ export function BkashSettingsForm({
           type="button"
           disabled={busy}
           onClick={() => {
-            setError(null)
-            setSuccess(null)
             startTransition(async () => {
-              const result = await saveBkashSettings(formDataFromState())
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
-              setAppKey('')
-              setAppSecret('')
-              setPassword('')
-              setSuccess('Saved. Checkout can offer bKash when configured.')
-              router.refresh()
+              await performSave()
             })
           }}
         >

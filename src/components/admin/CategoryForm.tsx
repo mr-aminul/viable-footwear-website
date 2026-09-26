@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import {
   createCategory,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/catalog/actions/categories'
 import { slugify } from '@/lib/catalog/slug'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   FormError,
   FormSuccess,
@@ -46,7 +47,16 @@ export function CategoryForm({
 
   const isEdit = Boolean(initial?.id)
 
-  const save = () => {
+  const draft = useMemo(
+    () => ({ name, slug, active, seoTitle, seoDescription }),
+    [name, slug, active, seoTitle, seoDescription],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(draft),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
 
@@ -57,24 +67,32 @@ export function CategoryForm({
     formData.set('seo_description', seoDescription)
     if (active) formData.set('active', 'on')
 
-    startTransition(async () => {
-      const result = isEdit
-        ? await updateCategory(initial!.id!, formData)
-        : await createCategory(formData)
+    const result = isEdit
+      ? await updateCategory(initial!.id!, formData)
+      : await createCategory(formData)
 
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
 
-      if (!isEdit && result.data?.id) {
-        router.push(`/admin/catalog/categories/${result.data.id}`)
-        router.refresh()
-        return
-      }
-
-      setSuccess('Category saved.')
+    setSavedSnapshot(JSON.stringify(draft))
+    if (!isEdit && result.data?.id) {
+      router.push(`/admin/catalog/categories/${result.data.id}`)
       router.refresh()
+      return true
+    }
+
+    setSuccess('Category saved.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const save = () => {
+    startTransition(async () => {
+      await performSave()
     })
   }
 

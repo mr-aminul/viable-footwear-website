@@ -874,38 +874,44 @@ export async function saveProductVariants(
     .filter((id) => !keepIds.has(id))
 
   if (toDelete.length > 0) {
-    // Soft-deactivate removed variants so historical orders stay coherent.
-    const { error: deactivateError } = await supabase
+    // Hard-delete removed rows. order_items already snapshots name/size/color/sku
+    // and variant_id is ON DELETE SET NULL, so past orders stay readable.
+    const { error: deleteError } = await supabase
       .from('product_variants')
-      .update({ active: false })
+      .delete()
       .in('id', toDelete)
-    if (deactivateError) {
-      return { ok: false, error: deactivateError.message }
+    if (deleteError) {
+      return { ok: false, error: deleteError.message }
     }
   }
 
   const toUpdate = parsed.filter((v) => v.id)
   const toInsert = parsed.filter((v) => !v.id)
 
+  async function writeVariantUpdate(variant: VariantInput & { id: string }) {
+    const { error } = await supabase
+      .from('product_variants')
+      .update({
+        size_eu: variant.size_eu,
+        color: variant.color,
+        color_hex: variant.color_hex,
+        media_id: variant.media_id ?? null,
+        sku: variant.sku,
+        stock: variant.stock,
+        active: variant.active,
+      })
+      .eq('id', variant.id)
+      .eq('product_id', productId)
+    return error
+  }
+
   if (toUpdate.length > 0) {
     const updateResults = await Promise.all(
       toUpdate.map((variant) =>
-        supabase
-          .from('product_variants')
-          .update({
-            size_eu: variant.size_eu,
-            color: variant.color,
-            color_hex: variant.color_hex,
-            media_id: variant.media_id ?? null,
-            sku: variant.sku,
-            stock: variant.stock,
-            active: variant.active,
-          })
-          .eq('id', variant.id!)
-          .eq('product_id', productId),
+        writeVariantUpdate({ ...variant, id: variant.id! }),
       ),
     )
-    for (const { error } of updateResults) {
+    for (const error of updateResults) {
       if (!error) continue
       if (error.code === '23505') {
         return { ok: false, error: 'Duplicate size/color combination.' }
@@ -915,23 +921,66 @@ export async function saveProductVariants(
   }
 
   if (toInsert.length > 0) {
-    const { error } = await supabase.from('product_variants').insert(
-      toInsert.map((variant) => ({
-        product_id: productId,
-        size_eu: variant.size_eu,
-        color: variant.color,
-        color_hex: variant.color_hex,
-        media_id: variant.media_id ?? null,
-        sku: variant.sku,
-        stock: variant.stock,
-        active: variant.active,
-      })),
+    // Reclaim any leftover inactive rows (from older soft-delete behavior) that
+    // match size+color so unique(product, size, color) does not block re-adds.
+    const { data: inactiveRows } = await supabase
+      .from('product_variants')
+      .select('id, size_eu, color')
+      .eq('product_id', productId)
+      .eq('active', false)
+
+    const inactiveByKey = new Map(
+      (inactiveRows ?? []).map((row) => [
+        `${Number(row.size_eu)}::${(row.color ?? '').trim().toLowerCase()}`,
+        row.id,
+      ]),
     )
-    if (error) {
-      if (error.code === '23505') {
-        return { ok: false, error: 'Duplicate size/color combination.' }
+
+    const reclaim: Array<VariantInput & { id: string }> = []
+    const fresh: VariantInput[] = []
+    for (const variant of toInsert) {
+      const key = `${variant.size_eu}::${(variant.color ?? '').trim().toLowerCase()}`
+      const existingId = inactiveByKey.get(key)
+      if (existingId) {
+        reclaim.push({ ...variant, id: existingId, active: true })
+        inactiveByKey.delete(key)
+      } else {
+        fresh.push(variant)
       }
-      return { ok: false, error: error.message }
+    }
+
+    if (reclaim.length > 0) {
+      const reclaimResults = await Promise.all(
+        reclaim.map((variant) => writeVariantUpdate(variant)),
+      )
+      for (const error of reclaimResults) {
+        if (!error) continue
+        if (error.code === '23505') {
+          return { ok: false, error: 'Duplicate size/color combination.' }
+        }
+        return { ok: false, error: error.message }
+      }
+    }
+
+    if (fresh.length > 0) {
+      const { error } = await supabase.from('product_variants').insert(
+        fresh.map((variant) => ({
+          product_id: productId,
+          size_eu: variant.size_eu,
+          color: variant.color,
+          color_hex: variant.color_hex,
+          media_id: variant.media_id ?? null,
+          sku: variant.sku,
+          stock: variant.stock,
+          active: variant.active,
+        })),
+      )
+      if (error) {
+        if (error.code === '23505') {
+          return { ok: false, error: 'Duplicate size/color combination.' }
+        }
+        return { ok: false, error: error.message }
+      }
     }
   }
 
@@ -944,6 +993,7 @@ export async function saveProductVariants(
   }
 
   revalidateProductSurfaces(product.slug)
+  revalidateTag(`admin-product-${productId}`)
   return { ok: true }
 }
 

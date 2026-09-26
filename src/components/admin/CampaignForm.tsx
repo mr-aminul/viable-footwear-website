@@ -1,8 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { PathaoCityMultiSelect } from '@/components/admin/PathaoCityMultiSelect'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   Field,
   FormError,
@@ -63,16 +65,62 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
   const [fixedDelivery, setFixedDelivery] = useState(
     String(parsed?.fixed_delivery ?? 0),
   )
-  const [cityAllow, setCityAllow] = useState(
-    (parsed?.city_ids_allow ?? []).join(', '),
+  const [cityAllow, setCityAllow] = useState<number[]>(
+    parsed?.city_ids_allow ?? [],
   )
-  const [cityDeny, setCityDeny] = useState(
-    (parsed?.city_ids_deny ?? []).join(', '),
+  const [cityDeny, setCityDeny] = useState<number[]>(
+    parsed?.city_ids_deny ?? [],
   )
 
   const isEdit = Boolean(initial?.id)
 
-  const save = () => {
+  const draft = useMemo(
+    () => ({
+      name,
+      priority,
+      active,
+      startsAt,
+      endsAt,
+      ruleType,
+      minSubtotal,
+      percentOff,
+      fixedDelivery,
+      cityAllow,
+      cityDeny,
+    }),
+    [
+      name,
+      priority,
+      active,
+      startsAt,
+      endsAt,
+      ruleType,
+      minSubtotal,
+      percentOff,
+      fixedDelivery,
+      cityAllow,
+      cityDeny,
+    ],
+  )
+
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      name: initial?.name ?? '',
+      priority: String(initial?.priority ?? 10),
+      active: initial?.active ?? true,
+      startsAt: toDatetimeLocal(initial?.starts_at || null),
+      endsAt: toDatetimeLocal(initial?.ends_at || null),
+      ruleType: parsed?.type ?? 'free_shipping_min_subtotal',
+      minSubtotal: String(parsed?.min_subtotal ?? 3000),
+      percentOff: String(parsed?.percent_off ?? 50),
+      fixedDelivery: String(parsed?.fixed_delivery ?? 0),
+      cityAllow: parsed?.city_ids_allow ?? [],
+      cityDeny: parsed?.city_ids_deny ?? [],
+    }),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
     const fd = new FormData()
@@ -85,24 +133,32 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
     fd.set('min_subtotal', minSubtotal)
     fd.set('percent_off', percentOff)
     fd.set('fixed_delivery', fixedDelivery)
-    fd.set('city_ids_allow', cityAllow)
-    fd.set('city_ids_deny', cityDeny)
+    fd.set('city_ids_allow', cityAllow.join(','))
+    fd.set('city_ids_deny', cityDeny.join(','))
 
-    startTransition(async () => {
-      const result = isEdit
-        ? await updateCampaign(initial!.id!, fd)
-        : await createCampaign(fd)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSuccess('Saved.')
-      if (!isEdit && result.data?.id) {
-        router.push(`/admin/campaigns/${result.data.id}`)
-        router.refresh()
-        return
-      }
+    const result = isEdit
+      ? await updateCampaign(initial!.id!, fd)
+      : await createCampaign(fd)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(draft))
+    setSuccess('Saved.')
+    if (!isEdit && result.data?.id) {
+      router.push(`/admin/campaigns/${result.data.id}`)
       router.refresh()
+      return true
+    }
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const save = () => {
+    startTransition(async () => {
+      await performSave()
     })
   }
 
@@ -217,23 +273,25 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
       ) : null}
 
       <Field
-        label="City IDs allow"
-        hint="Optional Pathao city_id list, comma-separated. Empty = all cities."
+        label="Cities allow"
+        hint="Optional — leave empty to apply in all Pathao cities."
       >
-        <input
-          className={softFieldClassName}
-          value={cityAllow}
-          onChange={(e) => setCityAllow(e.target.value)}
-          placeholder="e.g. 1, 2"
+        <PathaoCityMultiSelect
+          selectedIds={cityAllow}
+          onChange={setCityAllow}
           disabled={pending}
+          placeholder="All cities"
         />
       </Field>
-      <Field label="City IDs deny" hint="Optional — block these cities.">
-        <input
-          className={softFieldClassName}
-          value={cityDeny}
-          onChange={(e) => setCityDeny(e.target.value)}
+      <Field
+        label="Cities deny"
+        hint="Optional — block these cities even when allow is empty."
+      >
+        <PathaoCityMultiSelect
+          selectedIds={cityDeny}
+          onChange={setCityDeny}
           disabled={pending}
+          placeholder="None blocked"
         />
       </Field>
 

@@ -36,6 +36,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { DEFAULT_SITE_CONTENT } from '@/lib/website/defaults'
 
 const productPromises = DEFAULT_SITE_CONTENT.productPromises
@@ -106,6 +107,53 @@ export function AdminProductEditor({
   const [size, setSize] = useState<number | null>(null)
   const [colorIndex, setColorIndex] = useState(0)
 
+  const draft = useMemo(
+    () => ({
+      name,
+      slug,
+      description,
+      subtitle,
+      note,
+      materials,
+      careInfo,
+      price,
+      compareAt,
+      badge,
+      categoryId,
+      featured,
+      active,
+      weightKg,
+      seoTitle,
+      seoDescription,
+      variantRows,
+      relatedIds,
+    }),
+    [
+      name,
+      slug,
+      description,
+      subtitle,
+      note,
+      materials,
+      careInfo,
+      price,
+      compareAt,
+      badge,
+      categoryId,
+      featured,
+      active,
+      weightKg,
+      seoTitle,
+      seoDescription,
+      variantRows,
+      relatedIds,
+    ],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(draft),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
   const categoryLabel =
     categories.find((c) => c.id === categoryId)?.name ?? product.categoryLabel
 
@@ -174,14 +222,14 @@ export function AdminProductEditor({
       : product.sizes
   }, [variantRows, selectedColor, product.sizes])
 
-  const save = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
 
     const variantError = validateVariantDrafts(variantRows)
     if (variantError) {
       setError(variantError)
-      return
+      return false
     }
 
     const formData = new FormData()
@@ -208,31 +256,39 @@ export function AdminProductEditor({
     const relatedData = new FormData()
     relatedData.set('related_ids_json', JSON.stringify(relatedIds))
 
+    const variantsResult = await saveProductVariants(product.id, variantsData)
+    if (!variantsResult.ok) {
+      setError(variantsResult.error)
+      return false
+    }
+
+    const detailsResult = await updateProduct(product.id, formData)
+    if (!detailsResult.ok) {
+      setError(detailsResult.error)
+      return false
+    }
+
+    const relatedResult = await saveRelatedProducts(product.id, relatedData)
+    if (!relatedResult.ok) {
+      setError(relatedResult.error)
+      return false
+    }
+
+    setSavedSnapshot(JSON.stringify(draft))
+    setSuccess('Product saved.')
+    if (slug !== product.slug) {
+      router.replace(adminProductPath(slug))
+    } else {
+      router.refresh()
+    }
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const save = () => {
     startTransition(async () => {
-      const variantsResult = await saveProductVariants(product.id, variantsData)
-      if (!variantsResult.ok) {
-        setError(variantsResult.error)
-        return
-      }
-
-      const detailsResult = await updateProduct(product.id, formData)
-      if (!detailsResult.ok) {
-        setError(detailsResult.error)
-        return
-      }
-
-      const relatedResult = await saveRelatedProducts(product.id, relatedData)
-      if (!relatedResult.ok) {
-        setError(relatedResult.error)
-        return
-      }
-
-      setSuccess('Product saved.')
-      if (slug !== product.slug) {
-        router.replace(adminProductPath(slug))
-      } else {
-        router.refresh()
-      }
+      await performSave()
     })
   }
 
@@ -389,16 +445,6 @@ export function AdminProductEditor({
               className={`${pdpFieldClassName} text-[13px] text-mute`}
               placeholder="slug"
             />
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            <Star className="h-4 w-4 fill-gold text-gold" />
-            <span className="text-[14px] font-medium">
-              {product.rating.toFixed(1)}
-            </span>
-            <span className="text-[14px] text-mute">
-              ({product.reviews} reviews)
-            </span>
           </div>
 
           <div className="mt-5 flex flex-wrap items-baseline gap-3">
@@ -582,12 +628,6 @@ export function AdminProductEditor({
                 placeholder="Care instructions, manufacturer notes…"
                 className={`${pdpFieldClassName} resize-y text-[14px] leading-relaxed text-mute focus:text-ink`}
               />
-            </ProductAccordion>
-            <ProductAccordion title="Reviews">
-              <p>
-                {product.rating.toFixed(1)} · {product.reviews} reviews
-                (storefront summary)
-              </p>
             </ProductAccordion>
           </div>
 

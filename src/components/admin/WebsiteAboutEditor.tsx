@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { FormError, FormSuccess } from '@/components/admin/ui'
 import { SiteMediaPicker } from '@/components/website/SiteMediaPicker'
 import {
@@ -31,27 +32,24 @@ export function WebsiteAboutEditor({ initial }: WebsiteAboutEditorProps) {
 
   const isDirty = JSON.stringify(content) !== savedSnapshot
 
-  useEffect(() => {
-    if (!isDirty) return
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty])
-
-  const onSave = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
+    const result = await saveAboutPageContent(content)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(content))
+    setSuccess('About page saved. Shoppers will see these changes.')
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const onSave = () => {
     startTransition(async () => {
-      const result = await saveAboutPageContent(content)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSavedSnapshot(JSON.stringify(content))
-      setSuccess('About page saved. Shoppers will see these changes.')
+      await performSave()
     })
   }
 

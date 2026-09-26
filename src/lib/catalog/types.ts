@@ -15,8 +15,6 @@ export type Product = {
   categoryLabel: string
   price: number
   compareAt?: number
-  rating: number
-  reviews: number
   image: string
   images: ProductImage[]
   videoUrl?: string

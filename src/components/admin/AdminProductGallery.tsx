@@ -378,8 +378,9 @@ export function AdminProductGallery({
 
       {images.length > 1 ? (
         <p className="text-[12px] text-mute">
-          Drag thumbnails to set gallery order. First image is primary. Assign
-          images to variants in the table below.
+          Drag thumbnails to set gallery order. First image is primary. Color
+          photos are assigned per variant below — the storefront shows those
+          plus the rest of this gallery.
         </p>
       ) : null}
 

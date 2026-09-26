@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   saveNagadSettings,
   testNagadSettings,
@@ -32,6 +33,21 @@ export function NagadSettingsForm({
   const [merchantPrivateKey, setMerchantPrivateKey] = useState('')
   const [nagadPublicKey, setNagadPublicKey] = useState('')
 
+  const nonSecretDraft = useMemo(
+    () => ({ mode, merchantId, merchantNumber }),
+    [mode, merchantId, merchantNumber],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      mode: initial.mode,
+      merchantId: initial.merchantId,
+      merchantNumber: initial.merchantNumber,
+    }),
+  )
+  const hasSecretDraft = Boolean(merchantPrivateKey || nagadPublicKey)
+  const isDirty =
+    JSON.stringify(nonSecretDraft) !== savedSnapshot || hasSecretDraft
+
   const busy = pending || testing
 
   const formDataFromState = () => {
@@ -43,6 +59,24 @@ export function NagadSettingsForm({
     fd.set('nagadPublicKey', nagadPublicKey)
     return fd
   }
+
+  const performSave = async (): Promise<boolean> => {
+    setError(null)
+    setSuccess(null)
+    const result = await saveNagadSettings(formDataFromState())
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setMerchantPrivateKey('')
+    setNagadPublicKey('')
+    setSavedSnapshot(JSON.stringify(nonSecretDraft))
+    setSuccess('Saved. Checkout can offer Nagad when configured.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
 
   return (
     <>
@@ -164,18 +198,8 @@ export function NagadSettingsForm({
           type="button"
           disabled={busy}
           onClick={() => {
-            setError(null)
-            setSuccess(null)
             startTransition(async () => {
-              const result = await saveNagadSettings(formDataFromState())
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
-              setMerchantPrivateKey('')
-              setNagadPublicKey('')
-              setSuccess('Saved. Checkout can offer Nagad when configured.')
-              router.refresh()
+              await performSave()
             })
           }}
         >

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   saveOmsWebhookSettings,
   testOmsWebhook,
@@ -42,6 +43,21 @@ export function OmsWebhookSettingsForm({
   const [apiKey, setApiKey] = useState('')
   const [events, setEvents] = useState(initial.events)
 
+  const nonSecretDraft = useMemo(
+    () => ({ enabled, endpointUrl, events }),
+    [enabled, endpointUrl, events],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      enabled: initial.enabled,
+      endpointUrl: initial.endpointUrl,
+      events: initial.events,
+    }),
+  )
+  const hasSecretDraft = Boolean(apiKey)
+  const isDirty =
+    JSON.stringify(nonSecretDraft) !== savedSnapshot || hasSecretDraft
+
   const busy = pending || testing
 
   const formDataFromState = () => {
@@ -54,6 +70,23 @@ export function OmsWebhookSettingsForm({
     }
     return fd
   }
+
+  const performSave = async (): Promise<boolean> => {
+    setError(null)
+    setSuccess(null)
+    const result = await saveOmsWebhookSettings(formDataFromState())
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setApiKey('')
+    setSavedSnapshot(JSON.stringify(nonSecretDraft))
+    setSuccess('Saved.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
 
   return (
     <>
@@ -140,17 +173,8 @@ export function OmsWebhookSettingsForm({
           type="button"
           disabled={busy}
           onClick={() => {
-            setError(null)
-            setSuccess(null)
             startTransition(async () => {
-              const result = await saveOmsWebhookSettings(formDataFromState())
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
-              setApiKey('')
-              setSuccess('Saved.')
-              router.refresh()
+              await performSave()
             })
           }}
         >

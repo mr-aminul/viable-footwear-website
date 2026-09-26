@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import type { LogisticsAnalytics } from '@/lib/orders/logistics'
 import { storeStatusLabel } from '@/lib/orders/status-labels'
+import { SyncActivePathaoButton } from '@/components/admin/SyncActivePathaoButton'
 
 export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
   const { buckets, pathaoBreakdown, cod, needsShipping, activeShipments } = data
@@ -160,10 +161,18 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
       </div>
 
       <section className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <div className="border-b border-cloud px-4 py-3">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-mute">
-            Active Pathao shipments
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cloud px-4 py-3">
+          <div>
+            <h2 className="text-[13px] font-semibold uppercase tracking-wider text-mute">
+              Active Pathao shipments
+            </h2>
+            <p className="mt-0.5 text-[11px] text-mute">
+              Statuses are cached until you sync from Pathao.
+            </p>
+          </div>
+          <SyncActivePathaoButton
+            orderIds={activeShipments.map((row) => row.id)}
+          />
         </div>
         {activeShipments.length === 0 ? (
           <p className="px-4 py-8 text-[13px] text-mute">

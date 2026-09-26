@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  useEffect,
   useState,
   useTransition,
   type ReactNode,
@@ -22,6 +21,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { FormError, FormSuccess } from '@/components/admin/ui'
 import { ProductCard } from '@/components/ProductCard'
 import { WhatsAppOrderVisual } from '@/components/WhatsAppOrderVisual'
@@ -265,27 +265,24 @@ export function WebsiteHomeEditor({
     }))
   }
 
-  useEffect(() => {
-    if (!isDirty) return
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty])
-
-  const onSave = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
+    const result = await saveHomePageContent(content)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(content))
+    setSuccess('Home page saved. Shoppers will see these changes.')
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const onSave = () => {
     startTransition(async () => {
-      const result = await saveHomePageContent(content)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setSavedSnapshot(JSON.stringify(content))
-      setSuccess('Home page saved. Shoppers will see these changes.')
+      await performSave()
     })
   }
 

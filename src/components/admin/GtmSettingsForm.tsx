@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { saveGtmSettings } from '@/lib/integrations/actions'
 import type { GtmSettingsView } from '@/lib/integrations/marketing-settings'
 
@@ -20,6 +21,37 @@ export function GtmSettingsForm({ initial }: { initial: GtmSettingsView }) {
   const [success, setSuccess] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(initial.enabled)
   const [containerId, setContainerId] = useState(initial.containerId)
+
+  const draft = useMemo(
+    () => ({ enabled, containerId }),
+    [enabled, containerId],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      enabled: initial.enabled,
+      containerId: initial.containerId,
+    }),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
+  const performSave = async (): Promise<boolean> => {
+    setError(null)
+    setSuccess(null)
+    const fd = new FormData()
+    fd.set('enabled', enabled ? '1' : '0')
+    fd.set('containerId', containerId)
+    const result = await saveGtmSettings(fd)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(draft))
+    setSuccess('Saved. Storefront will pick this up on next load.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
 
   return (
     <>
@@ -66,19 +98,8 @@ export function GtmSettingsForm({ initial }: { initial: GtmSettingsView }) {
           type="button"
           disabled={pending}
           onClick={() => {
-            setError(null)
-            setSuccess(null)
             startTransition(async () => {
-              const fd = new FormData()
-              fd.set('enabled', enabled ? '1' : '0')
-              fd.set('containerId', containerId)
-              const result = await saveGtmSettings(fd)
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
-              setSuccess('Saved. Storefront will pick this up on next load.')
-              router.refresh()
+              await performSave()
             })
           }}
         >

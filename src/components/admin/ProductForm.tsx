@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition, type FormEvent } from 'react'
 import {
   createProduct,
   deactivateProduct,
@@ -17,6 +17,7 @@ import {
   FormSuccess,
   inputClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 
 type CategoryOption = { id: string; name: string }
 
@@ -44,36 +45,55 @@ export function ProductForm({
   categories: CategoryOption[]
 }) {
   const router = useRouter()
+  const formRef = useRef<HTMLFormElement>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [name, setName] = useState(initial?.name ?? '')
   const [slug, setSlug] = useState(initial?.slug ?? '')
   const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug))
+  const [isDirty, setIsDirty] = useState(false)
   const isEdit = Boolean(initial?.id)
 
-  const onSubmit = (formData: FormData) => {
+  const markDirty = () => setIsDirty(true)
+
+  const performSave = async (): Promise<boolean> => {
+    const form = formRef.current
+    if (!form) return false
+
     setError(null)
     setSuccess(null)
-    startTransition(async () => {
-      const result = isEdit
-        ? await updateProduct(initial!.id!, formData)
-        : await createProduct(formData)
 
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
+    const formData = new FormData(form)
+    const result = isEdit
+      ? await updateProduct(initial!.id!, formData)
+      : await createProduct(formData)
 
-      if (!isEdit && result.data?.id) {
-        const nextSlug = String(formData.get('slug') ?? slug).trim() || slug
-        router.push(adminProductPath(nextSlug))
-        router.refresh()
-        return
-      }
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
 
-      setSuccess('Product saved.')
+    setIsDirty(false)
+
+    if (!isEdit && result.data?.id) {
+      const nextSlug = String(formData.get('slug') ?? slug).trim() || slug
+      router.push(adminProductPath(nextSlug))
       router.refresh()
+      return true
+    }
+
+    setSuccess('Product saved.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    startTransition(async () => {
+      await performSave()
     })
   }
 
@@ -92,7 +112,13 @@ export function ProductForm({
   }
 
   return (
-    <form action={onSubmit} className="space-y-5">
+    <form
+      ref={formRef}
+      onSubmit={onSubmit}
+      onInput={markDirty}
+      onChange={markDirty}
+      className="space-y-5"
+    >
       <FormError message={error} />
       <FormSuccess message={success} />
 

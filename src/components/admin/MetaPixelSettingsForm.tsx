@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { saveMetaPixelSettings } from '@/lib/integrations/actions'
 import type { MetaPixelSettingsView } from '@/lib/integrations/marketing-settings'
 
@@ -25,6 +26,39 @@ export function MetaPixelSettingsForm({
   const [enabled, setEnabled] = useState(initial.enabled)
   const [pixelId, setPixelId] = useState(initial.pixelId)
   const [preferGtm, setPreferGtm] = useState(initial.preferGtm)
+
+  const draft = useMemo(
+    () => ({ enabled, pixelId, preferGtm }),
+    [enabled, pixelId, preferGtm],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      enabled: initial.enabled,
+      pixelId: initial.pixelId,
+      preferGtm: initial.preferGtm,
+    }),
+  )
+  const isDirty = JSON.stringify(draft) !== savedSnapshot
+
+  const performSave = async (): Promise<boolean> => {
+    setError(null)
+    setSuccess(null)
+    const fd = new FormData()
+    fd.set('enabled', enabled ? '1' : '0')
+    fd.set('pixelId', pixelId)
+    fd.set('preferGtm', preferGtm ? '1' : '0')
+    const result = await saveMetaPixelSettings(fd)
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setSavedSnapshot(JSON.stringify(draft))
+    setSuccess('Saved.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
 
   return (
     <>
@@ -86,20 +120,8 @@ export function MetaPixelSettingsForm({
           type="button"
           disabled={pending}
           onClick={() => {
-            setError(null)
-            setSuccess(null)
             startTransition(async () => {
-              const fd = new FormData()
-              fd.set('enabled', enabled ? '1' : '0')
-              fd.set('pixelId', pixelId)
-              fd.set('preferGtm', preferGtm ? '1' : '0')
-              const result = await saveMetaPixelSettings(fd)
-              if (!result.ok) {
-                setError(result.error)
-                return
-              }
-              setSuccess('Saved.')
-              router.refresh()
+              await performSave()
             })
           }}
         >

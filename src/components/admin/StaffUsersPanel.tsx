@@ -19,6 +19,7 @@ import {
   inputClassName,
 } from '@/components/admin/ui'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import type { UserRole } from '@/lib/supabase/database.types'
 
 export type StaffUserRow = {
@@ -134,6 +135,19 @@ export function StaffUsersPanel({
   const [newPassword, setNewPassword] = useState('')
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
 
+  const isDirty =
+    dialog?.type === 'add'
+      ? Boolean(
+          addEmail.trim() ||
+            addName.trim() ||
+            addPassword ||
+            addPasswordConfirm ||
+            addRole !== 'manager',
+        )
+      : dialog?.type === 'password'
+        ? Boolean(newPassword || newPasswordConfirm)
+        : false
+
   const resetDialogFields = () => {
     setAddEmail('')
     setAddName('')
@@ -142,12 +156,6 @@ export function StaffUsersPanel({
     setAddPasswordConfirm('')
     setNewPassword('')
     setNewPasswordConfirm('')
-  }
-
-  const closeDialog = () => {
-    if (pending) return
-    setDialog(null)
-    resetDialogFields()
   }
 
   const finishDialog = () => {
@@ -196,34 +204,76 @@ export function StaffUsersPanel({
     )
   }
 
-  const handleCreateUser = () => {
-    if (addPassword !== addPasswordConfirm) {
-      setError('Passwords do not match.')
-      return
+  const performSave = async (): Promise<boolean> => {
+    if (dialog?.type === 'add') {
+      if (addPassword !== addPasswordConfirm) {
+        setError('Passwords do not match.')
+        return false
+      }
+      setError(null)
+      setSuccess(null)
+      const result = await createStaffUser({
+        email: addEmail,
+        fullName: addName,
+        role: addRole,
+        password: addPassword,
+      })
+      if (!result.ok) {
+        setError(result.error)
+        return false
+      }
+      setSuccess('Staff user created.')
+      finishDialog()
+      router.refresh()
+      return true
     }
-    runAction(
-      null,
-      () =>
-        createStaffUser({
-          email: addEmail,
-          fullName: addName,
-          role: addRole,
-          password: addPassword,
-        }),
-      'Staff user created.',
-    )
+
+    if (dialog?.type === 'password') {
+      if (newPassword !== newPasswordConfirm) {
+        setError('Passwords do not match.')
+        return false
+      }
+      setError(null)
+      setSuccess(null)
+      setBusyUserId(dialog.user.id)
+      const result = await setStaffPassword({
+        userId: dialog.user.id,
+        password: newPassword,
+      })
+      setBusyUserId(null)
+      if (!result.ok) {
+        setError(result.error)
+        return false
+      }
+      setSuccess(`Password updated for ${dialog.user.email}.`)
+      finishDialog()
+      router.refresh()
+      return true
+    }
+
+    return false
   }
 
-  const handleSetPassword = (user: StaffUserRow) => {
-    if (newPassword !== newPasswordConfirm) {
-      setError('Passwords do not match.')
-      return
-    }
-    runAction(
-      user.id,
-      () => setStaffPassword({ userId: user.id, password: newPassword }),
-      `Password updated for ${user.email}.`,
-    )
+  const { confirmLeave } = useUnsavedChanges(isDirty, performSave)
+
+  const closeDialog = () => {
+    if (pending) return
+    confirmLeave(() => {
+      setDialog(null)
+      resetDialogFields()
+    })
+  }
+
+  const handleCreateUser = () => {
+    startTransition(async () => {
+      await performSave()
+    })
+  }
+
+  const handleSetPassword = () => {
+    startTransition(async () => {
+      await performSave()
+    })
   }
 
   return (
@@ -477,7 +527,7 @@ export function StaffUsersPanel({
               <button
                 type="button"
                 className={adminButtonClassName('primary')}
-                onClick={() => handleSetPassword(dialog.user)}
+                onClick={handleSetPassword}
                 disabled={pending || !newPassword}
               >
                 {pending ? (

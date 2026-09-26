@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Heart, ShoppingBag, Star } from 'lucide-react'
+import { Heart, ShoppingBag } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import type { Product } from '@/lib/catalog/types'
 import { productBadgeClassName } from '@/lib/catalog/badge'
@@ -170,15 +170,6 @@ function ProductCardView({
                 </span>
               )}
             </div>
-            {product.reviews > 0 ? (
-              <div className="mt-1 flex items-center gap-1">
-                <Star className="h-3.5 w-3.5 fill-gold text-gold" />
-                <span className="text-[12px] font-medium text-ink">
-                  {product.rating.toFixed(1)}
-                </span>
-                <span className="text-[12px] text-mute">({product.reviews})</span>
-              </div>
-            ) : null}
           </div>
 
           <button

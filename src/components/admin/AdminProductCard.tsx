@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Heart, ShoppingBag, Star } from 'lucide-react'
+import { Heart, ShoppingBag } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { formatPrice } from '@/lib/brand'
 import { adminProductPath } from '@/lib/admin/paths'
@@ -119,13 +119,6 @@ export function AdminProductCard({
                   {formatPrice(product.compareAt)}
                 </span>
               ) : null}
-            </div>
-            <div className="mt-1 flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-gold text-gold" />
-              <span className="text-[12px] font-medium text-ink">
-                {product.rating.toFixed(1)}
-              </span>
-              <span className="text-[12px] text-mute">({product.reviews})</span>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -10,6 +10,7 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import {
   savePathaoSettings,
   testPathaoSettings,
@@ -35,6 +36,21 @@ export function PathaoSettingsForm({
   const [clientSecret, setClientSecret] = useState('')
   const [password, setPassword] = useState('')
 
+  const nonSecretDraft = useMemo(
+    () => ({ storeId, clientId, username }),
+    [storeId, clientId, username],
+  )
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({
+      storeId: initial.storeId,
+      clientId: initial.clientId,
+      username: initial.username,
+    }),
+  )
+  const hasSecretDraft = Boolean(clientSecret || password)
+  const isDirty =
+    JSON.stringify(nonSecretDraft) !== savedSnapshot || hasSecretDraft
+
   const busy = pending || testing
 
   const formDataFromState = () => {
@@ -47,19 +63,27 @@ export function PathaoSettingsForm({
     return fd
   }
 
-  const onSave = () => {
+  const performSave = async (): Promise<boolean> => {
     setError(null)
     setSuccess(null)
+    const result = await savePathaoSettings(formDataFromState())
+    if (!result.ok) {
+      setError(result.error)
+      return false
+    }
+    setClientSecret('')
+    setPassword('')
+    setSavedSnapshot(JSON.stringify(nonSecretDraft))
+    setSuccess('Saved. Checkout and dispatch will use these credentials.')
+    router.refresh()
+    return true
+  }
+
+  useUnsavedChanges(isDirty, performSave)
+
+  const onSave = () => {
     startTransition(async () => {
-      const result = await savePathaoSettings(formDataFromState())
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setClientSecret('')
-      setPassword('')
-      setSuccess('Saved. Checkout and dispatch will use these credentials.')
-      router.refresh()
+      await performSave()
     })
   }
 

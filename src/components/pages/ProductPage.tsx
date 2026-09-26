@@ -254,21 +254,6 @@ export function ProductPage({
             <p className="mt-1 text-[15px] text-mute">{product.categoryLabel}</p>
           )}
 
-          {product.reviews > 0 ? (
-            <a
-              href="#product-reviews"
-              className="mt-3 inline-flex items-center gap-2 transition hover:opacity-80"
-            >
-              <Star className="h-4 w-4 fill-gold text-gold" />
-              <span className="text-[14px] font-medium">
-                {product.rating.toFixed(1)}
-              </span>
-              <span className="text-[14px] text-mute">
-                ({product.reviews} reviews)
-              </span>
-            </a>
-          ) : null}
-
           <div className="mt-5 flex items-baseline gap-3">
             <span className="text-2xl font-semibold text-ink">
               {formatPrice(product.price)}
@@ -465,24 +450,6 @@ export function ProductPage({
             {product.careInfo ? (
               <ProductAccordion title="Care & safety">
                 <p className="whitespace-pre-wrap">{product.careInfo}</p>
-              </ProductAccordion>
-            ) : null}
-            {product.reviews > 0 ? (
-              <ProductAccordion title="Reviews" id="product-reviews">
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 fill-gold text-gold" />
-                  <span className="font-medium text-ink">
-                    {product.rating.toFixed(1)}
-                  </span>
-                  <span>
-                    based on {product.reviews}{' '}
-                    {product.reviews === 1 ? 'review' : 'reviews'}
-                  </span>
-                </div>
-                <p className="mt-2 text-mute">
-                  Individual review write-ups are not shown yet — the score above
-                  reflects store feedback.
-                </p>
               </ProductAccordion>
             ) : null}
           </div>

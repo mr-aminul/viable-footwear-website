@@ -310,7 +310,8 @@ export function VariantsEditor({
         <p className="text-[13px] text-mute">
           Name each color clearly (Navy, Black). Same name = same color across
           sizes. Image picks apply to that row only — use “Apply to all sizes”
-          when you want the whole colorway to share a photo.
+          when you want the whole colorway to share a photo. Hit Save product to
+          persist deletions and image assignments.
         </p>
       )}
 

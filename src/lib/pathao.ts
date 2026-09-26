@@ -260,6 +260,19 @@ function isCancelledOrderStatus(info: PathaoOrderInfo): boolean {
   return slug.includes('cancel') || status.includes('cancel')
 }
 
+/**
+ * Pathao often returns this after a consignment is cancelled in the merchant
+ * panel (the /info endpoint no longer finds the parcel).
+ */
+export function isPathaoOrderNotFoundError(message: string): boolean {
+  const text = message.trim().toLowerCase()
+  return (
+    text.includes('order not found') ||
+    text.includes('consignment not found') ||
+    text.includes('parcel not found')
+  )
+}
+
 async function getConfig(override?: PathaoConfig): Promise<PathaoConfig> {
   if (override) return override
   return resolvePathaoConfig()
@@ -420,8 +433,11 @@ export async function cancelPathaoOrder(
   let info: PathaoOrderInfo | null = null
   try {
     info = await getPathaoOrderInfo(trimmedId)
-  } catch {
-    // Fall through
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (isPathaoOrderNotFoundError(message)) {
+      return { alreadyCancelled: true }
+    }
   }
 
   if (info && isCancelledOrderStatus(info)) {
