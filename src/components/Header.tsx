@@ -15,7 +15,6 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
 import { useOrders } from '@/context/OrdersContext'
-import { BRAND } from '@/lib/brand'
 import { BrandLogo } from '@/components/BrandLogo'
 import { drawerTransition } from '@/lib/motion'
 
@@ -29,7 +28,11 @@ const links = [
   { to: '/shop?sale=1', label: 'Sale', accent: true },
 ]
 
-export function Header() {
+export function Header({
+  announcement = null,
+}: {
+  announcement?: string | null
+}) {
   const { cartCount, wishlist, hydrated: cartHydrated } = useCart()
   const { orderCount, hydrated: ordersHydrated } = useOrders()
   const [open, setOpen] = useState(false)
@@ -69,9 +72,11 @@ export function Header() {
 
   return (
     <>
-      <div className="bg-navy px-4 py-2 text-center text-[12px] font-medium tracking-wide text-white md:text-[13px]">
-        Free delivery in Dhaka on orders over ৳3,000 · WhatsApp {BRAND.phone}
-      </div>
+      {announcement ? (
+        <div className="bg-navy px-4 py-2 text-center text-[12px] font-medium tracking-wide text-white md:text-[13px]">
+          {announcement}
+        </div>
+      ) : null}
       <header
         className={`sticky top-0 z-50 border-b transition-all duration-300 ${scrolled
             ? 'border-cloud/70 bg-paper/90 shadow-soft backdrop-blur-md'
@@ -109,7 +114,7 @@ export function Header() {
 
           <div className="flex items-center gap-0.5 md:gap-1">
             <Link
-              href="/shop"
+              href="/shop?focus=search"
               className="hidden h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist sm:flex"
               aria-label="Search"
             >
@@ -128,7 +133,7 @@ export function Header() {
               </Link>
             ) : null}
             <Link
-              href="/shop"
+              href="/wishlist"
               className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition hover:bg-mist"
               aria-label="Wishlist"
             >

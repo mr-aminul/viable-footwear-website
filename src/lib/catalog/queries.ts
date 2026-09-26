@@ -104,7 +104,7 @@ function mapProduct(
     badge: parseBadge(row.badge),
     description: row.description,
     subtitle: row.subtitle?.trim() || undefined,
-    fitNote: row.fit_note?.trim() || undefined,
+    note: row.note?.trim() || undefined,
     materials: row.materials?.trim() || undefined,
     careInfo: row.care_info?.trim() || undefined,
     featured: row.featured,
@@ -657,7 +657,7 @@ export function getCatalogCounts() {
 }
 
 const ADMIN_PRODUCT_DETAIL_SELECT =
-  'id, name, slug, description, subtitle, fit_note, materials, care_info, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
+  'id, name, slug, description, subtitle, note, materials, care_info, price, compare_at, weight_kg, category_id, badge, featured, active, seo_title, seo_description, related_product_ids' as const
 
 /**
  * Cached product core row for the admin edit page.

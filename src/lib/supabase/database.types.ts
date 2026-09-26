@@ -94,7 +94,7 @@ export interface Database {
           slug: string
           description: string
           subtitle: string | null
-          fit_note: string | null
+          note: string | null
           materials: string
           care_info: string
           price: number
@@ -118,7 +118,7 @@ export interface Database {
           slug: string
           description?: string
           subtitle?: string | null
-          fit_note?: string | null
+          note?: string | null
           materials?: string
           care_info?: string
           price: number
@@ -257,6 +257,22 @@ export interface Database {
           updated_by?: string | null
         }
         Update: Partial<Database['public']['Tables']['integration_settings']['Insert']>
+        Relationships: []
+      }
+      site_pages: {
+        Row: {
+          page_key: string
+          content: Json
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          page_key: string
+          content?: Json
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['site_pages']['Insert']>
         Relationships: []
       }
       orders: {

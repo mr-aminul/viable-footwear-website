@@ -22,6 +22,8 @@ import {
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
+import { decrementOrderStock } from '@/lib/orders/stock'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { createServiceClient } from '@/lib/supabase/admin'
 import type { Json } from '@/lib/supabase/database.types'
 
@@ -32,10 +34,12 @@ type LineInput = {
 }
 
 /**
- * Stock strategy (COD v1): decrement on order place.
- * Gateway payments (bKash/Nagad) can switch to decrement-on-paid later.
+ * Stock: COD decrements on place; bKash/Nagad decrement on successful payment.
  */
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, 'orders', 10, 60_000)
+  if (limited) return limited
+
   try {
     const body = (await request.json()) as {
       email?: string
@@ -419,18 +423,21 @@ export async function POST(request: NextRequest) {
 
     // COD: decrement on place. Gateways: decrement on successful payment.
     if (paymentMethod === 'cod') {
-      for (const line of lines) {
-        const variant = variantMap.get(line.variantId)!
-        const nextStock = variant.stock - line.quantity
-        const { error: stockError } = await supabase
-          .from('product_variants')
-          .update({ stock: nextStock })
-          .eq('id', line.variantId)
-          .gte('stock', line.quantity)
+      const reserved = await decrementOrderStock(
+        supabase,
+        lines.map((line) => ({
+          variantId: line.variantId,
+          quantity: line.quantity,
+        })),
+      )
 
-        if (stockError) {
-          console.error('[orders] stock decrement', stockError)
-        }
+      if (!reserved.ok) {
+        await supabase.from('order_items').delete().eq('order_id', insertedOrder.id)
+        await supabase.from('orders').delete().eq('id', insertedOrder.id)
+        return NextResponse.json(
+          { success: false, error: reserved.error },
+          { status: 409, headers: NO_STORE_HEADERS },
+        )
       }
 
       revalidateAdminOrders()
@@ -449,8 +456,8 @@ export async function POST(request: NextRequest) {
         area_name: areaName,
         address,
       })
+      // COD is not prepaid — only signal creation. Paid/collected is ops-side.
       void emitOmsWebhook('order.created', omsOrder)
-      void emitOmsWebhook('order.paid', omsOrder)
 
       return NextResponse.json(
         {

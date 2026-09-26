@@ -25,6 +25,7 @@ import {
   VariantsEditor,
   buildVariantsPayload,
   createEmptyVariantDraft,
+  validateVariantDrafts,
   type VariantDraft,
 } from '@/components/admin/VariantsEditor'
 import { RelatedProductsPicker } from '@/components/admin/RelatedProductsPicker'
@@ -35,6 +36,9 @@ import {
   FormSuccess,
   softFieldClassName,
 } from '@/components/admin/ui'
+import { DEFAULT_SITE_CONTENT } from '@/lib/website/defaults'
+
+const productPromises = DEFAULT_SITE_CONTENT.productPromises
 
 /** Compact soft fields — match storefront PDP rhythm (not the padded form fields). */
 const pdpFieldClassName =
@@ -76,7 +80,7 @@ export function AdminProductEditor({
   const [slugTouched, setSlugTouched] = useState(true)
   const [description, setDescription] = useState(product.description)
   const [subtitle, setSubtitle] = useState(product.subtitle ?? '')
-  const [fitNote, setFitNote] = useState(product.fitNote ?? '')
+  const [note, setNote] = useState(product.note ?? '')
   const [materials, setMaterials] = useState(product.materials ?? '')
   const [careInfo, setCareInfo] = useState(product.careInfo ?? '')
   const [price, setPrice] = useState(String(product.price))
@@ -173,12 +177,19 @@ export function AdminProductEditor({
   const save = () => {
     setError(null)
     setSuccess(null)
+
+    const variantError = validateVariantDrafts(variantRows)
+    if (variantError) {
+      setError(variantError)
+      return
+    }
+
     const formData = new FormData()
     formData.set('name', name)
     formData.set('slug', slug)
     formData.set('description', description)
     formData.set('subtitle', subtitle)
-    formData.set('fit_note', fitNote)
+    formData.set('note', note)
     formData.set('materials', materials)
     formData.set('care_info', careInfo)
     formData.set('price', price)
@@ -416,7 +427,7 @@ export function AdminProductEditor({
             </label>
           </div>
           <p className="mt-1 text-[12px] text-mute">
-            Incl. VAT · Free delivery across Bangladesh
+            Prices in BDT · Delivery calculated at checkout
           </p>
 
           {colorOptions.length > 0 ? (
@@ -465,13 +476,13 @@ export function AdminProductEditor({
 
           <label className="mt-6 block">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-              Fit note (optional)
+              Note (optional)
             </span>
             <div className="mt-1.5 flex items-start gap-2.5 rounded-xl bg-sky-50 px-3.5 py-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
               <input
-                value={fitNote}
-                onChange={(e) => setFitNote(e.target.value)}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
                 placeholder="e.g. Customers report this model runs small"
                 className="w-full border-0 bg-transparent p-0 text-[13px] text-ink outline-none placeholder:text-mute"
               />
@@ -518,22 +529,28 @@ export function AdminProductEditor({
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Truck className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Delivery: </span>
-                24hrs within Dhaka, 48–72hrs outside Dhaka
+                <span className="font-semibold text-ink">
+                  {productPromises.deliveryLabel}{' '}
+                </span>
+                {productPromises.deliveryText}
               </span>
             </li>
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Free returns: </span>
-                7-day return policy on unused pairs
+                <span className="font-semibold text-ink">
+                  {productPromises.returnsLabel}{' '}
+                </span>
+                {productPromises.returnsText}
               </span>
             </li>
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Star className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Authentic: </span>
-                Genuine footwear, curated for Bangladesh
+                <span className="font-semibold text-ink">
+                  {productPromises.authenticLabel}{' '}
+                </span>
+                {productPromises.authenticText}
               </span>
             </li>
           </ul>
@@ -598,7 +615,8 @@ export function AdminProductEditor({
       <section className="mt-14">
         <h2 className="text-[15px] font-semibold text-ink">Variants & SKUs</h2>
         <p className="mt-1 text-[13px] text-mute">
-          Size, color, SKU, and stock. Required before publishing.
+          Size, color name, SKU, and stock. Different colors need different
+          names — images are per row unless you apply to the whole colorway.
         </p>
         <div className="mt-4">
           <VariantsEditor

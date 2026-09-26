@@ -108,7 +108,10 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
 
   return (
     <div className="mt-8 max-w-xl space-y-4">
-      <Field label="Name">
+      <Field
+        label="Name"
+        hint="Shown on the storefront top ribbon (plus WhatsApp). Highest priority live campaign wins."
+      >
         <input
           className={softFieldClassName}
           value={name}

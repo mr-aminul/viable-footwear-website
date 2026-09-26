@@ -9,6 +9,7 @@ import {
   getActivePromoByCode,
   resolvePromoForCheckout,
 } from '@/lib/promotions/queries'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { createServiceClient } from '@/lib/supabase/admin'
 
 type CartItemInput = {
@@ -17,6 +18,9 @@ type CartItemInput = {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, 'pathao-price', 40, 60_000)
+  if (limited) return limited
+
   try {
     const body = (await request.json()) as {
       city_id?: number

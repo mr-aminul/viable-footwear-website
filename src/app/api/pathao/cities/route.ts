@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { getPathaoCities } from '@/lib/pathao'
+import { enforceRateLimit } from '@/lib/rate-limit'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const limited = enforceRateLimit(request, 'pathao-cities', 60, 60_000)
+  if (limited) return limited
+
   try {
     const cities = await getPathaoCities()
     return NextResponse.json(

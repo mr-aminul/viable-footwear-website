@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { amountsMatch } from '@/lib/payments/amount-match'
 import {
   isNagadPaymentSuccessful,
   verifyNagadPayment,
@@ -106,6 +107,21 @@ export async function GET(request: NextRequest) {
           verified.status ||
           'Nagad could not confirm the payment.',
       )
+    }
+
+    if (!amountsMatch(attempt.amount, verified.amount)) {
+      await supabase
+        .from('payment_attempts')
+        .update({
+          status: 'failed',
+          raw_json: verified as unknown as Json,
+        })
+        .eq('id', attempt.id)
+      console.error('[nagad callback] amount mismatch', {
+        expected: attempt.amount,
+        actual: verified.amount,
+      })
+      return fail('Payment amount did not match the order total.')
     }
 
     const trxId =

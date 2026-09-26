@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { resolvePromoForCheckout } from '@/lib/promotions/queries'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { createServiceClient } from '@/lib/supabase/admin'
 
 type CartItemInput = {
@@ -12,6 +13,9 @@ type CartItemInput = {
  * Preview / validate a promo against cart lines (authoritative product prices).
  */
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, 'promo-validate', 30, 60_000)
+  if (limited) return limited
+
   try {
     const body = (await request.json()) as {
       promo_code?: string

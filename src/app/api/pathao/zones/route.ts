@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { getPathaoZones } from '@/lib/pathao'
+import { enforceRateLimit } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
+  const limited = enforceRateLimit(request, 'pathao-zones', 60, 60_000)
+  if (limited) return limited
+
   const cityId = request.nextUrl.searchParams.get('city_id')
   if (!cityId) {
     return NextResponse.json(

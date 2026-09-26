@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { normalizePathaoPhone } from '@/lib/pathao'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { createServiceClient } from '@/lib/supabase/admin'
 
 /**
@@ -8,6 +9,9 @@ import { createServiceClient } from '@/lib/supabase/admin'
  * Lets “Your Orders” refresh tracking after Admin dispatches to Pathao.
  */
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, 'orders-lookup', 20, 60_000)
+  if (limited) return limited
+
   try {
     const body = (await request.json()) as {
       orderId?: string

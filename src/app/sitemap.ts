@@ -10,7 +10,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: base, changeFrequency: 'daily', priority: 1 },
     { url: `${base}/shop`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${base}/about`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/wishlist`, changeFrequency: 'weekly', priority: 0.4 },
     { url: `${base}/cart`, changeFrequency: 'weekly', priority: 0.3 },
+    { url: `${base}/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${base}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
   ]
 
   const products = await listActiveProductSlugs()

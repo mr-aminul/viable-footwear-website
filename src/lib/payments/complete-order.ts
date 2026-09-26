@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
+import { decrementOrderStock } from '@/lib/orders/stock'
 
 type ServiceClient = SupabaseClient<Database>
 
 /**
  * Mark a pending gateway order paid and decrement stock once.
- * Safe to call repeatedly (guards on pending_payment / payment_trx_id).
+ * Stock is reserved before the paid status change; safe to retry.
  */
 export async function completeGatewayPaidOrder(
   supabase: ServiceClient,
@@ -21,7 +22,25 @@ export async function completeGatewayPaidOrder(
   if (!order) return null
 
   if (order.status === 'pending_payment' && !order.payment_trx_id) {
-    await supabase
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('variant_id, quantity')
+      .eq('order_id', order.id)
+
+    const lines = (items ?? [])
+      .filter((item) => item.variant_id)
+      .map((item) => ({
+        variantId: item.variant_id as string,
+        quantity: Number(item.quantity),
+      }))
+
+    const reserved = await decrementOrderStock(supabase, lines)
+    if (!reserved.ok) {
+      console.error('[completeGatewayPaidOrder] stock', reserved.error)
+      return null
+    }
+
+    const { error: payError } = await supabase
       .from('orders')
       .update({
         status: 'awaiting_fulfillment',
@@ -31,25 +50,9 @@ export async function completeGatewayPaidOrder(
       .eq('id', order.id)
       .eq('status', 'pending_payment')
 
-    const { data: items } = await supabase
-      .from('order_items')
-      .select('variant_id, quantity')
-      .eq('order_id', order.id)
-
-    for (const item of items ?? []) {
-      if (!item.variant_id) continue
-      const { data: variant } = await supabase
-        .from('product_variants')
-        .select('stock')
-        .eq('id', item.variant_id)
-        .maybeSingle()
-      if (!variant) continue
-      const next = Math.max(0, Number(variant.stock) - Number(item.quantity))
-      await supabase
-        .from('product_variants')
-        .update({ stock: next })
-        .eq('id', item.variant_id)
-        .gte('stock', item.quantity)
+    if (payError) {
+      console.error('[completeGatewayPaidOrder] mark paid', payError)
+      return null
     }
   }
 

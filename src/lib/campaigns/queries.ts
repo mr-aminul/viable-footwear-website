@@ -1,5 +1,13 @@
+import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { createServiceClient } from '@/lib/supabase/admin'
-import type { CampaignRow } from '@/lib/campaigns/rules'
+import {
+  pickAnnouncementCampaign,
+  type CampaignRow,
+} from '@/lib/campaigns/rules'
+import { getSiteContent } from '@/lib/website/queries'
+
+export const CAMPAIGNS_ANNOUNCEMENT_TAG = 'campaigns-announcement'
 
 export async function listActiveCampaignsForCheckout(): Promise<CampaignRow[]> {
   const supabase = createServiceClient()
@@ -15,6 +23,34 @@ export async function listActiveCampaignsForCheckout(): Promise<CampaignRow[]> {
   }
   return data
 }
+
+async function fetchAnnouncementCampaign(): Promise<CampaignRow | null> {
+  try {
+    const campaigns = await listActiveCampaignsForCheckout()
+    return pickAnnouncementCampaign(campaigns)
+  } catch (error) {
+    console.error('[campaigns] announcement', error)
+    return null
+  }
+}
+
+const getAnnouncementCached = unstable_cache(
+  async (): Promise<string | null> => {
+    const [campaign, site] = await Promise.all([
+      fetchAnnouncementCampaign(),
+      getSiteContent(),
+    ])
+    if (!campaign?.name.trim()) return null
+    return `${campaign.name.trim()} · WhatsApp ${site.brand.phone}`
+  },
+  ['campaigns-announcement'],
+  { tags: [CAMPAIGNS_ANNOUNCEMENT_TAG], revalidate: 60 },
+)
+
+/** Storefront top ribbon copy from the highest-priority live campaign. */
+export const getStorefrontAnnouncement = cache(
+  async (): Promise<string | null> => getAnnouncementCached(),
+)
 
 export async function listCampaignsAdmin(): Promise<
   Array<CampaignRow & { created_at: string; updated_at: string }>

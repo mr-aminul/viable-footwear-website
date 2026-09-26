@@ -1,7 +1,8 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
+import { CAMPAIGNS_ANNOUNCEMENT_TAG } from '@/lib/campaigns/queries'
 import type { CampaignRuleType, CampaignRules } from '@/lib/campaigns/rules'
 import type { ActionResult } from '@/lib/catalog/types'
 import type { Json } from '@/lib/supabase/database.types'
@@ -69,7 +70,9 @@ function buildRules(formData: FormData): CampaignRules | { error: string } {
 }
 
 function revalidateCampaigns() {
+  revalidateTag(CAMPAIGNS_ANNOUNCEMENT_TAG)
   revalidatePath('/admin/campaigns')
+  revalidatePath('/', 'layout')
 }
 
 export async function createCampaign(

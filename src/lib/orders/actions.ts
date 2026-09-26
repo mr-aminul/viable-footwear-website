@@ -17,6 +17,10 @@ import type { OrderStatus } from '@/lib/supabase/database.types'
 import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
 import { isPathaoShipmentStranded } from '@/lib/orders/status-labels'
 import { parsePathaoHistory } from '@/lib/orders/pathao-history'
+import {
+  orderHeldStock,
+  restoreOrderStock,
+} from '@/lib/orders/stock'
 import { createClient } from '@/lib/supabase/server'
 
 async function assertPathaoConfigured(): Promise<ActionResult | null> {
@@ -406,7 +410,9 @@ export async function cancelOrder(
   const supabase = await createClient()
   const { data: existing, error } = await supabase
     .from('orders')
-    .select('id, status, pathao_consignment_id, pathao_cancelled_at')
+    .select(
+      'id, status, pathao_consignment_id, pathao_cancelled_at, payment_method, payment_trx_id',
+    )
     .eq('id', orderId)
     .maybeSingle()
 
@@ -414,6 +420,8 @@ export async function cancelOrder(
 
   const alreadyCancelled = existing.status === 'cancelled'
   const consignmentId = existing.pathao_consignment_id?.trim() || null
+  const shouldRestoreStock =
+    !alreadyCancelled && orderHeldStock(existing)
 
   if (alreadyCancelled && !consignmentId) {
     return { ok: false, error: 'Order is already cancelled.' }
@@ -449,7 +457,7 @@ export async function cancelOrder(
     }
   }
 
-  const { error: updateError } = await supabase
+  const { data: cancelledRow, error: updateError } = await supabase
     .from('orders')
     .update({
       status: 'cancelled',
@@ -464,16 +472,32 @@ export async function cancelOrder(
         : {}),
     })
     .eq('id', orderId)
+    .neq('status', 'cancelled')
+    .select('id')
+    .maybeSingle()
 
   if (updateError) {
     return { ok: false, error: 'Failed to cancel order.' }
+  }
+
+  // Only restore when we actually flipped this row to cancelled (avoids double restore).
+  if (shouldRestoreStock && cancelledRow) {
+    const restored = await restoreOrderStock(supabase, orderId)
+    if (!restored.ok) {
+      return {
+        ok: false,
+        error: `Order cancelled, but stock restore failed: ${restored.error}`,
+      }
+    }
   }
 
   const message = pathaoCancelled
     ? pathaoAlreadyCancelled
       ? 'Order cancelled. The Pathao shipment was already cancelled.'
       : `Order cancelled and Pathao shipment ${consignmentId} cancelled.`
-    : 'Order cancelled.'
+    : shouldRestoreStock && cancelledRow
+      ? 'Order cancelled and stock restored.'
+      : 'Order cancelled.'
 
   revalidateAdminOrders(orderId)
   return { ok: true, data: { pathaoCancelled, message } }

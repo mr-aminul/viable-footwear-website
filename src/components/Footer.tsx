@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { ArrowRight, Mail, MapPin, Phone } from 'lucide-react'
-import { BRAND } from '@/lib/brand'
+import { whatsappHref } from '@/lib/brand'
 import { BrandLogo } from '@/components/BrandLogo'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
 
 const iconBtnClass =
   'flex h-10 w-10 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/45 hover:bg-white/5'
@@ -19,6 +20,10 @@ function InstagramIcon({ className = 'h-4 w-4' }: { className?: string }) {
 }
 
 export function Footer() {
+  const { brand, footer } = useSiteSettings()
+  const year = new Date().getFullYear()
+  const copyright = footer.copyright.replaceAll('{year}', String(year))
+
   return (
     <footer className="mt-auto bg-navy-deep text-white">
       {/* Mobile — centered compact layout */}
@@ -27,7 +32,7 @@ export function Footer() {
 
         <div className="mt-6 flex items-center gap-3">
           <a
-            href={BRAND.facebook}
+            href={brand.facebook}
             target="_blank"
             rel="noreferrer"
             className={iconBtnClass}
@@ -36,7 +41,7 @@ export function Footer() {
             <span className="text-[15px] font-semibold leading-none">f</span>
           </a>
           <a
-            href={BRAND.instagram}
+            href={brand.instagram}
             target="_blank"
             rel="noreferrer"
             className={iconBtnClass}
@@ -44,7 +49,7 @@ export function Footer() {
           >
             <InstagramIcon />
           </a>
-          <a href={`tel:${BRAND.phone}`} className={iconBtnClass} aria-label="Call us">
+          <a href={`tel:${brand.phone}`} className={iconBtnClass} aria-label="Call us">
             <Phone className="h-4 w-4" strokeWidth={1.75} />
           </a>
         </div>
@@ -63,7 +68,7 @@ export function Footer() {
             About us
           </Link>
           <a
-            href={`https://wa.me/${BRAND.whatsapp.replace('+', '')}`}
+            href={whatsappHref(brand.whatsapp)}
             target="_blank"
             rel="noreferrer"
             className="hover:text-white"
@@ -74,22 +79,22 @@ export function Footer() {
 
         <div className="mt-8 space-y-2.5 text-[13px] text-white/75">
           <a
-            href={`tel:${BRAND.phone}`}
+            href={`tel:${brand.phone}`}
             className="flex items-center justify-center gap-2 hover:text-white"
           >
             <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            {BRAND.phone}
+            {brand.phone}
           </a>
           <a
-            href={`mailto:${BRAND.email}`}
+            href={`mailto:${brand.email}`}
             className="flex items-center justify-center gap-2 hover:text-white"
           >
             <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            {BRAND.email}
+            {brand.email}
           </a>
           <p className="flex items-center justify-center gap-2">
             <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            {BRAND.city}
+            {brand.city}
           </p>
         </div>
       </div>
@@ -99,12 +104,11 @@ export function Footer() {
         <div className="lg:col-span-4">
           <BrandLogo variant="light" heightClassName="h-10" />
           <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-white/70">
-            Casual footwear for Dhaka&apos;s Gen Z. Foam runners, crocs, slides
-            and everyday kicks — designed to move with you.
+            {footer.blurb}
           </p>
           <div className="mt-6 flex items-center gap-3">
             <a
-              href={BRAND.instagram}
+              href={brand.instagram}
               target="_blank"
               rel="noreferrer"
               className={iconBtnClass}
@@ -113,7 +117,7 @@ export function Footer() {
               <InstagramIcon />
             </a>
             <a
-              href={BRAND.facebook}
+              href={brand.facebook}
               target="_blank"
               rel="noreferrer"
               className={iconBtnClass}
@@ -158,13 +162,13 @@ export function Footer() {
             </h4>
             <ul className="mt-4 space-y-2.5 text-[14px] text-white/75">
               <li>
-                <a href={`tel:${BRAND.phone}`} className="hover:text-white">
+                <a href={`tel:${brand.phone}`} className="hover:text-white">
                   Call us
                 </a>
               </li>
               <li>
                 <a
-                  href={`https://wa.me/${BRAND.whatsapp.replace('+', '')}`}
+                  href={whatsappHref(brand.whatsapp)}
                   target="_blank"
                   rel="noreferrer"
                   className="hover:text-white"
@@ -173,7 +177,7 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href={`mailto:${BRAND.email}`} className="hover:text-white">
+                <a href={`mailto:${brand.email}`} className="hover:text-white">
                   Email
                 </a>
               </li>
@@ -191,16 +195,21 @@ export function Footer() {
             <ul className="mt-4 space-y-2.5 text-[14px] text-white/75">
               <li>
                 <Link href="/about" className="hover:text-white">
-                  About Viable
+                  About {brand.name}
                 </Link>
               </li>
               <li>
-                <a href={BRAND.facebook} className="hover:text-white">
+                <a href={brand.facebook} className="hover:text-white">
                   Stores
                 </a>
               </li>
               <li>
-                <span className="text-white/50">Careers</span>
+                <a
+                  href={`mailto:${brand.email}?subject=${encodeURIComponent(`Careers at ${brand.name}`)}`}
+                  className="hover:text-white"
+                >
+                  Careers
+                </a>
               </li>
             </ul>
           </div>
@@ -208,41 +217,31 @@ export function Footer() {
 
         <div className="lg:col-span-3">
           <h4 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/45">
-            Newsletter
+            {footer.dropsTitle}
           </h4>
-          <p className="mt-3 text-[14px] text-white/70">
-            Drops, restocks & early sale access.
-          </p>
-          <form
-            className="mt-4 flex overflow-hidden rounded-full border border-white/15 bg-white/5 focus-within:border-white/35"
-            onSubmit={(e) => e.preventDefault()}
+          <p className="mt-3 text-[14px] text-white/70">{footer.dropsBody}</p>
+          <a
+            href={whatsappHref(brand.whatsapp, footer.dropsPrefill)}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-spark px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-spark-soft"
           >
-            <input
-              type="email"
-              required
-              placeholder="Your email"
-              className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[14px] text-white outline-none placeholder:text-white/40"
-            />
-            <button
-              type="submit"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-spark text-white transition hover:bg-spark-soft"
-              aria-label="Subscribe"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
+            {footer.dropsCtaLabel}
+            <ArrowRight className="h-4 w-4" />
+          </a>
         </div>
       </div>
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-4 py-4 text-center text-[11px] text-white/45 md:flex-row md:items-center md:justify-between md:px-6 md:text-left md:text-[12px] lg:px-8">
-          <p>
-            © {new Date().getFullYear()} Viable. Shop from Dhaka, deliver
-            across the city.
-          </p>
+          <p>{copyright}</p>
           <div className="hidden gap-5 md:flex">
-            <span>Terms</span>
-            <span>Privacy</span>
+            <Link href="/terms" className="hover:text-white/70">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-white/70">
+              Privacy
+            </Link>
           </div>
         </div>
       </div>

@@ -75,7 +75,7 @@ function cityAllowed(rules: CampaignRules, cityId: number | null): boolean {
   return true
 }
 
-function isInDateWindow(
+export function isInDateWindow(
   now: Date,
   startsAt: string | null,
   endsAt: string | null,
@@ -83,6 +83,18 @@ function isInDateWindow(
   if (startsAt && new Date(startsAt) > now) return false
   if (endsAt && new Date(endsAt) < now) return false
   return true
+}
+
+/** Highest-priority live campaign for the storefront announcement ribbon. */
+export function pickAnnouncementCampaign(
+  campaigns: CampaignRow[],
+  now: Date = new Date(),
+): CampaignRow | null {
+  const sorted = [...campaigns]
+    .filter((c) => c.active)
+    .filter((c) => isInDateWindow(now, c.starts_at, c.ends_at))
+    .sort((a, b) => b.priority - a.priority)
+  return sorted[0] ?? null
 }
 
 function applyRuleToDelivery(

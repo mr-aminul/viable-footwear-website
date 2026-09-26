@@ -17,6 +17,7 @@ import {
   Store,
   Ticket,
   Users,
+  Wand2,
   X,
 } from 'lucide-react'
 import { signOut } from '@/lib/auth/actions'
@@ -39,6 +40,7 @@ const nav: NavItem[] = [
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/promotions', label: 'Promotions', icon: Ticket },
   { href: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },
+  { href: '/admin/website', label: 'Website Modifier', icon: Wand2 },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 

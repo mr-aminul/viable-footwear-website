@@ -72,9 +72,10 @@ export async function createStaffUser(input: {
       email,
       password,
       email_confirm: true,
+      // Role must never live in user_metadata (client-editable). Profile
+      // role/active are set below via service role after the signup trigger.
       user_metadata: {
         full_name: fullName,
-        role,
       },
     })
 

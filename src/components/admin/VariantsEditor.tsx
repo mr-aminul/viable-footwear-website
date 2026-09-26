@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { ImageOff, ImagePlus, Trash2 } from 'lucide-react'
+import { ImageOff, ImagePlus, Minus, Plus, Trash2 } from 'lucide-react'
 import { uploadProductMedia } from '@/lib/catalog/actions/media'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
@@ -61,9 +61,51 @@ export function buildVariantsPayload(rows: VariantDraft[]): string {
   )
 }
 
+function normalizeColorName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+/** Client-side check before save — mirrors server rules. */
+export function validateVariantDrafts(rows: VariantDraft[]): string | null {
+  const active = rows.filter((r) => r.active)
+  if (active.length === 0) return null
+
+  for (const row of active) {
+    if (!normalizeColorName(row.color)) {
+      return 'Every active variant needs a color name (e.g. Navy, Black).'
+    }
+  }
+
+  const byColor = new Map<string, VariantDraft[]>()
+  for (const row of active) {
+    const key = normalizeColorName(row.color).toLowerCase()
+    const list = byColor.get(key) ?? []
+    list.push(row)
+    byColor.set(key, list)
+  }
+
+  // Same color across sizes is fine. Different photos under one color name
+  // usually means the merchant forgot to rename a colorway.
+  for (const [, group] of byColor) {
+    if (group.length < 2) continue
+    const imageIds = new Set(
+      group.map((r) => r.media_id).filter((id): id is string => Boolean(id)),
+    )
+    if (imageIds.size > 1) {
+      return `“${group[0].color.trim()}” has different images on different sizes. Use one photo per color, or give each colorway its own name.`
+    }
+    const sizes = group.map((r) => r.size_eu.trim())
+    if (new Set(sizes).size !== sizes.length) {
+      return `Duplicate size under color “${group[0].color.trim()}”.`
+    }
+  }
+
+  return null
+}
+
 /**
  * Variant table — edits only; parent Save product persists size/color/stock/image.
- * Each row can pick its own gallery image (typically the photo for that color).
+ * Images are assigned per row. Same color name = same colorway on the storefront.
  */
 export function VariantsEditor({
   productId,
@@ -77,20 +119,39 @@ export function VariantsEditor({
   images: VariantImageOption[]
 }) {
   const setMediaId = (rowKey: string, mediaId: string | null) => {
-    const source = rows.find((r) => r.key === rowKey)
-    if (!source) return
-    const colorKey = source.color.trim().toLowerCase()
     onChange(
-      rows.map((r) => {
-        if (r.key === rowKey) return { ...r, media_id: mediaId }
-        // Same color name shares the photo across sizes
-        if (colorKey && r.color.trim().toLowerCase() === colorKey) {
-          return { ...r, media_id: mediaId }
-        }
-        return r
-      }),
+      rows.map((r) => (r.key === rowKey ? { ...r, media_id: mediaId } : r)),
     )
   }
+
+  const applyMediaToColor = (rowKey: string, mediaId: string | null) => {
+    const source = rows.find((r) => r.key === rowKey)
+    if (!source) return
+    const colorKey = normalizeColorName(source.color).toLowerCase()
+    if (!colorKey) {
+      setMediaId(rowKey, mediaId)
+      return
+    }
+    onChange(
+      rows.map((r) =>
+        normalizeColorName(r.color).toLowerCase() === colorKey
+          ? { ...r, media_id: mediaId }
+          : r,
+      ),
+    )
+  }
+
+  const colorSiblingCount = (row: VariantDraft) => {
+    const colorKey = normalizeColorName(row.color).toLowerCase()
+    if (!colorKey) return 0
+    return rows.filter(
+      (r) =>
+        r.key !== row.key &&
+        normalizeColorName(r.color).toLowerCase() === colorKey,
+    ).length
+  }
+
+  const draftError = validateVariantDrafts(rows)
 
   return (
     <div className="space-y-4">
@@ -108,128 +169,150 @@ export function VariantsEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} className="border-b border-cloud last:border-0">
-                <td className="px-3 py-2">
-                  <VariantImagePicker
-                    productId={productId}
-                    mediaId={row.media_id}
-                    images={images}
-                    onSelect={(mediaId) => setMediaId(row.key, mediaId)}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    value={row.size_eu}
-                    onChange={(e) =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key
-                            ? { ...r, size_eu: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    value={row.color}
-                    onChange={(e) =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key
-                            ? { ...r, color: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClassName}
-                    placeholder="Navy"
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    value={row.sku}
-                    onChange={(e) =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key ? { ...r, sku: e.target.value } : r,
-                        ),
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={row.stock}
-                    onChange={(e) =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key
-                            ? { ...r, stock: e.target.value }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={inputClassName}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={row.active}
-                    aria-label={row.active ? 'Active' : 'Inactive'}
-                    onClick={() =>
-                      onChange(
-                        rows.map((r) =>
-                          r.key === row.key
-                            ? { ...r, active: !r.active }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={[
-                      'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
-                      row.active ? 'bg-navy' : 'bg-cloud',
-                    ].join(' ')}
-                  >
-                    <span
-                      className={[
-                        'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                        row.active ? 'translate-x-5' : 'translate-x-0',
-                      ].join(' ')}
+            {rows.map((row) => {
+              const colorMissing =
+                row.active && !normalizeColorName(row.color)
+              const siblings = colorSiblingCount(row)
+              return (
+                <tr
+                  key={row.key}
+                  className="border-b border-cloud last:border-0"
+                >
+                  <td className="px-3 py-2">
+                    <VariantImagePicker
+                      productId={productId}
+                      mediaId={row.media_id}
+                      images={images}
+                      colorLabel={normalizeColorName(row.color) || null}
+                      siblingCount={siblings}
+                      onSelect={(mediaId) => setMediaId(row.key, mediaId)}
+                      onApplyToColor={(mediaId) =>
+                        applyMediaToColor(row.key, mediaId)
+                      }
                     />
-                  </button>
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    aria-label="Delete variant"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
-                    onClick={() =>
-                      onChange(rows.filter((r) => r.key !== row.key))
-                    }
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={row.size_eu}
+                      onChange={(e) =>
+                        onChange(
+                          rows.map((r) =>
+                            r.key === row.key
+                              ? { ...r, size_eu: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={inputClassName}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={row.color}
+                      onChange={(e) =>
+                        onChange(
+                          rows.map((r) =>
+                            r.key === row.key
+                              ? { ...r, color: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={[
+                        inputClassName,
+                        colorMissing
+                          ? 'border-spark/50 ring-1 ring-spark/20'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      placeholder="Navy"
+                      aria-invalid={colorMissing}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={row.sku}
+                      onChange={(e) =>
+                        onChange(
+                          rows.map((r) =>
+                            r.key === row.key
+                              ? { ...r, sku: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={inputClassName}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <StockStepper
+                      value={row.stock}
+                      onChange={(stock) =>
+                        onChange(
+                          rows.map((r) =>
+                            r.key === row.key ? { ...r, stock } : r,
+                          ),
+                        )
+                      }
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={row.active}
+                      aria-label={row.active ? 'Active' : 'Inactive'}
+                      onClick={() =>
+                        onChange(
+                          rows.map((r) =>
+                            r.key === row.key
+                              ? { ...r, active: !r.active }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={[
+                        'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+                        row.active ? 'bg-navy' : 'bg-cloud',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+                          row.active ? 'translate-x-5' : 'translate-x-0',
+                        ].join(' ')}
+                      />
+                    </button>
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      aria-label="Delete variant"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
+                      onClick={() =>
+                        onChange(rows.filter((r) => r.key !== row.key))
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
-      <p className="text-[13px] text-mute">
-        Upload a photo for each color (e.g. Navy, Black). Sizes of the same
-        color share that photo. Shoppers pick colors by image — no swatches.
-        Save product to keep assignments.
-      </p>
+      {draftError ? (
+        <p className="text-[13px] text-spark">{draftError}</p>
+      ) : (
+        <p className="text-[13px] text-mute">
+          Name each color clearly (Navy, Black). Same name = same color across
+          sizes. Image picks apply to that row only — use “Apply to all sizes”
+          when you want the whole colorway to share a photo.
+        </p>
+      )}
 
       <AdminActionButton
         type="button"
@@ -249,16 +332,73 @@ export function VariantsEditor({
   )
 }
 
+function parseStock(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.floor(parsed))
+}
+
+function StockStepper({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (stock: string) => void
+}) {
+  const stock = parseStock(value)
+  const canDecrease = stock > 0
+
+  return (
+    <div className="inline-flex w-[5.5rem] items-center rounded-lg border border-cloud bg-white focus-within:border-navy">
+      <button
+        type="button"
+        aria-label="Decrease stock"
+        disabled={!canDecrease}
+        onClick={() => onChange(String(stock - 1))}
+        className="flex h-8 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60 disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <Minus className="h-3 w-3" />
+      </button>
+      <input
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => {
+          if (value !== String(stock)) onChange(String(stock))
+        }}
+        aria-label="Stock"
+        className="min-w-0 flex-1 border-0 bg-transparent px-0.5 py-1.5 text-center text-[13px] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        aria-label="Increase stock"
+        onClick={() => onChange(String(stock + 1))}
+        className="flex h-8 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60"
+      >
+        <Plus className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}
+
 function VariantImagePicker({
   productId,
   mediaId,
   images,
+  colorLabel,
+  siblingCount,
   onSelect,
+  onApplyToColor,
 }: {
   productId: string
   mediaId: string | null
   images: VariantImageOption[]
+  colorLabel: string | null
+  siblingCount: number
   onSelect: (mediaId: string | null) => void
+  onApplyToColor: (mediaId: string | null) => void
 }) {
   const router = useRouter()
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -272,6 +412,7 @@ function VariantImagePicker({
   )
 
   const selected = images.find((img) => img.id === mediaId) ?? null
+  const canApplyToColor = Boolean(colorLabel) && siblingCount > 0
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return
@@ -442,11 +583,24 @@ function VariantImagePicker({
                 </button>
               </div>
 
+              {canApplyToColor && mediaId ? (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onApplyToColor(mediaId)}
+                  className="mt-2 w-full rounded-lg border border-white/20 px-2 py-1.5 text-[11px] font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                >
+                  Apply to all {siblingCount + 1} “{colorLabel}” sizes
+                </button>
+              ) : null}
+
               {error ? (
                 <p className="mt-2 text-[11px] text-spark-soft">{error}</p>
               ) : (
                 <p className="mt-2 text-[11px] text-white/50">
-                  One image per variant. Uploads also appear in the gallery.
+                  {canApplyToColor
+                    ? 'Applies to this size only unless you use the button above.'
+                    : 'One image per variant row. Uploads also appear in the gallery.'}
                 </p>
               )}
             </div>,

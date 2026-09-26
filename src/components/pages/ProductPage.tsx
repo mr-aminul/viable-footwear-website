@@ -20,6 +20,7 @@ import { formatSizeLabel } from '@/lib/catalog/sizing'
 import type { Product } from '@/lib/catalog/types'
 import { enterTransition } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
+import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { ProductAccordion } from '@/components/ProductAccordion'
 import { ProductCard } from '@/components/ProductCard'
 import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
@@ -35,6 +36,7 @@ export function ProductPage({
   related: Product[]
 }) {
   const { addToCart, toggleWishlist, isWishlisted } = useCart()
+  const { productPromises } = useSiteSettings()
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<number | null>(null)
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('EU')
@@ -252,18 +254,20 @@ export function ProductPage({
             <p className="mt-1 text-[15px] text-mute">{product.categoryLabel}</p>
           )}
 
-          <a
-            href="#product-reviews"
-            className="mt-3 inline-flex items-center gap-2 transition hover:opacity-80"
-          >
-            <Star className="h-4 w-4 fill-gold text-gold" />
-            <span className="text-[14px] font-medium">
-              {product.rating.toFixed(1)}
-            </span>
-            <span className="text-[14px] text-mute">
-              ({product.reviews} reviews)
-            </span>
-          </a>
+          {product.reviews > 0 ? (
+            <a
+              href="#product-reviews"
+              className="mt-3 inline-flex items-center gap-2 transition hover:opacity-80"
+            >
+              <Star className="h-4 w-4 fill-gold text-gold" />
+              <span className="text-[14px] font-medium">
+                {product.rating.toFixed(1)}
+              </span>
+              <span className="text-[14px] text-mute">
+                ({product.reviews} reviews)
+              </span>
+            </a>
+          ) : null}
 
           <div className="mt-5 flex items-baseline gap-3">
             <span className="text-2xl font-semibold text-ink">
@@ -276,7 +280,7 @@ export function ProductPage({
             )}
           </div>
           <p className="mt-1 text-[12px] text-mute">
-            Incl. VAT · Free delivery across Bangladesh
+            Prices in BDT · Delivery calculated at checkout
           </p>
 
           {colorOptions.length > 0 ? (
@@ -324,10 +328,10 @@ export function ProductPage({
             </div>
           ) : null}
 
-          {product.fitNote ? (
+          {product.note ? (
             <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-sky-50 px-3.5 py-3 text-[13px] leading-snug text-ink">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
-              <p>{product.fitNote}</p>
+              <p>{product.note}</p>
             </div>
           ) : null}
 
@@ -423,22 +427,28 @@ export function ProductPage({
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Truck className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Delivery: </span>
-                24hrs within Dhaka, 48–72hrs outside Dhaka
+                <span className="font-semibold text-ink">
+                  {productPromises.deliveryLabel}{' '}
+                </span>
+                {productPromises.deliveryText}
               </span>
             </li>
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Free returns: </span>
-                7-day return policy on unused pairs
+                <span className="font-semibold text-ink">
+                  {productPromises.returnsLabel}{' '}
+                </span>
+                {productPromises.returnsText}
               </span>
             </li>
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Star className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
-                <span className="font-semibold text-ink">Authentic: </span>
-                Genuine footwear, curated for Bangladesh
+                <span className="font-semibold text-ink">
+                  {productPromises.authenticLabel}{' '}
+                </span>
+                {productPromises.authenticText}
               </span>
             </li>
           </ul>
@@ -457,21 +467,24 @@ export function ProductPage({
                 <p className="whitespace-pre-wrap">{product.careInfo}</p>
               </ProductAccordion>
             ) : null}
-            <ProductAccordion title="Reviews" id="product-reviews">
-              <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 fill-gold text-gold" />
-                <span className="font-medium text-ink">
-                  {product.rating.toFixed(1)}
-                </span>
-                <span>
-                  based on {product.reviews}{' '}
-                  {product.reviews === 1 ? 'review' : 'reviews'}
-                </span>
-              </div>
-              <p className="mt-2">
-                Detailed customer reviews will appear here as they come in.
-              </p>
-            </ProductAccordion>
+            {product.reviews > 0 ? (
+              <ProductAccordion title="Reviews" id="product-reviews">
+                <div className="flex items-center gap-2">
+                  <Star className="h-4 w-4 fill-gold text-gold" />
+                  <span className="font-medium text-ink">
+                    {product.rating.toFixed(1)}
+                  </span>
+                  <span>
+                    based on {product.reviews}{' '}
+                    {product.reviews === 1 ? 'review' : 'reviews'}
+                  </span>
+                </div>
+                <p className="mt-2 text-mute">
+                  Individual review write-ups are not shown yet — the score above
+                  reflects store feedback.
+                </p>
+              </ProductAccordion>
+            ) : null}
           </div>
 
           <p className="mt-6 text-[13px]">

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { amountsMatch } from '@/lib/payments/amount-match'
 import { executeBkashPayment } from '@/lib/payments/bkash'
 import { completeGatewayPaidOrder } from '@/lib/payments/complete-order'
 import {
@@ -93,6 +94,21 @@ export async function GET(request: NextRequest) {
           executed.errorMessage ||
           'bKash could not confirm the payment.',
       )
+    }
+
+    if (!amountsMatch(attempt.amount, executed.amount)) {
+      await supabase
+        .from('payment_attempts')
+        .update({
+          status: 'failed',
+          raw_json: executed as unknown as Json,
+        })
+        .eq('id', attempt.id)
+      console.error('[bkash callback] amount mismatch', {
+        expected: attempt.amount,
+        actual: executed.amount,
+      })
+      return fail('Payment amount did not match the order total.')
     }
 
     await supabase

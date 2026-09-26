@@ -1,3 +1,4 @@
+/** Default brand values — overridden by Website → Site settings when saved. */
 export const BRAND = {
   name: 'Viable',
   tagline: 'Everyday feet. Elevated.',
@@ -14,4 +15,15 @@ export const BRAND = {
 /** Format BDT amounts with the ৳ symbol. */
 export function formatPrice(amount: number): string {
   return `৳${amount.toLocaleString('en-BD')}`
+}
+
+/** Digits-only id for wa.me links. */
+export function whatsappDigits(whatsapp: string): string {
+  return whatsapp.replace(/\D/g, '')
+}
+
+export function whatsappHref(whatsapp: string, text?: string): string {
+  const base = `https://wa.me/${whatsappDigits(whatsapp)}`
+  if (!text) return base
+  return `${base}?text=${encodeURIComponent(text)}`
 }

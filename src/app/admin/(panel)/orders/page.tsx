@@ -4,6 +4,7 @@ import {
   listOrderCityNames,
   listOrders,
 } from '@/lib/orders/queries'
+import { expireAbandonedPendingOrders } from '@/lib/orders/expire-pending'
 import type {
   OrderStatus,
   PaymentMethod,
@@ -116,6 +117,7 @@ async function OrdersTableSection({
 }: {
   filters: ReturnType<typeof parseFilters>
 }) {
+  await expireAbandonedPendingOrders()
   const orders = await listOrders(filters)
   return <OrdersTable orders={orders} />
 }

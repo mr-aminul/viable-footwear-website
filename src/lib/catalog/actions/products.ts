@@ -79,10 +79,11 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
       if (!Number.isFinite(stock) || stock < 0) {
         return { error: 'Stock must be zero or greater.' }
       }
+      const colorRaw = typeof row.color === 'string' ? row.color.trim() : ''
       variants.push({
         id: typeof row.id === 'string' ? row.id : undefined,
         size_eu: size,
-        color: typeof row.color === 'string' ? row.color : null,
+        color: colorRaw || null,
         color_hex:
           typeof row.color_hex === 'string'
             ? normalizeColorHex(row.color_hex)
@@ -96,6 +97,44 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
         active: row.active !== false,
       })
     }
+
+    const active = variants.filter((v) => v.active)
+    for (const variant of active) {
+      if (!variant.color?.trim()) {
+        return {
+          error: 'Every active variant needs a color name (e.g. Navy, Black).',
+        }
+      }
+    }
+
+    const byColor = new Map<string, VariantInput[]>()
+    for (const variant of active) {
+      const key = variant.color!.trim().toLowerCase()
+      const list = byColor.get(key) ?? []
+      list.push(variant)
+      byColor.set(key, list)
+    }
+
+    for (const [, group] of byColor) {
+      if (group.length < 2) continue
+      const imageIds = new Set(
+        group
+          .map((v) => v.media_id)
+          .filter((id): id is string => Boolean(id)),
+      )
+      if (imageIds.size > 1) {
+        return {
+          error: `“${group[0].color}” has different images on different sizes. Use one photo per color, or give each colorway its own name.`,
+        }
+      }
+      const sizes = group.map((v) => v.size_eu)
+      if (new Set(sizes).size !== sizes.length) {
+        return {
+          error: `Duplicate size under color “${group[0].color}”.`,
+        }
+      }
+    }
+
     return variants
   } catch {
     return { error: 'Could not parse variants.' }
@@ -449,7 +488,7 @@ export async function createProduct(
   const slug = readString(formData, 'slug') || slugify(name)
   const description = readString(formData, 'description')
   const subtitle = readString(formData, 'subtitle') || null
-  const fitNote = readString(formData, 'fit_note') || null
+  const note = readString(formData, 'note') || null
   const materials = readString(formData, 'materials')
   const careInfo = readString(formData, 'care_info')
   const price = readNumber(formData, 'price')
@@ -485,7 +524,7 @@ export async function createProduct(
       slug,
       description,
       subtitle,
-      fit_note: fitNote,
+      note,
       materials,
       care_info: careInfo,
       price,
@@ -526,7 +565,7 @@ export async function updateProduct(
   const slug = readString(formData, 'slug')
   const description = readString(formData, 'description')
   const subtitle = readString(formData, 'subtitle') || null
-  const fitNote = readString(formData, 'fit_note') || null
+  const note = readString(formData, 'note') || null
   const materials = readString(formData, 'materials')
   const careInfo = readString(formData, 'care_info')
   const price = readNumber(formData, 'price')
@@ -578,7 +617,7 @@ export async function updateProduct(
       slug,
       description,
       subtitle,
-      fit_note: fitNote,
+      note,
       materials,
       care_info: careInfo,
       price,

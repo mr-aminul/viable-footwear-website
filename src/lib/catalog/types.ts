@@ -28,8 +28,8 @@ export type Product = {
   description: string
   /** Material/style line under the title (e.g. “suede”). */
   subtitle?: string
-  /** Sizing tip banner above size selectors. */
-  fitNote?: string
+  /** Tip banner above size selectors (e.g. sizing note). */
+  note?: string
   /** Materials accordion body. */
   materials?: string
   /** Care / manufacturer accordion body. */
