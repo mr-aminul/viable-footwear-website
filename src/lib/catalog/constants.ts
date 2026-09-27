@@ -1,9 +1,6 @@
 /** Cap for “You May Also Like” tiles on PDP. */
 export const RELATED_PRODUCTS_DISPLAY_CAP = 8
 
-/** Max images per product (primary + gallery). */
-export const MAX_PRODUCT_IMAGES = 12
-
 /** Max optional product videos. */
 export const MAX_PRODUCT_VIDEOS = 1
 

@@ -8,7 +8,6 @@ import {
   ALLOWED_IMAGE_TYPES,
   ALLOWED_VIDEO_TYPES,
   IMAGE_MAX_BYTES,
-  MAX_PRODUCT_IMAGES,
   MAX_PRODUCT_VIDEOS,
   PRODUCT_IMAGE_BUCKET,
   PRODUCT_VIDEO_BUCKET,
@@ -100,9 +99,6 @@ export async function uploadProductMedia(
   const images = (existing ?? []).filter((m) => m.media_type === 'image')
   const videos = (existing ?? []).filter((m) => m.media_type === 'video')
 
-  if (mediaType === 'image' && images.length >= MAX_PRODUCT_IMAGES) {
-    return { ok: false, error: `At most ${MAX_PRODUCT_IMAGES} images per product.` }
-  }
   if (mediaType === 'video' && videos.length >= MAX_PRODUCT_VIDEOS) {
     return { ok: false, error: 'Only one product video is allowed. Remove the existing one first.' }
   }
