@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
+import { offerPromoPath, OFFERS_PATH } from '@/lib/offers/paths'
 import {
   normalizePromoCode,
   type PromoDiscountType,
@@ -94,9 +95,15 @@ function parsePayload(formData: FormData):
     return { error: 'Percent discount cannot exceed 100.' }
   }
 
-  const productIds = parseProductIds(formData)
-  if (productIds.length === 0) {
-    return { error: 'Select at least one product for this promo.' }
+  const appliesToAll =
+    formData.get('applies_to_all') === 'on' ||
+    formData.get('applies_to_all') === 'true'
+  const productIds = appliesToAll ? [] : parseProductIds(formData)
+  if (!appliesToAll && productIds.length === 0) {
+    return {
+      error:
+        'Choose All products, or select at least one product for this promo.',
+    }
   }
 
   return {
@@ -108,13 +115,14 @@ function parsePayload(formData: FormData):
     ends_at: endsAt,
     discount_type: discountType,
     discount_value: discountValue,
+    // Empty product_ids = all current and future catalog products
     product_ids: productIds,
   }
 }
 
 function revalidatePromotions(id?: string) {
-  revalidatePath('/admin/promotions')
-  if (id) revalidatePath(`/admin/promotions/${id}`)
+  revalidatePath(OFFERS_PATH)
+  if (id) revalidatePath(offerPromoPath(id))
 }
 
 export async function createPromotion(
@@ -138,7 +146,7 @@ export async function createPromotion(
     return { ok: false, error: error.message }
   }
 
-  revalidatePromotions()
+  revalidatePromotions(data.id)
   return { ok: true, data: { id: data.id } }
 }
 

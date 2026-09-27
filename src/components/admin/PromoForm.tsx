@@ -12,6 +12,7 @@ import {
   softFieldClassName,
 } from '@/components/admin/ui'
 import type { RelatedPickerProduct } from '@/lib/catalog/queries'
+import { offerPromoPath } from '@/lib/offers/paths'
 import {
   createPromotion,
   updatePromotion,
@@ -75,6 +76,10 @@ export function PromoForm({
   const [productIds, setProductIds] = useState<string[]>(
     initial?.product_ids ?? [],
   )
+  /** Empty product_ids means all products (including ones added later). */
+  const [appliesToAll, setAppliesToAll] = useState(
+    () => !initial || initial.product_ids.length === 0,
+  )
 
   const isEdit = Boolean(initial?.id)
 
@@ -89,6 +94,7 @@ export function PromoForm({
       neverExpires,
       discountType,
       discountValue,
+      appliesToAll,
       productIds,
     }),
     [
@@ -101,6 +107,7 @@ export function PromoForm({
       neverExpires,
       discountType,
       discountValue,
+      appliesToAll,
       productIds,
     ],
   )
@@ -125,7 +132,12 @@ export function PromoForm({
     }
     fd.set('discount_type', discountType)
     fd.set('discount_value', discountValue)
-    fd.set('product_ids', JSON.stringify(productIds))
+    if (appliesToAll) {
+      fd.set('applies_to_all', 'on')
+      fd.set('product_ids', JSON.stringify([]))
+    } else {
+      fd.set('product_ids', JSON.stringify(productIds))
+    }
 
     const result = isEdit
       ? await updatePromotion(initial!.id!, fd)
@@ -137,7 +149,7 @@ export function PromoForm({
     setSavedSnapshot(JSON.stringify(draft))
     setSuccess('Saved.')
     if (!isEdit && result.data?.id) {
-      router.push(`/admin/promotions/${result.data.id}`)
+      router.push(offerPromoPath(result.data.id))
       router.refresh()
       return true
     }
@@ -270,24 +282,72 @@ export function PromoForm({
           Applicable products
         </h2>
         <p className="mt-1 text-[13px] text-mute">
-          Select the products this promo applies to. Discount is calculated only
-          on matching items in the bag.
+          Discount is calculated only on matching items in the bag. “All
+          products” stays in sync with the live catalog — new and removed
+          products are included or excluded automatically.
         </p>
-        <div className="mt-4">
-          <PromoProductPicker
-            catalog={catalog}
-            selectedIds={productIds}
-            onChange={setProductIds}
-            disabled={pending}
-          />
-        </div>
+
+        <fieldset className="mt-4 space-y-3" disabled={pending}>
+          <legend className="sr-only">Product scope</legend>
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ink/[0.045] px-4 py-3.5 transition hover:bg-ink/[0.07] has-[:checked]:bg-navy/5">
+            <input
+              type="radio"
+              name="product_scope"
+              className="mt-0.5"
+              checked={appliesToAll}
+              onChange={() => setAppliesToAll(true)}
+            />
+            <span>
+              <span className="block text-[14px] font-semibold text-ink">
+                All products
+              </span>
+              <span className="mt-0.5 block text-[13px] text-mute">
+                Applies to every product on the site, including ones added
+                after this promo is saved.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ink/[0.045] px-4 py-3.5 transition hover:bg-ink/[0.07] has-[:checked]:bg-navy/5">
+            <input
+              type="radio"
+              name="product_scope"
+              className="mt-0.5"
+              checked={!appliesToAll}
+              onChange={() => setAppliesToAll(false)}
+            />
+            <span>
+              <span className="block text-[14px] font-semibold text-ink">
+                Selected products
+              </span>
+              <span className="mt-0.5 block text-[13px] text-mute">
+                Only the products you pick below. New products are not included
+                until you add them here.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        {!appliesToAll ? (
+          <div className="mt-4">
+            <PromoProductPicker
+              catalog={catalog}
+              selectedIds={productIds}
+              onChange={setProductIds}
+              disabled={pending}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="max-w-xl space-y-4">
         <FormError message={error} />
         <FormSuccess message={success} />
         <AdminActionButton type="button" disabled={pending} onClick={save}>
-          {pending ? 'Saving…' : isEdit ? 'Save promotion' : 'Create promotion'}
+          {pending
+            ? 'Saving…'
+            : isEdit
+              ? 'Save promo code'
+              : 'Create promo code'}
         </AdminActionButton>
       </div>
     </div>

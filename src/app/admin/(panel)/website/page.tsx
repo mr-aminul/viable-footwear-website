@@ -82,9 +82,9 @@ export default function WebsiteModifierPage() {
         <Link href="/admin/catalog" className="font-semibold text-navy hover:underline">
           Products
         </Link>
-        . Delivery promotions for the top ribbon live under{' '}
-        <Link href="/admin/campaigns" className="font-semibold text-navy hover:underline">
-          Campaigns
+        . Delivery offers for the top ribbon live under{' '}
+        <Link href="/admin/offers" className="font-semibold text-navy hover:underline">
+          Offers
         </Link>
         .
       </p>

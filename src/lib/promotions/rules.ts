@@ -57,7 +57,7 @@ export function formatPromoDiscountValue(
 
 /**
  * Discount applies only to lines whose product is in the promo's product_ids.
- * Empty product_ids means the promo applies to the full cart (all products).
+ * Empty product_ids means "All products": every live catalog item now and later.
  */
 export function computePromoDiscount(
   promo: Pick<

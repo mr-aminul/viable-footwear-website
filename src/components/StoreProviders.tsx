@@ -8,6 +8,7 @@ import { Header } from '@/components/Header'
 import { Footer } from '@/components/Footer'
 import { PageTransition } from '@/components/PageTransition'
 import { ToastHost } from '@/components/ToastHost'
+import { WhatsAppBubble } from '@/components/WhatsAppBubble'
 import type { SiteContent } from '@/lib/website/types'
 
 export function StoreProviders({
@@ -30,6 +31,7 @@ export function StoreProviders({
             <PageTransition>{children}</PageTransition>
           </main>
           <Footer />
+          <WhatsAppBubble />
           <ToastHost />
         </OrdersProvider>
       </CartProvider>

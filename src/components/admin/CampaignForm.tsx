@@ -19,6 +19,7 @@ import {
   parseCampaignRules,
   type CampaignRuleType,
 } from '@/lib/campaigns/rules'
+import { offerDeliveryPath } from '@/lib/offers/paths'
 import type { Json } from '@/lib/supabase/database.types'
 
 type CampaignFormValues = {
@@ -146,7 +147,7 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
     setSavedSnapshot(JSON.stringify(draft))
     setSuccess('Saved.')
     if (!isEdit && result.data?.id) {
-      router.push(`/admin/campaigns/${result.data.id}`)
+      router.push(offerDeliveryPath(result.data.id))
       router.refresh()
       return true
     }
@@ -195,7 +196,7 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
               onChange={(e) => setActive(e.target.checked)}
               disabled={pending}
             />
-            Campaign is live
+            Offer is live
           </label>
         </Field>
       </div>
@@ -221,7 +222,10 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
         </Field>
       </div>
 
-      <Field label="Rule type">
+      <Field
+        label="Rule type"
+        hint="Delivery offers always apply to the full bag — any live products on the site. New products are included automatically."
+      >
         <select
           className={softFieldClassName}
           value={ruleType}
@@ -299,7 +303,11 @@ export function CampaignForm({ initial }: { initial?: CampaignFormValues }) {
       <FormSuccess message={success} />
 
       <AdminActionButton type="button" disabled={pending} onClick={save}>
-        {pending ? 'Saving…' : isEdit ? 'Save campaign' : 'Create campaign'}
+        {pending
+          ? 'Saving…'
+          : isEdit
+            ? 'Save delivery offer'
+            : 'Create delivery offer'}
       </AdminActionButton>
     </div>
   )

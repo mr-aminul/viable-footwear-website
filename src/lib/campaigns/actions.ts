@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { CAMPAIGNS_ANNOUNCEMENT_TAG } from '@/lib/campaigns/queries'
 import type { CampaignRuleType, CampaignRules } from '@/lib/campaigns/rules'
+import { offerDeliveryPath, OFFERS_PATH } from '@/lib/offers/paths'
 import type { ActionResult } from '@/lib/catalog/types'
 import type { Json } from '@/lib/supabase/database.types'
 import { createClient } from '@/lib/supabase/server'
@@ -69,9 +70,10 @@ function buildRules(formData: FormData): CampaignRules | { error: string } {
   return { ...base, fixed_delivery: fixed }
 }
 
-function revalidateCampaigns() {
+function revalidateCampaigns(id?: string) {
   revalidateTag(CAMPAIGNS_ANNOUNCEMENT_TAG)
-  revalidatePath('/admin/campaigns')
+  revalidatePath(OFFERS_PATH)
+  if (id) revalidatePath(offerDeliveryPath(id))
   revalidatePath('/', 'layout')
 }
 
@@ -105,7 +107,7 @@ export async function createCampaign(
     .single()
 
   if (error) return { ok: false, error: error.message }
-  revalidateCampaigns()
+  revalidateCampaigns(data.id)
   return { ok: true, data: { id: data.id } }
 }
 
@@ -139,8 +141,7 @@ export async function updateCampaign(
     .eq('id', id)
 
   if (error) return { ok: false, error: error.message }
-  revalidateCampaigns()
-  revalidatePath(`/admin/campaigns/${id}`)
+  revalidateCampaigns(id)
   return { ok: true }
 }
 
@@ -155,6 +156,6 @@ export async function setCampaignActive(
     .update({ active })
     .eq('id', id)
   if (error) return { ok: false, error: error.message }
-  revalidateCampaigns()
+  revalidateCampaigns(id)
   return { ok: true }
 }
