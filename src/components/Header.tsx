@@ -21,8 +21,8 @@ const links = [
   { to: '/', label: 'Home' },
   { to: '/shop', label: 'Shop' },
   { to: '/shop?category=crocs', label: 'Crocs' },
+  { to: '/shop?category=birkenstock', label: 'Birkenstock' },
   { to: '/shop?category=sneakers', label: 'Sneakers' },
-  { to: '/shop?category=slides', label: 'Slides' },
   { to: '/about', label: 'About' },
   { to: '/shop?sale=1', label: 'Sale', accent: true },
 ]

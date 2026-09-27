@@ -28,8 +28,8 @@ export function BrandLogo({
         src={src}
         alt="Viable"
         className={`w-auto ${heightClassName}`}
-        width={332}
-        height={81}
+        width={1600}
+        height={410}
         decoding="async"
         fetchPriority="low"
       />
