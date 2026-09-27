@@ -21,17 +21,25 @@ type EncodedWebp = {
   info: { width: number; height: number }
 }
 
+export type OptimizeImageOptions = {
+  /** Center-crop to a 1:1 square (product gallery / cards). */
+  square?: boolean
+}
+
 async function encodeWebp(
   bytes: Buffer,
   quality: number,
+  options: OptimizeImageOptions = {},
 ): Promise<EncodedWebp> {
+  const square = options.square === true
   const result = await sharp(bytes, { failOn: 'none' })
     .rotate()
     .resize({
       width: IMAGE_OPTIMIZE_MAX_EDGE,
       height: IMAGE_OPTIMIZE_MAX_EDGE,
-      fit: 'inside',
-      withoutEnlargement: true,
+      fit: square ? 'cover' : 'inside',
+      position: 'centre',
+      withoutEnlargement: !square,
     })
     .webp({
       quality,
@@ -54,6 +62,7 @@ async function encodeWebp(
 export async function optimizeProductImage(
   input: Buffer | ArrayBuffer,
   sourceMime: string,
+  options: OptimizeImageOptions = {},
 ): Promise<OptimizedImage | null> {
   const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input)
 
@@ -63,14 +72,14 @@ export async function optimizeProductImage(
   }
 
   let quality = IMAGE_OPTIMIZE_WEBP_QUALITY
-  let optimized = await encodeWebp(bytes, quality)
+  let optimized = await encodeWebp(bytes, quality, options)
 
   while (
     optimized.data.byteLength > IMAGE_OPTIMIZE_TARGET_BYTES &&
     quality > IMAGE_OPTIMIZE_MIN_QUALITY
   ) {
     quality = Math.max(IMAGE_OPTIMIZE_MIN_QUALITY, quality - 8)
-    optimized = await encodeWebp(bytes, quality)
+    optimized = await encodeWebp(bytes, quality, options)
   }
 
   return {

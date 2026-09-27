@@ -6,7 +6,7 @@ type DiscountChipProps = {
   className?: string
 }
 
-/** Compact “-% off” chip for PDP price rows (storefront + admin). */
+/** Compact “-% off” chip for price rows (cards, PDP, admin). */
 export function DiscountChip({
   price,
   compareAt,

@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import type { Product } from '@/lib/catalog/types'
 import { productBadgeClassName } from '@/lib/catalog/badge'
 import { formatPrice } from '@/lib/brand'
+import { DiscountChip } from '@/components/DiscountChip'
 import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { trackAddToCart } from '@/lib/analytics/events'
@@ -89,12 +90,12 @@ function ProductCardView({
   const interactive = Boolean(onToggleWishlist && onAddToCart)
 
   const media = (
-    <div className="block aspect-square overflow-hidden">
+    <div className="relative block aspect-square overflow-hidden">
       <img
         src={product.image}
         alt={product.name}
         className={[
-          'h-full w-full object-contain will-change-transform',
+          'absolute inset-0 h-full w-full object-cover will-change-transform',
           reduceMotion
             ? ''
             : 'transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.06]',
@@ -159,16 +160,22 @@ function ProductCardView({
         <p className="text-[13px] text-mute">{product.categoryLabel}</p>
 
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[15px] font-semibold text-ink">
-                {formatPrice(product.price)}
-              </span>
-              {product.compareAt && (
-                <span className="text-[13px] text-mute line-through">
-                  {formatPrice(product.compareAt)}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="inline-flex max-w-full items-baseline gap-1">
+                <span className="shrink-0 text-[15px] font-semibold text-ink">
+                  {formatPrice(product.price)}
                 </span>
-              )}
+                {product.compareAt ? (
+                  <span className="text-[11px] leading-none text-mute line-through sm:text-[13px]">
+                    {formatPrice(product.compareAt)}
+                  </span>
+                ) : null}
+              </span>
+              <DiscountChip
+                price={product.price}
+                compareAt={product.compareAt}
+              />
             </div>
           </div>
 

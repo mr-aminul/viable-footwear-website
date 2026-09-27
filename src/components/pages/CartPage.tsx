@@ -8,8 +8,15 @@ import { EASE_OUT } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 
 export function CartPage() {
-  const { items, updateQuantity, removeFromCart, cartTotal, clearCart, hydrated } =
-    useCart()
+  const {
+    items,
+    updateQuantity,
+    removeFromCart,
+    cartTotal,
+    clearCart,
+    clearBuyNow,
+    hydrated,
+  } = useCart()
   const reduceMotion = useReducedMotion()
 
   if (!hydrated) {
@@ -165,6 +172,7 @@ export function CartPage() {
           </p>
           <Link
             href="/checkout"
+            onClick={() => clearBuyNow()}
             className="mt-5 flex w-full items-center justify-center rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft"
           >
             Checkout

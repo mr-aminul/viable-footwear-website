@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -9,6 +10,7 @@ import {
   Heart,
   Info,
   RotateCcw,
+  ShoppingCart,
   Star,
   Truck,
 } from 'lucide-react'
@@ -24,6 +26,7 @@ import { useCart } from '@/context/CartContext'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { ProductAccordion } from '@/components/ProductAccordion'
 import { ProductCard } from '@/components/ProductCard'
+import { ProductImageZoom } from '@/components/ProductImageZoom'
 import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
 import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
 
@@ -36,12 +39,13 @@ export function ProductPage({
   product: Product
   related: Product[]
 }) {
-  const { addToCart, toggleWishlist, isWishlisted } = useCart()
+  const { addToCart, startBuyNow, toggleWishlist, isWishlisted } = useCart()
   const { productPromises } = useSiteSettings()
+  const router = useRouter()
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<number | null>(null)
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('EU')
-  const [colorIndex, setColorIndex] = useState(0)
+  const [colorIndex, setColorIndex] = useState<number | null>(0)
   const [imageIndex, setImageIndex] = useState(0)
   const [added, setAdded] = useState(false)
   const [error, setError] = useState('')
@@ -81,7 +85,8 @@ export function ProductPage({
     }))
   }, [product])
 
-  const selectedColor = colorOptions[colorIndex]
+  const selectedColor =
+    colorIndex != null ? colorOptions[colorIndex] : undefined
   const sizesForColor = useMemo(() => {
     if (!selectedColor) return product.sizes
     const matched = product.variants
@@ -119,10 +124,10 @@ export function ProductPage({
     })
   }, [product.id, product.name, product.category, product.categoryLabel, product.price])
 
-  const handleAdd = () => {
+  const resolveSelectedVariant = () => {
     if (size == null) {
       setError('Select a size')
-      return
+      return null
     }
 
     const variant =
@@ -137,11 +142,14 @@ export function ProductPage({
 
     if (!variant) {
       setError('That size is out of stock')
-      return
+      return null
     }
 
     setError('')
-    addToCart(product, size, 1, variant.id)
+    return variant
+  }
+
+  const trackSelectedVariantAdd = () => {
     trackAddToCart({
       item_id: product.id,
       item_name: product.name,
@@ -152,15 +160,29 @@ export function ProductPage({
         .filter(Boolean)
         .join(' / '),
     })
+  }
+
+  const handleAdd = () => {
+    const variant = resolveSelectedVariant()
+    if (!variant || size == null) return
+
+    addToCart(product, size, 1, variant.id)
+    trackSelectedVariantAdd()
     setAdded(true)
     window.setTimeout(() => setAdded(false), 2000)
   }
 
-  const ctaLabel =
-    size == null ? 'Choose size' : added ? 'Added' : 'Add to bag'
+  const handleBuyNow = () => {
+    const variant = resolveSelectedVariant()
+    if (!variant || size == null) return
+
+    startBuyNow(product, size, 1, variant.id)
+    trackSelectedVariantAdd()
+    router.push('/checkout')
+  }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12 lg:px-8">
+    <div className="mx-auto w-[90%] py-6 md:py-8">
       <nav
         aria-label="Breadcrumb"
         className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-mute"
@@ -191,56 +213,71 @@ export function ProductPage({
         Back to shop
       </Link>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
+      <div className="mt-5 grid grid-cols-1 gap-8 lg:grid-cols-[auto_minmax(22rem,1fr)] lg:items-start lg:gap-10 xl:gap-12">
         <motion.div
           initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={enterTransition(reduceMotion)}
-          className="space-y-3"
+          className="min-w-0 max-w-full lg:sticky lg:top-[calc(4.5rem+1rem)] lg:w-max"
         >
-          <div className="flex gap-3">
-            {gallery.length > 1 ? (
-              <div className="flex max-h-[min(100vw-2rem,36rem)] w-16 shrink-0 flex-col gap-2 overflow-y-auto md:max-h-[min(100%,28rem)] lg:max-h-none lg:self-stretch">
+          {/*
+            Square frame sized to leftover viewport height. Thumbs are capped to
+            the same height (scrollable) so they never stretch the main image.
+          */}
+          <div className="flex max-w-full items-start gap-3">
+            {gallery.length > 0 ? (
+              <div
+                className="flex w-14 shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain sm:w-16"
+                style={{ maxHeight: 'calc(100svh - 13rem)' }}
+              >
                 {gallery.map((src, i) => (
                   <button
                     key={src + i}
                     type="button"
                     onClick={() => setImageIndex(i)}
-                    className={`aspect-square w-full shrink-0 overflow-hidden rounded-xl border bg-white ${
+                    className={`relative aspect-square w-full shrink-0 overflow-hidden rounded-xl border bg-white ${
                       imageIndex === i ? 'border-navy' : 'border-cloud'
                     }`}
                   >
                     <img
                       src={src}
                       alt=""
-                      className="h-full w-full object-contain"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   </button>
                 ))}
               </div>
             ) : null}
-            <div className="relative min-w-0 flex-1 aspect-square overflow-hidden rounded-[1.5rem] bg-white">
-              <img
+            <div
+              className="relative shrink-0 overflow-hidden rounded-[1.5rem] bg-white"
+              style={{
+                width: 'calc(100svh - 13rem)',
+                maxWidth: '100%',
+                aspectRatio: '1 / 1',
+                height: 'auto',
+              }}
+            >
+              <ProductImageZoom
                 src={
                   gallery[Math.min(imageIndex, gallery.length - 1)] ??
                   product.image
                 }
                 alt={product.name}
-                className="h-full w-full object-contain"
-              />
-              {product.badge && (
-                <span
-                  className={`absolute left-4 top-4 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
-                >
-                  {product.badge}
-                </span>
-              )}
+              >
+                {product.badge ? (
+                  <span
+                    className={`absolute left-4 top-4 z-10 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${productBadgeClassName(product.badge)}`}
+                  >
+                    {product.badge}
+                  </span>
+                ) : null}
+              </ProductImageZoom>
             </div>
           </div>
           {product.videoUrl ? (
             <video
               controls
-              className="w-full rounded-[1.25rem] bg-ink/5"
+              className="mt-3 w-full max-w-[calc(100svh-13rem)] rounded-[1.25rem] bg-ink/5"
               src={product.videoUrl}
             />
           ) : null}
@@ -250,6 +287,7 @@ export function ProductPage({
           initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={enterTransition(reduceMotion, 0.08)}
+          className="min-w-0"
         >
           <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink md:text-5xl">
             {product.name}
@@ -293,21 +331,22 @@ export function ProductPage({
                     aria-label={c.name ? `Color ${c.name}` : `Color ${i + 1}`}
                     title={c.name ?? undefined}
                     onClick={() => {
-                      setColorIndex(i)
+                      setColorIndex((prev) => (prev === i ? null : i))
                       setSize(null)
                       setImageIndex(0)
                     }}
-                    className={`h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
+                    className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
                       colorIndex === i
                         ? 'border-navy'
                         : 'border-cloud hover:border-navy/40'
                     }`}
+                    aria-pressed={colorIndex === i}
                   >
                     {c.thumb ? (
                       <img
                         src={c.thumb}
                         alt=""
-                        className="h-full w-full object-contain"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-mist text-[10px] font-semibold uppercase text-mute">
@@ -371,7 +410,7 @@ export function ProductPage({
                   key={s}
                   type="button"
                   onClick={() => {
-                    setSize(s)
+                    setSize((prev) => (prev === s ? null : s))
                     setError('')
                   }}
                   className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
@@ -379,6 +418,7 @@ export function ProductPage({
                       ? 'border-navy bg-navy text-white'
                       : 'border-cloud bg-white text-ink hover:border-navy/40'
                   }`}
+                  aria-pressed={size === s}
                 >
                   {formatSizeLabel(s, sizeUnit)}
                 </button>
@@ -403,15 +443,25 @@ export function ProductPage({
             <button
               type="button"
               onClick={handleAdd}
-              className="inline-flex min-w-[180px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft sm:flex-none"
+              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:border-navy/30 hover:bg-mist sm:flex-none"
             >
               {added ? (
                 <>
                   <Check className="h-4 w-4" /> Added
                 </>
               ) : (
-                ctaLabel
+                <>
+                  <ShoppingCart className="h-4 w-4" />
+                  Add to cart
+                </>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft sm:flex-none"
+            >
+              Buy now
             </button>
           </div>
 

@@ -124,12 +124,12 @@ function GalleryThumb({
         isSelected ? 'border-navy' : 'border-cloud',
       ].join(' ')}
     >
-      <div className="h-full w-full overflow-hidden rounded-[inherit]">
+      <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
         <img
           src={image.url}
           alt=""
           draggable={false}
-          className="pointer-events-none h-full w-full object-contain"
+          className="pointer-events-none h-full w-full object-cover"
         />
       </div>
       <button
@@ -303,7 +303,7 @@ export function AdminProductGallery({
         colorways.find((name) => colorwayKey(name) === previewColorKey) ?? null
       let lastError: string | null = null
       for (const file of files) {
-        const prepared = await prepareMediaFileForUpload(file)
+        const prepared = await prepareMediaFileForUpload(file, { square: true })
         const formData = new FormData()
         formData.set('file', prepared.file)
         if (activeColor) formData.set('color', activeColor)
@@ -413,7 +413,7 @@ export function AdminProductGallery({
             <img
               src={current?.url ?? placeholderSrc}
               alt={current?.alt || productName}
-              className="h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-cover"
             />
 
             {isDraft ? (

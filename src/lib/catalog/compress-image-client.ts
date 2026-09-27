@@ -3,6 +3,11 @@ import {
   CLIENT_IMAGE_TARGET_BYTES,
 } from '@/lib/catalog/constants'
 
+export type CompressImageOptions = {
+  /** Center-crop to a 1:1 square (product gallery / cards). */
+  square?: boolean
+}
+
 function supportsWebpEncode(): boolean {
   if (typeof document === 'undefined') return false
   try {
@@ -30,13 +35,18 @@ async function canvasToBlob(
  * and Storage never sees multi-MB camera originals.
  * Animated GIFs and non-images are returned unchanged.
  */
-export async function compressImageForUpload(file: File): Promise<File> {
+export async function compressImageForUpload(
+  file: File,
+  options: CompressImageOptions = {},
+): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') {
     return file
   }
 
-  // Already small enough — skip the canvas pass.
-  if (file.size <= CLIENT_IMAGE_TARGET_BYTES) {
+  const square = options.square === true
+
+  // Already small enough — skip the canvas pass (unless we need a square crop).
+  if (!square && file.size <= CLIENT_IMAGE_TARGET_BYTES) {
     return file
   }
 
@@ -47,23 +57,32 @@ export async function compressImageForUpload(file: File): Promise<File> {
     return file
   }
 
-  const scale = Math.min(
-    1,
-    CLIENT_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height),
-  )
-  const width = Math.max(1, Math.round(bitmap.width * scale))
-  const height = Math.max(1, Math.round(bitmap.height * scale))
-
   const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) {
     bitmap.close()
     return file
   }
 
-  ctx.drawImage(bitmap, 0, 0, width, height)
+  if (square) {
+    const crop = Math.min(bitmap.width, bitmap.height)
+    const sx = Math.floor((bitmap.width - crop) / 2)
+    const sy = Math.floor((bitmap.height - crop) / 2)
+    const edge = Math.min(crop, CLIENT_IMAGE_MAX_EDGE)
+    canvas.width = edge
+    canvas.height = edge
+    ctx.drawImage(bitmap, sx, sy, crop, crop, 0, 0, edge, edge)
+  } else {
+    const scale = Math.min(
+      1,
+      CLIENT_IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height),
+    )
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+    canvas.width = width
+    canvas.height = height
+    ctx.drawImage(bitmap, 0, 0, width, height)
+  }
   bitmap.close()
 
   const preferWebp = supportsWebpEncode()
@@ -82,7 +101,7 @@ export async function compressImageForUpload(file: File): Promise<File> {
     blob = await canvasToBlob(canvas, mime, quality)
   }
 
-  if (!blob || blob.size >= file.size) {
+  if (!blob || (!square && blob.size >= file.size)) {
     return file
   }
 
@@ -96,7 +115,10 @@ export async function compressImageForUpload(file: File): Promise<File> {
 /**
  * Prepare a gallery/variant file for upload: compress images, pass videos through.
  */
-export async function prepareMediaFileForUpload(file: File): Promise<{
+export async function prepareMediaFileForUpload(
+  file: File,
+  options: CompressImageOptions = {},
+): Promise<{
   file: File
   warning?: string
 }> {
@@ -108,6 +130,6 @@ export async function prepareMediaFileForUpload(file: File): Promise<{
     }
   }
 
-  const compressed = await compressImageForUpload(file)
+  const compressed = await compressImageForUpload(file, options)
   return { file: compressed }
 }

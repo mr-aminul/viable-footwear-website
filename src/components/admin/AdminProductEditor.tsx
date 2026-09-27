@@ -106,7 +106,7 @@ export function AdminProductEditor({
   const [relatedIds, setRelatedIds] = useState<string[]>(initialRelatedIds)
 
   const [size, setSize] = useState<number | null>(null)
-  const [colorIndex, setColorIndex] = useState(0)
+  const [colorIndex, setColorIndex] = useState<number | null>(0)
 
   const draft = useMemo(
     () => ({
@@ -211,7 +211,8 @@ export function AdminProductEditor({
     [colorOptions],
   )
 
-  const selectedColor = colorOptions[colorIndex]
+  const selectedColor =
+    colorIndex != null ? colorOptions[colorIndex] : undefined
   const sizesForColor = useMemo(() => {
     if (!selectedColor) {
       return [
@@ -515,7 +516,7 @@ export function AdminProductEditor({
                     aria-label={c.name ? `Color ${c.name}` : `Color ${i + 1}`}
                     title={c.name ?? undefined}
                     onClick={() => {
-                      setColorIndex(i)
+                      setColorIndex((prev) => (prev === i ? null : i))
                       setSize(null)
                     }}
                     className={`h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
@@ -523,6 +524,7 @@ export function AdminProductEditor({
                         ? 'border-navy'
                         : 'border-cloud hover:border-navy/40'
                     }`}
+                    aria-pressed={colorIndex === i}
                   >
                     {c.thumb ? (
                       <img
@@ -564,12 +566,15 @@ export function AdminProductEditor({
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setSize(s)}
+                    onClick={() =>
+                      setSize((prev) => (prev === s ? null : s))
+                    }
                     className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
                       size === s
                         ? 'border-navy bg-navy text-white'
                         : 'border-cloud bg-white text-ink hover:border-navy/40'
                     }`}
+                    aria-pressed={size === s}
                   >
                     {s}
                   </button>

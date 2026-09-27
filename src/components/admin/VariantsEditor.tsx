@@ -2,11 +2,14 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   ChevronDown,
@@ -649,10 +652,13 @@ function ColorPhotos({
 }) {
   const router = useRouter()
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
 
   const assignedIds = useMemo(
     () => new Set(colorImages.map((img) => img.id)),
@@ -660,19 +666,56 @@ function ColorPhotos({
   )
   const galleryChoices = images.filter((img) => !assignedIds.has(img.id))
 
-  useEffect(() => {
-    if (!open) return
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null)
+      return
+    }
+
+    const syncPosition = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const menuWidth = Math.min(17 * 16, window.innerWidth - 32)
+      const menuHeight = menuRef.current?.offsetHeight ?? 160
+      const gap = 6
+      const left = Math.min(
+        Math.max(8, rect.left),
+        window.innerWidth - menuWidth - 8,
+      )
+      const spaceBelow = window.innerHeight - rect.bottom - gap
+      const top =
+        spaceBelow < menuHeight && rect.top > menuHeight + gap
+          ? rect.top - menuHeight - gap
+          : rect.bottom + gap
+      setMenuStyle({
+        position: 'fixed',
+        top,
+        left,
+        zIndex: 80,
+      })
+    }
+
+    syncPosition()
+
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (rootRef.current?.contains(target)) return
+      if (menuRef.current?.contains(target)) return
+      setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    window.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('scroll', syncPosition, true)
+    window.addEventListener('resize', syncPosition)
     return () => {
-      window.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', syncPosition, true)
+      window.removeEventListener('resize', syncPosition)
     }
   }, [open])
 
@@ -712,7 +755,7 @@ function ColorPhotos({
       const uploadedIds: string[] = []
       let lastError: string | null = null
       for (const file of files) {
-        const prepared = await prepareMediaFileForUpload(file)
+        const prepared = await prepareMediaFileForUpload(file, { square: true })
         const formData = new FormData()
         formData.set('file', prepared.file)
         formData.set('color', colorLabel.trim())
@@ -782,6 +825,7 @@ function ColorPhotos({
       })}
 
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -798,48 +842,55 @@ function ColorPhotos({
         <ImagePlus className="h-3.5 w-3.5" />
       </button>
 
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="Choose photo"
-          className="absolute left-0 top-full z-30 mt-1.5 w-[min(17rem,calc(100vw-2rem))] rounded-xl border border-cloud bg-white p-2 shadow-card"
-        >
-          <div className="flex flex-wrap gap-1.5">
-            {galleryChoices.map((img, index) => (
-              <button
-                key={img.id}
-                type="button"
-                aria-label={`Gallery image ${index + 1}`}
-                onClick={() => pickFromGallery(img.id)}
-                className="h-12 w-12 overflow-hidden rounded-lg border border-cloud bg-mist/30 transition hover:border-navy/40"
-              >
-                <img
-                  src={img.url}
-                  alt=""
-                  className="h-full w-full object-contain"
-                />
-              </button>
-            ))}
-
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-              className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-cloud text-mute transition hover:border-navy/40 hover:text-navy disabled:opacity-60"
-              aria-label="Upload new photo"
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="dialog"
+              aria-label="Choose photo"
+              style={menuStyle ?? undefined}
+              className="w-[min(17rem,calc(100vw-2rem))] rounded-xl border border-cloud bg-white p-2 shadow-card"
             >
-              <ImagePlus className="h-4 w-4" />
-              <span className="text-[9px] font-semibold">
-                {uploading ? '…' : 'Upload'}
-              </span>
-            </button>
-          </div>
+              <div className="flex flex-wrap gap-1.5">
+                {galleryChoices.map((img, index) => (
+                  <button
+                    key={img.id}
+                    type="button"
+                    aria-label={`Gallery image ${index + 1}`}
+                    onClick={() => pickFromGallery(img.id)}
+                    className="h-12 w-12 overflow-hidden rounded-lg border border-cloud bg-mist/30 transition hover:border-navy/40"
+                  >
+                    <img
+                      src={img.url}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+                ))}
 
-          {error ? (
-            <p className="mt-1.5 text-[11px] text-spark">{error}</p>
-          ) : null}
-        </div>
-      ) : error ? (
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileRef.current?.click()}
+                  className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-cloud text-mute transition hover:border-navy/40 hover:text-navy disabled:opacity-60"
+                  aria-label="Upload new photo"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  <span className="text-[9px] font-semibold">
+                    {uploading ? '…' : 'Upload'}
+                  </span>
+                </button>
+              </div>
+
+              {error ? (
+                <p className="mt-1.5 text-[11px] text-spark">{error}</p>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {!open && error ? (
         <span className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap text-[11px] text-spark">
           {error}
         </span>

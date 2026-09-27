@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, Copy, Loader2 } from 'lucide-react'
@@ -152,8 +153,38 @@ function SectionHeading({
 export function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { items, cartTotal, cartCount, cartWeightKg, clearCart, hydrated } =
-    useCart()
+  const {
+    items: bagItems,
+    buyNowItems,
+    clearCart,
+    clearBuyNow,
+    hydrated,
+  } = useCart()
+  const isBuyNow = Boolean(buyNowItems && buyNowItems.length > 0)
+  const items = isBuyNow ? buyNowItems! : bagItems
+  const cartTotal = useMemo(
+    () => items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
+    [items],
+  )
+  const cartCount = useMemo(
+    () => items.reduce((sum, i) => sum + i.quantity, 0),
+    [items],
+  )
+  const cartWeightKg = useMemo(
+    () =>
+      Math.max(
+        0.5,
+        items.reduce(
+          (sum, i) => sum + (i.product.weightKg || 0.5) * i.quantity,
+          0,
+        ),
+      ),
+    [items],
+  )
+  const finishCheckout = useCallback(() => {
+    if (isBuyNow) clearBuyNow()
+    else clearCart()
+  }, [clearBuyNow, clearCart, isBuyNow])
   const { addOrder } = useOrders()
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
@@ -247,7 +278,7 @@ export function CheckoutPage() {
       } catch {
         // ignore
       }
-      clearCart()
+      finishCheckout()
       return
     }
     if (pay === 'failed') {
@@ -261,7 +292,7 @@ export function CheckoutPage() {
         message,
       })
     }
-  }, [searchParams, clearCart])
+  }, [searchParams, finishCheckout])
 
   useEffect(() => {
     if (!hydrated || items.length === 0) return
@@ -808,7 +839,7 @@ export function CheckoutPage() {
             .join(' · '),
         })
       }
-      clearCart()
+      finishCheckout()
     } catch {
       setError({
         title: 'Connection problem',
@@ -942,10 +973,16 @@ export function CheckoutPage() {
           </p>
         </div>
         <Link
-          href="/cart"
+          href={
+            isBuyNow
+              ? items[0]
+                ? `/product/${items[0].product.slug}`
+                : '/shop'
+              : '/cart'
+          }
           className="text-[13px] font-medium text-navy underline-offset-4 hover:underline"
         >
-          Edit bag
+          {isBuyNow ? 'Back to product' : 'Edit bag'}
         </Link>
       </div>
 
@@ -1540,41 +1577,53 @@ export function CheckoutPage() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="mt-5 hidden w-full items-center justify-center gap-2 rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50 lg:inline-flex"
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-navy py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {submitLabel}
           </button>
           <Link
-            href="/cart"
-            className="mt-3 hidden text-center text-[13px] font-medium text-navy underline-offset-4 hover:underline lg:block"
+            href={
+              isBuyNow
+                ? items[0]
+                  ? `/product/${items[0].product.slug}`
+                  : '/shop'
+                : '/cart'
+            }
+            className="mt-3 block text-center text-[13px] font-medium text-navy underline-offset-4 hover:underline"
           >
-            Back to bag
+            {isBuyNow ? 'Back to product' : 'Back to bag'}
           </Link>
         </aside>
       </form>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-              {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
-            </p>
-            <p className="truncate font-display text-[20px] tabular-nums tracking-tight text-navy-deep">
-              {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
-            </p>
-          </div>
-          <button
-            type="submit"
-            form="checkout-form"
-            disabled={!canSubmit}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-navy px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {submitLabel}
-          </button>
-        </div>
-      </div>
+      {/* Portal so Framer page transitions (transform) don’t trap position:fixed on mobile */}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cloud bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+              <div className="mx-auto flex max-w-7xl items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+                    {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
+                  </p>
+                  <p className="truncate font-display text-[20px] tabular-nums tracking-tight text-navy-deep">
+                    {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
+                  </p>
+                </div>
+                <button
+                  type="submit"
+                  form="checkout-form"
+                  disabled={!canSubmit}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-navy px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {submitLabel}
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

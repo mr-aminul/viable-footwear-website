@@ -112,7 +112,9 @@ export async function uploadProductMedia(
 
   if (!isVideo) {
     try {
-      const optimized = await optimizeProductImage(originalBytes, file.type)
+      const optimized = await optimizeProductImage(originalBytes, file.type, {
+        square: true,
+      })
       if (optimized) {
         uploadBody = optimized.buffer
         contentType = optimized.contentType

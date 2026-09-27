@@ -20,6 +20,7 @@ export interface CartItem {
 
 interface CartContextValue {
   items: CartItem[]
+  buyNowItems: CartItem[] | null
   wishlist: string[]
   hydrated: boolean
   addToCart: (
@@ -28,6 +29,13 @@ interface CartContextValue {
     quantity?: number,
     variantId?: string,
   ) => void
+  startBuyNow: (
+    product: Product,
+    size: number,
+    quantity?: number,
+    variantId?: string,
+  ) => void
+  clearBuyNow: () => void
   removeFromCart: (productId: string, size: number) => void
   updateQuantity: (productId: string, size: number, quantity: number) => void
   toggleWishlist: (productId: string) => void
@@ -41,6 +49,7 @@ interface CartContextValue {
 const CartContext = createContext<CartContextValue | null>(null)
 
 const CART_STORAGE_KEY = 'viable-cart'
+const BUY_NOW_STORAGE_KEY = 'viable-buy-now'
 const WISHLIST_STORAGE_KEY = 'viable-wishlist'
 
 type PersistedCartItem = {
@@ -50,10 +59,9 @@ type PersistedCartItem = {
   variantId?: string
 }
 
-function readJson<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback
+function readJson<T>(key: string, fallback: T, storage: Storage): T {
   try {
-    const raw = window.localStorage.getItem(key)
+    const raw = storage.getItem(key)
     if (!raw) return fallback
     return JSON.parse(raw) as T
   } catch {
@@ -61,38 +69,76 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function writeJson(key: string, value: unknown, storage: Storage) {
+  try {
+    storage.setItem(key, JSON.stringify(value))
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function resolveVariantId(
+  product: Product,
+  size: number,
+  variantId?: string,
+) {
+  return (
+    variantId ??
+    product.variants.find((v) => v.sizeEu === size && v.stock > 0)?.id
+  )
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [buyNowItems, setBuyNowItems] = useState<CartItem[] | null>(null)
   const [wishlist, setWishlist] = useState<string[]>([])
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    const storedItems = readJson<PersistedCartItem[]>(CART_STORAGE_KEY, [])
-    const storedWishlist = readJson<string[]>(WISHLIST_STORAGE_KEY, [])
+    const storedItems = readJson<PersistedCartItem[]>(
+      CART_STORAGE_KEY,
+      [],
+      window.localStorage,
+    )
+    const storedWishlist = readJson<string[]>(
+      WISHLIST_STORAGE_KEY,
+      [],
+      window.localStorage,
+    )
+    const storedBuyNow = readJson<PersistedCartItem[] | null>(
+      BUY_NOW_STORAGE_KEY,
+      null,
+      window.sessionStorage,
+    )
     if (Array.isArray(storedItems)) setItems(storedItems)
     if (Array.isArray(storedWishlist)) setWishlist(storedWishlist)
+    if (Array.isArray(storedBuyNow) && storedBuyNow.length > 0) {
+      setBuyNowItems(storedBuyNow)
+    }
     setHydrated(true)
   }, [])
 
   useEffect(() => {
     if (!hydrated) return
-    try {
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items))
-    } catch {
-      // ignore quota errors
-    }
+    writeJson(CART_STORAGE_KEY, items, window.localStorage)
   }, [items, hydrated])
 
   useEffect(() => {
     if (!hydrated) return
-    try {
-      window.localStorage.setItem(
-        WISHLIST_STORAGE_KEY,
-        JSON.stringify(wishlist),
-      )
-    } catch {
-      // ignore
+    if (buyNowItems && buyNowItems.length > 0) {
+      writeJson(BUY_NOW_STORAGE_KEY, buyNowItems, window.sessionStorage)
+    } else {
+      try {
+        window.sessionStorage.removeItem(BUY_NOW_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
     }
+  }, [buyNowItems, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    writeJson(WISHLIST_STORAGE_KEY, wishlist, window.localStorage)
   }, [wishlist, hydrated])
 
   const addToCart = useCallback(
@@ -102,9 +148,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       quantity = 1,
       variantId?: string,
     ) => {
-      const resolvedVariantId =
-        variantId ??
-        product.variants.find((v) => v.sizeEu === size && v.stock > 0)?.id
+      const resolvedVariantId = resolveVariantId(product, size, variantId)
 
       setItems((prev) => {
         const existing = prev.find(
@@ -130,6 +174,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
+
+  const startBuyNow = useCallback(
+    (
+      product: Product,
+      size: number,
+      quantity = 1,
+      variantId?: string,
+    ) => {
+      const resolvedVariantId = resolveVariantId(product, size, variantId)
+      const next: CartItem[] = [
+        { product, size, quantity, variantId: resolvedVariantId },
+      ]
+      // Persist before navigation so /checkout never races an empty bag.
+      writeJson(BUY_NOW_STORAGE_KEY, next, window.sessionStorage)
+      setBuyNowItems(next)
+    },
+    [],
+  )
+
+  const clearBuyNow = useCallback(() => {
+    try {
+      window.sessionStorage.removeItem(BUY_NOW_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+    setBuyNowItems(null)
+  }, [])
 
   const removeFromCart = useCallback((productId: string, size: number) => {
     setItems((prev) =>
@@ -194,9 +265,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       items,
+      buyNowItems,
       wishlist,
       hydrated,
       addToCart,
+      startBuyNow,
+      clearBuyNow,
       removeFromCart,
       updateQuantity,
       toggleWishlist,
@@ -208,9 +282,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }),
     [
       items,
+      buyNowItems,
       wishlist,
       hydrated,
       addToCart,
+      startBuyNow,
+      clearBuyNow,
       removeFromCart,
       updateQuantity,
       toggleWishlist,

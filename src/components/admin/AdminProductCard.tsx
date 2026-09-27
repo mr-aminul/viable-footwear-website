@@ -93,11 +93,11 @@ export function AdminProductCard({
         <Heart className="h-4 w-4" />
       </span>
 
-      <div className="aspect-square overflow-hidden">
+      <div className="relative aspect-square overflow-hidden">
         <img
           src={product.image}
           alt={product.name}
-          className="h-full w-full object-contain transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-[1.06]"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-[1.06]"
           loading="lazy"
         />
       </div>
