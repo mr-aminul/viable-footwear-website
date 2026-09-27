@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import { productBadgeClassName } from '@/lib/catalog/badge'
+import { DiscountChip } from '@/components/DiscountChip'
 import { galleryForColorway } from '@/lib/catalog/gallery'
 import { colorwayKey } from '@/lib/catalog/colorway'
 import { formatSizeLabel } from '@/lib/catalog/sizing'
@@ -254,15 +255,16 @@ export function ProductPage({
             <p className="mt-1 text-[15px] text-mute">{product.categoryLabel}</p>
           )}
 
-          <div className="mt-5 flex items-baseline gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <span className="text-2xl font-semibold text-ink">
               {formatPrice(product.price)}
             </span>
-            {product.compareAt && (
+            {product.compareAt ? (
               <span className="text-[16px] text-mute line-through">
                 {formatPrice(product.compareAt)}
               </span>
-            )}
+            ) : null}
+            <DiscountChip price={product.price} compareAt={product.compareAt} />
           </div>
           <p className="mt-1 text-[12px] text-mute">
             Prices in BDT · Delivery calculated at checkout

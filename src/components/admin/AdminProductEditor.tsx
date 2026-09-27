@@ -30,6 +30,7 @@ import {
 } from '@/components/admin/VariantsEditor'
 import { RelatedProductsPicker } from '@/components/admin/RelatedProductsPicker'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { DiscountChip } from '@/components/DiscountChip'
 import { ProductAccordion } from '@/components/ProductAccordion'
 import {
   FormError,
@@ -447,7 +448,7 @@ export function AdminProductEditor({
             />
           </div>
 
-          <div className="mt-5 flex flex-wrap items-baseline gap-3">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <label className="flex items-baseline gap-1 rounded-lg bg-ink/[0.045] px-2 py-1 transition focus-within:bg-ink/[0.07]">
               <span className="text-[14px] text-mute">৳</span>
               <input
@@ -471,6 +472,10 @@ export function AdminProductEditor({
                 className="w-24 border-0 bg-transparent p-0 text-[16px] leading-none text-mute line-through outline-none"
               />
             </label>
+            <DiscountChip
+              price={Number(price)}
+              compareAt={compareAt.trim() === '' ? null : Number(compareAt)}
+            />
           </div>
           <p className="mt-1 text-[12px] text-mute">
             Prices in BDT · Delivery calculated at checkout

@@ -17,6 +17,21 @@ export function formatPrice(amount: number): string {
   return `৳${amount.toLocaleString('en-BD')}`
 }
 
+/**
+ * Percent off from compare-at → current price.
+ * Returns null when there is no meaningful discount.
+ */
+export function discountPercent(
+  price: number,
+  compareAt: number | null | undefined,
+): number | null {
+  if (compareAt == null || !Number.isFinite(compareAt) || !Number.isFinite(price)) {
+    return null
+  }
+  if (compareAt <= 0 || price < 0 || compareAt <= price) return null
+  return Math.round(((compareAt - price) / compareAt) * 100)
+}
+
 /** Digits-only id for wa.me links. */
 export function whatsappDigits(whatsapp: string): string {
   return whatsapp.replace(/\D/g, '')
