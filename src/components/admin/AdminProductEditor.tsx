@@ -166,6 +166,7 @@ export function AdminProductEditor({
         .map((m) => ({
           id: m.id,
           url: resolveMediaUrl(m.storage_path, 'image'),
+          color: m.color?.trim() || null,
         })),
     [media],
   )
@@ -178,8 +179,13 @@ export function AdminProductEditor({
     for (const row of variantRows) {
       if (!row.active) continue
       const key = colorwayKey(row.color)
+      const fromTagged = variantImageOptions.find(
+        (img) => colorwayKey(img.color) === key,
+      )?.url
       const thumb =
-        variantImageOptions.find((img) => img.id === row.media_id)?.url ?? null
+        fromTagged ??
+        variantImageOptions.find((img) => img.id === row.media_id)?.url ??
+        null
       const existing = unique.get(key)
       if (!existing) {
         unique.set(key, {
@@ -196,6 +202,14 @@ export function AdminProductEditor({
       thumb: value.thumb,
     }))
   }, [variantRows, variantImageOptions])
+
+  const colorwayNames = useMemo(
+    () =>
+      colorOptions
+        .map((c) => c.name)
+        .filter((name): name is string => Boolean(name)),
+    [colorOptions],
+  )
 
   const selectedColor = colorOptions[colorIndex]
   const sizesForColor = useMemo(() => {
@@ -368,6 +382,8 @@ export function AdminProductEditor({
             onBadgeChange={setBadge}
             isDraft={!active}
             media={media}
+            colorways={colorwayNames}
+            previewColorKey={selectedColor?.key ?? null}
             placeholderSrc={product.image}
           />
 
@@ -658,11 +674,7 @@ export function AdminProductEditor({
       </div>
 
       <section className="mt-14">
-        <h2 className="text-[15px] font-semibold text-ink">Variants & SKUs</h2>
-        <p className="mt-1 text-[13px] text-mute">
-          Size, color name, SKU, and stock. Different colors need different
-          names — images are per row unless you apply to the whole colorway.
-        </p>
+        <h2 className="text-[15px] font-semibold text-ink">Colors & sizes</h2>
         <div className="mt-4">
           <VariantsEditor
             productId={product.id}

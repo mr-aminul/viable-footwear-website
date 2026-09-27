@@ -54,14 +54,19 @@ export function ProductPage({
     >()
     for (const variant of product.variants) {
       const key = colorwayKey(variant.color)
+      const fromGallery = product.images.find(
+        (img) =>
+          Boolean(img.color?.trim()) && colorwayKey(img.color) === key,
+      )?.url
+      const thumb = fromGallery ?? variant.imageUrl
       const existing = unique.get(key)
       if (!existing) {
         unique.set(key, {
           name: variant.color?.trim() || null,
-          thumb: variant.imageUrl,
+          thumb,
         })
-      } else if (!existing.thumb && variant.imageUrl) {
-        existing.thumb = variant.imageUrl
+      } else if (!existing.thumb && thumb) {
+        existing.thumb = thumb
       }
     }
     if (unique.size === 0 && product.colors.length > 0) {

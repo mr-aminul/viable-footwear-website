@@ -1,8 +1,10 @@
 import type { ProductBadge } from '@/lib/catalog/constants'
 
-/** Storefront gallery image; colorHex tags a colorway (null = shared). */
+/** Storefront gallery image; `color` tags a colorway name (null = shared). */
 export type ProductImage = {
   url: string
+  /** Colorway name (matches variant.color). Null = shared / unassigned. */
+  color: string | null
   colorHex: string | null
 }
 

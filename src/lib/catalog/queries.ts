@@ -61,6 +61,7 @@ function mapProduct(
     .sort((a, b) => a.sort_order - b.sort_order)
   const images = imageRows.map((m) => ({
     url: resolveMediaUrl(m.storage_path, 'image'),
+    color: m.color?.trim() || null,
     colorHex: normalizeColorHex(m.color_hex),
   }))
   const mediaById = new Map(
@@ -699,7 +700,7 @@ export function getAdminProductMedia(productId: string) {
       const admin = createServiceClient()
       const { data } = await admin
         .from('product_media')
-        .select('id, media_type, storage_path, alt, sort_order, color_hex')
+        .select('id, media_type, storage_path, alt, sort_order, color, color_hex')
         .eq('product_id', productId)
         .order('sort_order', { ascending: true })
       return data ?? []

@@ -52,11 +52,13 @@ export async function uploadProductMedia(
   }
 
   const alt = String(formData.get('alt') ?? '').trim() || null
+  const colorRaw = String(formData.get('color') ?? '').trim()
+  const color = colorRaw ? colorRaw.replace(/\s+/g, ' ') : null
   const colorHexRaw = String(formData.get('color_hex') ?? '').trim()
   let colorHex: string | null = null
   if (colorHexRaw) {
     if (!/^#[0-9a-fA-F]{6}$/.test(colorHexRaw)) {
-      return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
+      return { ok: false, error: 'Color hex must be a #RRGGBB value.' }
     }
     colorHex = colorHexRaw.toUpperCase()
   }
@@ -158,6 +160,7 @@ export async function uploadProductMedia(
       storage_path: storagePath,
       alt,
       sort_order: nextSort,
+      color: mediaType === 'image' ? color : null,
       color_hex: mediaType === 'image' ? colorHex : null,
     })
     .select('id')
@@ -288,8 +291,41 @@ export async function updateMediaAlt(
 }
 
 /**
- * Tag a gallery image with a colorway (null = shared across colors).
+ * Tag a gallery image with a colorway name (null = shared / unassigned).
+ * Skips cache revalidation so admin picks stay instant — Save product refreshes.
  */
+export async function updateMediaColorway(
+  mediaId: string,
+  color: string | null,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const { data: media, error: loadError } = await supabase
+    .from('product_media')
+    .select('id, media_type')
+    .eq('id', mediaId)
+    .maybeSingle()
+
+  if (loadError || !media) {
+    return { ok: false, error: loadError?.message ?? 'Media not found.' }
+  }
+  if (media.media_type !== 'image') {
+    return { ok: false, error: 'Only images can be tagged with a color.' }
+  }
+
+  const nextColor = color?.trim().replace(/\s+/g, ' ') || null
+
+  const { error } = await supabase
+    .from('product_media')
+    .update({ color: nextColor })
+    .eq('id', mediaId)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+/** @deprecated Prefer updateMediaColorway (name-based). */
 export async function updateMediaColor(
   mediaId: string,
   colorHex: string | null,
@@ -310,18 +346,18 @@ export async function updateMediaColor(
     return { ok: false, error: 'Only images can be tagged with a color.' }
   }
 
-  let nextColor: string | null = null
+  let nextHex: string | null = null
   if (colorHex) {
     const trimmed = colorHex.trim()
     if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
       return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
     }
-    nextColor = trimmed.toUpperCase()
+    nextHex = trimmed.toUpperCase()
   }
 
   const { error } = await supabase
     .from('product_media')
-    .update({ color_hex: nextColor })
+    .update({ color_hex: nextHex })
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }
@@ -337,18 +373,18 @@ export async function updateMediaColor(
 }
 
 /**
- * Clear all gallery images tagged to a colorway (make them shared again).
+ * Clear all gallery images tagged to a colorway name (make them shared again).
  */
 export async function clearColorwayMedia(
   productId: string,
-  colorHex: string,
+  color: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
-  const trimmed = colorHex.trim().toUpperCase()
-  if (!/^#[0-9A-F]{6}$/.test(trimmed)) {
-    return { ok: false, error: 'Color must be a #RRGGBB hex value.' }
+  const trimmed = color.trim().replace(/\s+/g, ' ')
+  if (!trimmed) {
+    return { ok: false, error: 'Color name is required.' }
   }
 
   const { data: product } = await supabase
@@ -358,14 +394,26 @@ export async function clearColorwayMedia(
     .maybeSingle()
   if (!product) return { ok: false, error: 'Product not found.' }
 
-  const { error } = await supabase
+  const { data: rows } = await supabase
     .from('product_media')
-    .update({ color_hex: null })
+    .select('id, color')
     .eq('product_id', productId)
     .eq('media_type', 'image')
-    .eq('color_hex', trimmed)
 
-  if (error) return { ok: false, error: error.message }
+  const ids = (rows ?? [])
+    .filter(
+      (row) =>
+        row.color?.trim().toLowerCase() === trimmed.toLowerCase(),
+    )
+    .map((row) => row.id)
+
+  if (ids.length > 0) {
+    const { error } = await supabase
+      .from('product_media')
+      .update({ color: null })
+      .in('id', ids)
+    if (error) return { ok: false, error: error.message }
+  }
 
   revalidateProduct(productId, product.slug)
   return { ok: true }

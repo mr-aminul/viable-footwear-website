@@ -144,6 +144,7 @@ export interface Database {
           storage_path: string
           alt: string | null
           sort_order: number
+          color: string | null
           color_hex: string | null
           created_at: string
         }
@@ -154,6 +155,7 @@ export interface Database {
           storage_path: string
           alt?: string | null
           sort_order?: number
+          color?: string | null
           color_hex?: string | null
         }
         Update: Partial<Database['public']['Tables']['product_media']['Insert']>

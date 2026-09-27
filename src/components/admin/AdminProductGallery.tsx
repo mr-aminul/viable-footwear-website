@@ -14,8 +14,10 @@ import { ImagePlus, Trash2, Upload } from 'lucide-react'
 import {
   deleteProductMedia,
   reorderProductMedia,
+  updateMediaColorway,
   uploadProductMedia,
 } from '@/lib/catalog/actions/media'
+import { colorwayKey } from '@/lib/catalog/colorway'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { normalizeProductBadge, productBadgeClassName } from '@/lib/catalog/badge'
 import type { ProductBadge } from '@/lib/catalog/constants'
@@ -29,6 +31,7 @@ export type GalleryMedia = {
   storage_path: string
   alt: string | null
   sort_order: number
+  color?: string | null
   color_hex?: string | null
 }
 
@@ -41,6 +44,10 @@ type AdminProductGalleryProps = {
   onBadgeChange?: (badge: ProductBadge) => void
   isDraft?: boolean
   media: GalleryMedia[]
+  /** Colorway names from variants — used to tag gallery images. */
+  colorways?: string[]
+  /** When set, left thumbs filter to this colorway (storefront preview). */
+  previewColorKey?: string | null
   /** Fallback when no uploaded images exist yet. */
   placeholderSrc: string
 }
@@ -56,8 +63,10 @@ function GalleryThumb({
   isSelected,
   canDrag,
   pending,
+  colorways,
   onSelect,
   onRemove,
+  onColorChange,
   onDragStart,
   onDragEnd,
 }: {
@@ -66,8 +75,10 @@ function GalleryThumb({
   isSelected: boolean
   canDrag: boolean
   pending: boolean
+  colorways: string[]
   onSelect: () => void
   onRemove: () => void
+  onColorChange: (color: string | null) => void
   onDragStart: () => void
   onDragEnd: () => void
 }) {
@@ -134,6 +145,31 @@ function GalleryThumb({
       >
         <Trash2 className="h-3 w-3" />
       </button>
+      {colorways.length > 0 ? (
+        <select
+          aria-label={`Colorway for image ${index + 1}`}
+          disabled={pending}
+          value={image.color?.trim() || ''}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            event.stopPropagation()
+            onColorChange(event.target.value || null)
+          }}
+          className="absolute inset-x-0 bottom-0 z-10 max-w-full truncate rounded-b-[inherit] border-0 bg-ink/80 py-0.5 pl-0.5 pr-0 text-[8px] font-semibold uppercase tracking-wide text-white"
+        >
+          <option value="">Shared</option>
+          {colorways.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      ) : image.color?.trim() ? (
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-ink/75 px-0.5 py-px text-center text-[8px] font-semibold uppercase tracking-wide text-white">
+          {image.color.trim()}
+        </span>
+      ) : null}
     </Reorder.Item>
   )
 }
@@ -148,6 +184,8 @@ export function AdminProductGallery({
   onBadgeChange,
   isDraft,
   media,
+  colorways = [],
+  previewColorKey = null,
   placeholderSrc,
 }: AdminProductGalleryProps) {
   const router = useRouter()
@@ -168,13 +206,41 @@ export function AdminProductGallery({
     [media],
   )
 
-  const [images, setImages] = useState<GalleryImage[]>(sortedFromProps)
-  const orderBeforeDragRef = useRef(sortedFromProps)
+  const displayImages = useMemo(() => {
+    if (!previewColorKey) return sortedFromProps
+    const tagged = sortedFromProps.filter(
+      (img) =>
+        Boolean(img.color?.trim()) &&
+        colorwayKey(img.color) === previewColorKey,
+    )
+    if (tagged.length > 0) return tagged
+    const otherUrls = new Set(
+      sortedFromProps
+        .filter(
+          (img) =>
+            Boolean(img.color?.trim()) &&
+            colorwayKey(img.color) !== previewColorKey,
+        )
+        .map((img) => img.url),
+    )
+    const shared = sortedFromProps.filter((img) => !otherUrls.has(img.url))
+    return shared.length > 0 ? shared : sortedFromProps
+  }, [previewColorKey, sortedFromProps])
+
+  const [images, setImages] = useState<GalleryImage[]>(displayImages)
+  const orderBeforeDragRef = useRef(displayImages)
   const imagesRef = useRef(images)
+  const filteringByColor = Boolean(previewColorKey)
 
   useEffect(() => {
-    setImages(sortedFromProps)
-  }, [sortedFromProps])
+    setImages(displayImages)
+    setSelectedId((current) => {
+      if (current && displayImages.some((img) => img.id === current)) {
+        return current
+      }
+      return displayImages[0]?.id ?? null
+    })
+  }, [displayImages])
 
   useEffect(() => {
     imagesRef.current = images
@@ -198,11 +264,12 @@ export function AdminProductGallery({
       ? images[selectedIndex] ?? images[0]
       : { id: '', url: placeholderSrc, alt: productName }
   const currentIsReal = Boolean(current?.id)
-  const canDrag = images.length > 1 && !pending
+  const canDrag = images.length > 1 && !pending && !filteringByColor
 
   const persistOrder = (next: GalleryImage[]) => {
     setError(null)
     startTransition(async () => {
+      // When not filtering, next is the full ordered list.
       const result = await reorderProductMedia(
         productId,
         next.map((img) => img.id),
@@ -216,13 +283,10 @@ export function AdminProductGallery({
     })
   }
 
-  const runUpload = (file: File) => {
+  const setImageColor = (mediaId: string, color: string | null) => {
     setError(null)
     startTransition(async () => {
-      const prepared = await prepareMediaFileForUpload(file)
-      const formData = new FormData()
-      formData.set('file', prepared.file)
-      const result = await uploadProductMedia(productId, formData)
+      const result = await updateMediaColorway(mediaId, color)
       if (!result.ok) {
         setError(result.error)
         return
@@ -231,11 +295,34 @@ export function AdminProductGallery({
     })
   }
 
+  const runUpload = (files: File[]) => {
+    if (files.length === 0) return
+    setError(null)
+    startTransition(async () => {
+      const activeColor =
+        colorways.find((name) => colorwayKey(name) === previewColorKey) ?? null
+      let lastError: string | null = null
+      for (const file of files) {
+        const prepared = await prepareMediaFileForUpload(file)
+        const formData = new FormData()
+        formData.set('file', prepared.file)
+        if (activeColor) formData.set('color', activeColor)
+        const result = await uploadProductMedia(productId, formData)
+        if (!result.ok) {
+          lastError = result.error
+          break
+        }
+      }
+      if (lastError) setError(lastError)
+      router.refresh()
+    })
+  }
+
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const files = [...(event.target.files ?? [])]
     event.target.value = ''
-    if (!file) return
-    runUpload(file)
+    if (files.length === 0) return
+    runUpload(files)
   }
 
   const removeMedia = (id: string) => {
@@ -264,6 +351,7 @@ export function AdminProductGallery({
         ref={fileRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+        multiple
         className="sr-only"
         onChange={onFileChange}
       />
@@ -290,8 +378,10 @@ export function AdminProductGallery({
                     isSelected={isSelected}
                     canDrag={canDrag}
                     pending={pending}
+                    colorways={colorways}
                     onSelect={() => setSelectedId(img.id)}
                     onRemove={() => removeMedia(img.id)}
+                    onColorChange={(color) => setImageColor(img.id, color)}
                     onDragStart={() => {
                       orderBeforeDragRef.current = imagesRef.current
                     }}
@@ -376,13 +466,14 @@ export function AdminProductGallery({
         </div>
       </div>
 
-      {images.length > 1 ? (
-        <p className="text-[12px] text-mute">
-          Drag thumbnails to set gallery order. First image is primary. Color
-          photos are assigned per variant below — the storefront shows those
-          plus the rest of this gallery.
-        </p>
-      ) : null}
+      <p className="text-[12px] text-mute">
+        Tag each photo with a colorway (hover thumbnail → dropdown). The
+        storefront gallery shows only the selected color’s photos. Sizes share
+        that color’s images — no re-upload per size.
+        {!filteringByColor && images.length > 1
+          ? ' Drag thumbnails to set order.'
+          : null}
+      </p>
 
       {video ? (
         <div className="group/video relative overflow-hidden rounded-[1.25rem]">

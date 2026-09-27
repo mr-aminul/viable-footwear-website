@@ -117,16 +117,11 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
     }
 
     for (const [, group] of byColor) {
-      if (group.length < 2) continue
-      const imageIds = new Set(
-        group
-          .map((v) => v.media_id)
-          .filter((id): id is string => Boolean(id)),
-      )
-      if (imageIds.size > 1) {
-        return {
-          error: `“${group[0].color}” has different images on different sizes. Use one photo per color, or give each colorway its own name.`,
-        }
+      // Normalize: one swatch image per colorway across all sizes.
+      const primaryMedia =
+        group.find((v) => v.media_id)?.media_id ?? null
+      for (const variant of group) {
+        variant.media_id = primaryMedia
       }
       const sizes = group.map((v) => v.size_eu)
       if (new Set(sizes).size !== sizes.length) {
@@ -861,6 +856,27 @@ export async function saveProductVariants(
     .maybeSingle()
 
   if (!product) return { ok: false, error: 'Product not found.' }
+
+  // Prefer colorway-tagged gallery images as the swatch for each color.
+  const { data: mediaRows } = await supabase
+    .from('product_media')
+    .select('id, color, sort_order')
+    .eq('product_id', productId)
+    .eq('media_type', 'image')
+    .order('sort_order', { ascending: true })
+
+  const primaryByColor = new Map<string, string>()
+  for (const row of mediaRows ?? []) {
+    const key = row.color?.trim().toLowerCase()
+    if (!key || primaryByColor.has(key)) continue
+    primaryByColor.set(key, row.id)
+  }
+  for (const variant of parsed) {
+    const key = variant.color?.trim().toLowerCase()
+    if (!key) continue
+    const fromGallery = primaryByColor.get(key)
+    if (fromGallery) variant.media_id = fromGallery
+  }
 
   const { data: existing } = await supabase
     .from('product_variants')

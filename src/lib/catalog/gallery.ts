@@ -17,7 +17,10 @@ export { colorwayKey }
 
 export type ColorTaggedImage = {
   url: string
-  colorHex: string | null
+  /** Colorway name this image belongs to (null = shared / unassigned). */
+  color: string | null
+  /** @deprecated Prefer `color` — hex was an earlier tagging attempt. */
+  colorHex?: string | null
 }
 
 export type ColorwayVariantImage = {
@@ -26,58 +29,67 @@ export type ColorwayVariantImage = {
 }
 
 /**
- * Gallery for a selected colorway: that color’s variant photos first,
- * then product gallery images that aren’t claimed by another colorway.
- * (Previously returned only variant photos, which hid the left-side gallery.)
+ * Gallery for a selected colorway.
+ * Only that color’s photos (tagged media, then variant thumbs) — never other colors.
  */
 export function galleryForColorway(
   variants: ColorwayVariantImage[],
-  images: Array<{ url: string }>,
+  images: ColorTaggedImage[],
   selectedColorKey: string | null | undefined,
   fallbackImage: string,
 ): string[] {
   const galleryUrls = images.map((img) => img.url)
 
-  if (selectedColorKey) {
-    const fromVariants = [
-      ...new Set(
-        variants
-          .filter(
-            (v) =>
-              colorwayKey(v.color) === selectedColorKey && Boolean(v.imageUrl),
-          )
-          .map((v) => v.imageUrl as string),
-      ),
-    ]
+  if (!selectedColorKey) {
+    if (galleryUrls.length > 0) return galleryUrls
+    return [fallbackImage]
+  }
 
-    const otherColorImages = new Set(
+  const taggedForColor = [
+    ...new Set(
+      images
+        .filter(
+          (img) =>
+            Boolean(img.color?.trim()) &&
+            colorwayKey(img.color) === selectedColorKey,
+        )
+        .map((img) => img.url),
+    ),
+  ]
+  if (taggedForColor.length > 0) return taggedForColor
+
+  const fromVariants = [
+    ...new Set(
       variants
         .filter(
           (v) =>
-            colorwayKey(v.color) !== selectedColorKey && Boolean(v.imageUrl),
+            colorwayKey(v.color) === selectedColorKey && Boolean(v.imageUrl),
         )
         .map((v) => v.imageUrl as string),
-    )
+    ),
+  ]
+  if (fromVariants.length > 0) return fromVariants
 
-    const sharedGallery = galleryUrls.filter(
-      (url) => !otherColorImages.has(url),
-    )
-
-    if (fromVariants.length > 0) {
-      const rest = sharedGallery.filter((url) => !fromVariants.includes(url))
-      return [...fromVariants, ...rest]
+  // No color-specific media yet — show untagged images only, never other colors.
+  const otherColorUrls = new Set<string>()
+  for (const img of images) {
+    if (img.color?.trim() && colorwayKey(img.color) !== selectedColorKey) {
+      otherColorUrls.add(img.url)
     }
-
-    if (sharedGallery.length > 0) return sharedGallery
+  }
+  for (const v of variants) {
+    if (colorwayKey(v.color) !== selectedColorKey && v.imageUrl) {
+      otherColorUrls.add(v.imageUrl)
+    }
   }
 
-  if (galleryUrls.length > 0) return galleryUrls
+  const shared = galleryUrls.filter((url) => !otherColorUrls.has(url))
+  if (shared.length > 0) return shared
   return [fallbackImage]
 }
 
 /**
- * @deprecated Prefer galleryForColorway — images are per-variant, not hex-tagged.
- * Kept for any leftover callers that still match on color_hex.
+ * @deprecated Prefer galleryForColorway with name-tagged `color` on images.
  */
 export function galleryForColor(
   images: ColorTaggedImage[],

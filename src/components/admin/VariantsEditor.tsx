@@ -2,19 +2,27 @@
 
 import {
   useEffect,
-  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
-  useTransition,
   type ChangeEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { ImageOff, ImagePlus, Minus, Plus, Trash2 } from 'lucide-react'
-import { uploadProductMedia } from '@/lib/catalog/actions/media'
+import {
+  ChevronDown,
+  ChevronRight,
+  ImagePlus,
+  Minus,
+  Plus,
+  Trash2,
+} from 'lucide-react'
+import {
+  updateMediaColorway,
+  uploadProductMedia,
+} from '@/lib/catalog/actions/media'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
+import { colorwayKey } from '@/lib/catalog/colorway'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
-import { Field, inputClassName } from '@/components/admin/ui'
 
 export type VariantDraft = {
   key: string
@@ -31,13 +39,14 @@ export type VariantDraft = {
 export type VariantImageOption = {
   id: string
   url: string
+  color: string | null
 }
 
-export function createEmptyVariantDraft(): VariantDraft {
+export function createEmptyVariantDraft(color = ''): VariantDraft {
   return {
     key: crypto.randomUUID(),
     size_eu: '40',
-    color: '',
+    color,
     color_hex: '',
     media_id: null,
     sku: '',
@@ -72,7 +81,7 @@ export function validateVariantDrafts(rows: VariantDraft[]): string | null {
 
   for (const row of active) {
     if (!normalizeColorName(row.color)) {
-      return 'Every active variant needs a color name (e.g. Navy, Black).'
+      return 'Every color needs a name (e.g. Grey, Black).'
     }
   }
 
@@ -84,28 +93,61 @@ export function validateVariantDrafts(rows: VariantDraft[]): string | null {
     byColor.set(key, list)
   }
 
-  // Same color across sizes is fine. Different photos under one color name
-  // usually means the merchant forgot to rename a colorway.
   for (const [, group] of byColor) {
-    if (group.length < 2) continue
-    const imageIds = new Set(
-      group.map((r) => r.media_id).filter((id): id is string => Boolean(id)),
-    )
-    if (imageIds.size > 1) {
-      return `“${group[0].color.trim()}” has different images on different sizes. Use one photo per color, or give each colorway its own name.`
-    }
     const sizes = group.map((r) => r.size_eu.trim())
     if (new Set(sizes).size !== sizes.length) {
-      return `Duplicate size under color “${group[0].color.trim()}”.`
+      return `“${group[0].color.trim()}” has the same size twice.`
     }
   }
 
   return null
 }
 
+type ColorGroup = {
+  /** Stable id for React keys — does not change while typing a name. */
+  id: string
+  key: string
+  color: string
+  rows: VariantDraft[]
+}
+
+function groupByColor(rows: VariantDraft[]): ColorGroup[] {
+  const groups: ColorGroup[] = []
+  const indexByKey = new Map<string, number>()
+
+  for (const row of rows) {
+    const name = normalizeColorName(row.color)
+    const key = name ? colorwayKey(name) : `untitled:${row.key}`
+    const existing = indexByKey.get(key)
+    if (existing != null) {
+      groups[existing].rows.push(row)
+      if (!groups[existing].color && name) groups[existing].color = name
+      continue
+    }
+    indexByKey.set(key, groups.length)
+    groups.push({
+      id: row.key,
+      key,
+      color: name,
+      rows: [row],
+    })
+  }
+
+  return groups
+}
+
+function parseStock(value: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.floor(parsed))
+}
+
+const fieldClass =
+  'w-full rounded-md border border-cloud bg-white px-2 py-1.5 text-[13px] text-ink outline-none transition placeholder:text-mute/70 focus:border-navy'
+
 /**
- * Variant table — edits only; parent Save product persists size/color/stock/image.
- * Images are assigned per row. Same color name = same colorway on the storefront.
+ * Simple nested list: each color holds its photos + sizes.
+ * Designed so a first-time merchant gets it without instructions.
  */
 export function VariantsEditor({
   productId,
@@ -118,225 +160,384 @@ export function VariantsEditor({
   onChange: (rows: VariantDraft[]) => void
   images: VariantImageOption[]
 }) {
-  const setMediaId = (rowKey: string, mediaId: string | null) => {
-    onChange(
-      rows.map((r) => (r.key === rowKey ? { ...r, media_id: mediaId } : r)),
-    )
-  }
-
-  const applyMediaToColor = (rowKey: string, mediaId: string | null) => {
-    const source = rows.find((r) => r.key === rowKey)
-    if (!source) return
-    const colorKey = normalizeColorName(source.color).toLowerCase()
-    if (!colorKey) {
-      setMediaId(rowKey, mediaId)
-      return
-    }
-    onChange(
-      rows.map((r) =>
-        normalizeColorName(r.color).toLowerCase() === colorKey
-          ? { ...r, media_id: mediaId }
-          : r,
-      ),
-    )
-  }
-
-  const colorSiblingCount = (row: VariantDraft) => {
-    const colorKey = normalizeColorName(row.color).toLowerCase()
-    if (!colorKey) return 0
-    return rows.filter(
-      (r) =>
-        r.key !== row.key &&
-        normalizeColorName(r.color).toLowerCase() === colorKey,
-    ).length
-  }
-
+  const groups = useMemo(() => groupByColor(rows), [rows])
   const draftError = validateVariantDrafts(rows)
 
+  // Optimistic color tags — UI updates instantly; server syncs in background.
+  const [colorByMediaId, setColorByMediaId] = useState(() =>
+    new Map(images.map((img) => [img.id, img.color])),
+  )
+  useEffect(() => {
+    setColorByMediaId(new Map(images.map((img) => [img.id, img.color])))
+  }, [images])
+
+  const liveImages = useMemo(
+    () =>
+      images.map((img) => ({
+        ...img,
+        color: colorByMediaId.has(img.id)
+          ? (colorByMediaId.get(img.id) ?? null)
+          : img.color,
+      })),
+    [images, colorByMediaId],
+  )
+
+  const tagMediaColor = (mediaId: string, color: string | null) => {
+    setColorByMediaId((prev) => {
+      const next = new Map(prev)
+      next.set(mediaId, color)
+      return next
+    })
+    void updateMediaColorway(mediaId, color)
+  }
+
+  // Start expanded so people see sizes immediately.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+
+  const isOpen = (key: string) => !collapsed.has(key)
+
+  const toggle = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const replaceGroupRows = (groupKey: string, nextGroupRows: VariantDraft[]) => {
+    const group = groups.find((g) => g.key === groupKey)
+    if (!group) return
+    const groupKeys = new Set(group.rows.map((r) => r.key))
+    const result: VariantDraft[] = []
+    let inserted = false
+    for (const row of rows) {
+      if (!groupKeys.has(row.key)) {
+        result.push(row)
+        continue
+      }
+      if (!inserted) {
+        result.push(...nextGroupRows)
+        inserted = true
+      }
+    }
+    if (!inserted) result.push(...nextGroupRows)
+    onChange(result)
+  }
+
+  const renameColor = (groupKey: string, nextColor: string) => {
+    const group = groups.find((g) => g.key === groupKey)
+    if (!group) return
+    const nextKey = colorwayKey(nextColor)
+    const primaryId =
+      liveImages.find((img) => colorwayKey(img.color) === nextKey)?.id ??
+      group.rows.find((r) => r.media_id)?.media_id ??
+      null
+    replaceGroupRows(
+      groupKey,
+      group.rows.map((r) => ({
+        ...r,
+        color: nextColor,
+        media_id: primaryId,
+      })),
+    )
+  }
+
+  const commitRename = (
+    groupKey: string,
+    previousColor: string,
+    nextColor: string,
+  ) => {
+    const previousKey = colorwayKey(previousColor)
+    const nextKey = colorwayKey(nextColor)
+    if (
+      !previousKey ||
+      previousKey === 'default' ||
+      !nextKey ||
+      nextKey === previousKey ||
+      !nextColor.trim()
+    ) {
+      return
+    }
+    const label = nextColor.trim()
+    const toRetag = liveImages.filter(
+      (img) => colorwayKey(img.color) === previousKey,
+    )
+    if (toRetag.length === 0) return
+    setColorByMediaId((prev) => {
+      const next = new Map(prev)
+      for (const img of toRetag) next.set(img.id, label)
+      return next
+    })
+    for (const img of toRetag) void updateMediaColorway(img.id, label)
+  }
+
+  const setPrimaryImage = (groupKey: string, mediaId: string | null) => {
+    const group = groups.find((g) => g.key === groupKey)
+    if (!group) return
+    replaceGroupRows(
+      groupKey,
+      group.rows.map((r) => ({ ...r, media_id: mediaId })),
+    )
+  }
+
+  const addSize = (groupKey: string) => {
+    const group = groups.find((g) => g.key === groupKey)
+    if (!group) return
+    const primary =
+      group.rows.find((r) => r.media_id)?.media_id ??
+      liveImages.find(
+        (img) => colorwayKey(img.color) === colorwayKey(group.color),
+      )?.id ??
+      null
+    const sizes = group.rows
+      .map((r) => Number(r.size_eu))
+      .filter((n) => Number.isFinite(n))
+    const nextSize = sizes.length > 0 ? String(Math.max(...sizes) + 1) : '40'
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      next.delete(groupKey)
+      return next
+    })
+    replaceGroupRows(groupKey, [
+      ...group.rows,
+      {
+        ...createEmptyVariantDraft(group.color),
+        size_eu: nextSize,
+        media_id: primary,
+      },
+    ])
+  }
+
+  const addColor = () => {
+    const draft = createEmptyVariantDraft('')
+    onChange([...rows, draft])
+  }
+
+  if (groups.length === 0) {
+    return (
+      <AdminActionButton type="button" onClick={addColor}>
+        Add color
+      </AdminActionButton>
+    )
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <table className="w-full min-w-[760px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
-            <tr>
-              <th className="px-3 py-3">Image</th>
-              <th className="px-3 py-3">Size EU</th>
-              <th className="px-3 py-3">Color</th>
-              <th className="px-3 py-3">SKU</th>
-              <th className="px-3 py-3">Stock</th>
-              <th className="px-3 py-3">Active</th>
-              <th className="px-3 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const colorMissing =
-                row.active && !normalizeColorName(row.color)
-              const siblings = colorSiblingCount(row)
-              return (
-                <tr
-                  key={row.key}
-                  className="border-b border-cloud last:border-0"
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {groups.map((group) => {
+          const open = isOpen(group.key)
+          const colorImages = liveImages.filter(
+            (img) =>
+              group.color &&
+              colorwayKey(img.color) === colorwayKey(group.color),
+          )
+          const primaryId =
+            group.rows.find((r) => r.media_id)?.media_id ??
+            colorImages[0]?.id ??
+            null
+          const needsName = !normalizeColorName(group.color)
+
+          return (
+            <div
+              key={group.id}
+              className="overflow-hidden rounded-xl border border-cloud bg-white"
+            >
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-label={open ? 'Hide sizes' : 'Show sizes'}
+                  onClick={() => toggle(group.key)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mute transition hover:bg-mist hover:text-ink"
                 >
-                  <td className="px-3 py-2">
-                    <VariantImagePicker
-                      productId={productId}
-                      mediaId={row.media_id}
-                      images={images}
-                      colorLabel={normalizeColorName(row.color) || null}
-                      siblingCount={siblings}
-                      onSelect={(mediaId) => setMediaId(row.key, mediaId)}
-                      onApplyToColor={(mediaId) =>
-                        applyMediaToColor(row.key, mediaId)
-                      }
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      value={row.size_eu}
-                      onChange={(e) =>
-                        onChange(
-                          rows.map((r) =>
-                            r.key === row.key
-                              ? { ...r, size_eu: e.target.value }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={inputClassName}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      value={row.color}
-                      onChange={(e) =>
-                        onChange(
-                          rows.map((r) =>
-                            r.key === row.key
-                              ? { ...r, color: e.target.value }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={[
-                        inputClassName,
-                        colorMissing
-                          ? 'border-spark/50 ring-1 ring-spark/20'
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      placeholder="Navy"
-                      aria-invalid={colorMissing}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      value={row.sku}
-                      onChange={(e) =>
-                        onChange(
-                          rows.map((r) =>
-                            r.key === row.key
-                              ? { ...r, sku: e.target.value }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={inputClassName}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <StockStepper
-                      value={row.stock}
-                      onChange={(stock) =>
-                        onChange(
-                          rows.map((r) =>
-                            r.key === row.key ? { ...r, stock } : r,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="px-3 py-2">
+                  {open ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+
+                <ColorPhotos
+                  productId={productId}
+                  colorLabel={group.color}
+                  images={liveImages}
+                  colorImages={colorImages}
+                  primaryId={primaryId}
+                  onPrimaryChange={(mediaId) =>
+                    setPrimaryImage(group.key, mediaId)
+                  }
+                  onTagColor={tagMediaColor}
+                />
+
+                <ColorNameField
+                  value={group.color}
+                  needsName={needsName}
+                  onCommit={(next, previous) => {
+                    renameColor(group.key, next)
+                    commitRename(group.key, previous, next)
+                  }}
+                />
+
+                <span className="min-w-0 flex-1" />
+
+                <button
+                  type="button"
+                  aria-label="Remove this color"
+                  title="Remove this color"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
+                  onClick={() => {
+                    const keys = new Set(group.rows.map((r) => r.key))
+                    onChange(rows.filter((r) => !keys.has(r.key)))
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {open ? (
+                <div className="border-t border-cloud">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-[13px]">
+                      <thead>
+                        <tr className="text-[11px] uppercase tracking-wider text-mute">
+                          <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
+                            Size (EU)
+                          </th>
+                          <th className="px-3 py-2 font-semibold">SKU</th>
+                          <th className="px-3 py-2 font-semibold">Stock</th>
+                          <th className="px-3 py-2 font-semibold">On sale</th>
+                          <th className="w-10 px-2 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.rows.map((row) => (
+                          <tr
+                            key={row.key}
+                            className="border-t border-cloud/70"
+                          >
+                            <td className="px-3 py-1.5 sm:pl-[3.25rem]">
+                              <input
+                                value={row.size_eu}
+                                onChange={(e) =>
+                                  onChange(
+                                    rows.map((r) =>
+                                      r.key === row.key
+                                        ? { ...r, size_eu: e.target.value }
+                                        : r,
+                                    ),
+                                  )
+                                }
+                                className={`${fieldClass} w-[4.5rem]`}
+                                aria-label="Size EU"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                value={row.sku}
+                                onChange={(e) =>
+                                  onChange(
+                                    rows.map((r) =>
+                                      r.key === row.key
+                                        ? { ...r, sku: e.target.value }
+                                        : r,
+                                    ),
+                                  )
+                                }
+                                className={fieldClass}
+                                aria-label="SKU"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <StockStepper
+                                value={row.stock}
+                                onChange={(stock) =>
+                                  onChange(
+                                    rows.map((r) =>
+                                      r.key === row.key ? { ...r, stock } : r,
+                                    ),
+                                  )
+                                }
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={row.active}
+                                aria-label={
+                                  row.active ? 'On sale' : 'Hidden'
+                                }
+                                onClick={() =>
+                                  onChange(
+                                    rows.map((r) =>
+                                      r.key === row.key
+                                        ? { ...r, active: !r.active }
+                                        : r,
+                                    ),
+                                  )
+                                }
+                                className={[
+                                  'relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200',
+                                  row.active ? 'bg-navy' : 'bg-cloud',
+                                ].join(' ')}
+                              >
+                                <span
+                                  className={[
+                                    'absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                                    row.active
+                                      ? 'translate-x-4'
+                                      : 'translate-x-0',
+                                  ].join(' ')}
+                                />
+                              </button>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <button
+                                type="button"
+                                aria-label="Remove size"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
+                                onClick={() =>
+                                  onChange(
+                                    rows.filter((r) => r.key !== row.key),
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="border-t border-cloud px-3 py-2 sm:pl-[3.25rem]">
                     <button
                       type="button"
-                      role="switch"
-                      aria-checked={row.active}
-                      aria-label={row.active ? 'Active' : 'Inactive'}
-                      onClick={() =>
-                        onChange(
-                          rows.map((r) =>
-                            r.key === row.key
-                              ? { ...r, active: !r.active }
-                              : r,
-                          ),
-                        )
-                      }
-                      className={[
-                        'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
-                        row.active ? 'bg-navy' : 'bg-cloud',
-                      ].join(' ')}
+                      onClick={() => addSize(group.key)}
+                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-navy transition hover:underline"
                     >
-                      <span
-                        className={[
-                          'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                          row.active ? 'translate-x-5' : 'translate-x-0',
-                        ].join(' ')}
-                      />
+                      <Plus className="h-3.5 w-3.5" />
+                      Add a size
                     </button>
-                  </td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      aria-label="Delete variant"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
-                      onClick={() =>
-                        onChange(rows.filter((r) => r.key !== row.key))
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
       </div>
 
       {draftError ? (
         <p className="text-[13px] text-spark">{draftError}</p>
-      ) : (
-        <p className="text-[13px] text-mute">
-          Name each color clearly (Navy, Black). Same name = same color across
-          sizes. Image picks apply to that row only — use “Apply to all sizes”
-          when you want the whole colorway to share a photo. Hit Save product to
-          persist deletions and image assignments.
-        </p>
-      )}
+      ) : null}
 
-      <AdminActionButton
-        type="button"
-        variant="secondary"
-        onClick={() => onChange([...rows, createEmptyVariantDraft()])}
-      >
-        Add variant
+      <AdminActionButton type="button" variant="secondary" onClick={addColor}>
+        Add another color
       </AdminActionButton>
-
-      <Field
-        label="Tip"
-        hint="A product needs at least one active variant to stay published."
-      >
-        <span />
-      </Field>
     </div>
   )
-}
-
-function parseStock(value: string): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(0, Math.floor(parsed))
 }
 
 function StockStepper({
@@ -350,13 +551,13 @@ function StockStepper({
   const canDecrease = stock > 0
 
   return (
-    <div className="inline-flex w-[5.5rem] items-center rounded-lg border border-cloud bg-white focus-within:border-navy">
+    <div className="inline-flex w-[5.25rem] items-center rounded-md border border-cloud bg-white focus-within:border-navy">
       <button
         type="button"
         aria-label="Decrease stock"
         disabled={!canDecrease}
         onClick={() => onChange(String(stock - 1))}
-        className="flex h-8 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60 disabled:cursor-not-allowed disabled:opacity-35"
+        className="flex h-7 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60 disabled:cursor-not-allowed disabled:opacity-35"
       >
         <Minus className="h-3 w-3" />
       </button>
@@ -370,13 +571,13 @@ function StockStepper({
           if (value !== String(stock)) onChange(String(stock))
         }}
         aria-label="Stock"
-        className="min-w-0 flex-1 border-0 bg-transparent px-0.5 py-1.5 text-center text-[13px] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="min-w-0 flex-1 border-0 bg-transparent px-0.5 py-1 text-center text-[13px] text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         type="button"
         aria-label="Increase stock"
         onClick={() => onChange(String(stock + 1))}
-        className="flex h-8 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60"
+        className="flex h-7 w-6 shrink-0 items-center justify-center text-ink transition hover:bg-mist/60"
       >
         <Plus className="h-3 w-3" />
       </button>
@@ -384,230 +585,265 @@ function StockStepper({
   )
 }
 
-function VariantImagePicker({
+function ColorNameField({
+  value,
+  needsName,
+  onCommit,
+}: {
+  value: string
+  needsName: boolean
+  onCommit: (next: string, previous: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const previousRef = useRef(value)
+
+  useEffect(() => {
+    setDraft(value)
+    previousRef.current = value
+  }, [value])
+
+  return (
+    <input
+      value={draft}
+      onFocus={() => {
+        previousRef.current = draft
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft === previousRef.current) return
+        onCommit(draft, previousRef.current)
+        previousRef.current = draft
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur()
+        }
+      }}
+      className={[
+        fieldClass,
+        'max-w-[14rem] font-semibold',
+        needsName && !draft.trim() ? 'border-spark/50' : '',
+      ].join(' ')}
+      placeholder="Color name"
+      aria-label="Color name"
+    />
+  )
+}
+
+function ColorPhotos({
   productId,
-  mediaId,
-  images,
   colorLabel,
-  siblingCount,
-  onSelect,
-  onApplyToColor,
+  images,
+  colorImages,
+  primaryId,
+  onPrimaryChange,
+  onTagColor,
 }: {
   productId: string
-  mediaId: string | null
+  colorLabel: string
   images: VariantImageOption[]
-  colorLabel: string | null
-  siblingCount: number
-  onSelect: (mediaId: string | null) => void
-  onApplyToColor: (mediaId: string | null) => void
+  colorImages: VariantImageOption[]
+  primaryId: string | null
+  onPrimaryChange: (mediaId: string | null) => void
+  onTagColor: (mediaId: string, color: string | null) => void
 }) {
   const router = useRouter()
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
-  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(
-    null,
+  const [uploading, setUploading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const assignedIds = useMemo(
+    () => new Set(colorImages.map((img) => img.id)),
+    [colorImages],
   )
-
-  const selected = images.find((img) => img.id === mediaId) ?? null
-  const canApplyToColor = Boolean(colorLabel) && siblingCount > 0
-
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const panelWidth = Math.min(320, window.innerWidth - 24)
-    const left = Math.min(
-      Math.max(12, rect.left),
-      window.innerWidth - panelWidth - 12,
-    )
-    setPanelPos({
-      top: rect.bottom + 8,
-      left,
-    })
-  }, [open, images.length])
+  const galleryChoices = images.filter((img) => !assignedIds.has(img.id))
 
   useEffect(() => {
     if (!open) return
     const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (
-        triggerRef.current?.contains(target) ||
-        panelRef.current?.contains(target)
-      ) {
-        return
-      }
-      setOpen(false)
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    const onReposition = () => setOpen(false)
     window.addEventListener('mousedown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('scroll', onReposition, true)
-    window.addEventListener('resize', onReposition)
     return () => {
       window.removeEventListener('mousedown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('scroll', onReposition, true)
-      window.removeEventListener('resize', onReposition)
     }
   }, [open])
 
-  const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
+  const pickFromGallery = (mediaId: string) => {
+    if (!colorLabel.trim()) {
+      setError('Type a color name first.')
+      return
+    }
     setError(null)
-    startTransition(async () => {
-      const prepared = await prepareMediaFileForUpload(file)
-      const formData = new FormData()
-      formData.set('file', prepared.file)
-      const result = await uploadProductMedia(productId, formData)
-      if (!result.ok) {
-        setError(result.error)
-        return
+    setOpen(false)
+    // Instant UI — server sync is already fire-and-forget in onTagColor.
+    onTagColor(mediaId, colorLabel.trim())
+    onPrimaryChange(primaryId ?? mediaId)
+  }
+
+  const removePhoto = (mediaId: string) => {
+    setError(null)
+    onTagColor(mediaId, null)
+    if (primaryId === mediaId) {
+      const remaining = colorImages.filter((img) => img.id !== mediaId)
+      onPrimaryChange(remaining[0]?.id ?? null)
+    }
+  }
+
+  const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])]
+    event.target.value = ''
+    if (files.length === 0) return
+    if (!colorLabel.trim()) {
+      setError('Type a color name first.')
+      return
+    }
+    setError(null)
+    setOpen(false)
+    setUploading(true)
+    void (async () => {
+      const uploadedIds: string[] = []
+      let lastError: string | null = null
+      for (const file of files) {
+        const prepared = await prepareMediaFileForUpload(file)
+        const formData = new FormData()
+        formData.set('file', prepared.file)
+        formData.set('color', colorLabel.trim())
+        const result = await uploadProductMedia(productId, formData)
+        if (!result.ok) {
+          lastError = result.error
+          break
+        }
+        if (result.data?.id) {
+          uploadedIds.push(result.data.id)
+          onTagColor(result.data.id, colorLabel.trim())
+        }
       }
-      if (result.data?.id) {
-        onSelect(result.data.id)
+      setUploading(false)
+      if (uploadedIds.length > 0) {
+        onPrimaryChange(primaryId ?? uploadedIds[0]!)
       }
+      if (lastError) setError(lastError)
       router.refresh()
-    })
+    })()
   }
 
   return (
-    <>
+    <div ref={rootRef} className="relative flex shrink-0 items-center gap-1">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
+        className="sr-only"
+        onChange={onUpload}
+      />
+
+      {colorImages.map((img, index) => {
+        const isPrimary = img.id === primaryId || (!primaryId && index === 0)
+        return (
+          <div key={img.id} className="relative">
+            <button
+              type="button"
+              aria-pressed={isPrimary}
+              aria-label={`Photo ${index + 1}${isPrimary ? ' (main)' : ''}`}
+              title={isPrimary ? 'Main photo' : 'Set as main photo'}
+              onClick={() => onPrimaryChange(img.id)}
+              className={[
+                'h-9 w-9 overflow-hidden rounded-lg border bg-white transition',
+                isPrimary
+                  ? 'border-navy ring-2 ring-navy/20'
+                  : 'border-cloud hover:border-navy/40',
+              ].join(' ')}
+            >
+              <img
+                src={img.url}
+                alt=""
+                className="h-full w-full object-contain"
+              />
+            </button>
+            <button
+              type="button"
+              aria-label="Remove photo"
+              onClick={() => removePhoto(img.id)}
+              className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-ink text-white"
+            >
+              <Trash2 className="h-2 w-2" />
+            </button>
+          </div>
+        )
+      })}
+
       <button
-        ref={triggerRef}
         type="button"
-        aria-label="Choose variant image"
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label="Add photo"
+        title="Add photo"
         onClick={() => setOpen((prev) => !prev)}
         className={[
-          'inline-flex h-11 min-w-11 items-center gap-1 rounded-xl border bg-white px-1 transition',
+          'flex h-9 w-9 items-center justify-center rounded-lg border border-dashed transition',
           open
-            ? 'border-navy ring-2 ring-navy/20'
-            : 'border-cloud hover:border-navy/40',
+            ? 'border-navy text-navy ring-2 ring-navy/15'
+            : 'border-cloud text-mute hover:border-navy/40 hover:text-navy',
         ].join(' ')}
       >
-        {selected ? (
-          <span className="h-9 w-9 overflow-hidden rounded-lg bg-mist/50">
-            <img
-              src={selected.url}
-              alt=""
-              className="h-full w-full object-contain"
-            />
-          </span>
-        ) : (
-          <span className="px-2 text-[10px] font-semibold text-mute">Pick</span>
-        )}
+        <ImagePlus className="h-3.5 w-3.5" />
       </button>
 
-      {open && panelPos
-        ? createPortal(
-            <div
-              ref={panelRef}
-              role="dialog"
-              aria-label="Variant image"
-              style={{ top: panelPos.top, left: panelPos.left }}
-              className="fixed z-[80] w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl bg-ink p-3 shadow-lift"
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Choose photo"
+          className="absolute left-0 top-full z-30 mt-1.5 w-[min(17rem,calc(100vw-2rem))] rounded-xl border border-cloud bg-white p-2 shadow-card"
+        >
+          <div className="flex flex-wrap gap-1.5">
+            {galleryChoices.map((img, index) => (
+              <button
+                key={img.id}
+                type="button"
+                aria-label={`Gallery image ${index + 1}`}
+                onClick={() => pickFromGallery(img.id)}
+                className="h-12 w-12 overflow-hidden rounded-lg border border-cloud bg-mist/30 transition hover:border-navy/40"
+              >
+                <img
+                  src={img.url}
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+              className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-cloud text-mute transition hover:border-navy/40 hover:text-navy disabled:opacity-60"
+              aria-label="Upload new photo"
             >
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="sr-only"
-                onChange={onUpload}
-              />
+              <ImagePlus className="h-4 w-4" />
+              <span className="text-[9px] font-semibold">
+                {uploading ? '…' : 'Upload'}
+              </span>
+            </button>
+          </div>
 
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                Variant image
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={pending || !mediaId}
-                  onClick={() => onSelect(null)}
-                  className={[
-                    'flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed text-[10px] font-semibold transition',
-                    !mediaId
-                      ? 'border-white bg-white/10 text-white'
-                      : 'border-white/25 text-white/70 hover:border-white/50 hover:text-white disabled:opacity-40',
-                  ].join(' ')}
-                >
-                  <ImageOff className="h-3.5 w-3.5" />
-                  None
-                </button>
-
-                {images.map((img, index) => {
-                  const isSelected = img.id === mediaId
-                  return (
-                    <button
-                      key={img.id}
-                      type="button"
-                      disabled={pending}
-                      aria-pressed={isSelected}
-                      aria-label={`Image ${index + 1}${isSelected ? ', selected' : ''}`}
-                      onClick={() => onSelect(isSelected ? null : img.id)}
-                      className={[
-                        'relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border bg-white transition disabled:opacity-60',
-                        isSelected
-                          ? 'border-navy ring-2 ring-white/40'
-                          : 'border-transparent hover:border-white/40',
-                      ].join(' ')}
-                    >
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="h-full w-full object-contain"
-                      />
-                    </button>
-                  )
-                })}
-
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => fileRef.current?.click()}
-                  className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-white/30 text-white/80 transition hover:border-white/60 hover:text-white disabled:opacity-60"
-                  aria-label="Upload image for this variant"
-                >
-                  <ImagePlus className="h-4 w-4" />
-                  <span className="text-[10px] font-semibold">
-                    {pending ? '…' : 'Add'}
-                  </span>
-                </button>
-              </div>
-
-              {canApplyToColor && mediaId ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => onApplyToColor(mediaId)}
-                  className="mt-2 w-full rounded-lg border border-white/20 px-2 py-1.5 text-[11px] font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
-                >
-                  Apply to all {siblingCount + 1} “{colorLabel}” sizes
-                </button>
-              ) : null}
-
-              {error ? (
-                <p className="mt-2 text-[11px] text-spark-soft">{error}</p>
-              ) : (
-                <p className="mt-2 text-[11px] text-white/50">
-                  {canApplyToColor
-                    ? 'Applies to this size only unless you use the button above.'
-                    : 'One image per variant row. Uploads also appear in the gallery.'}
-                </p>
-              )}
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
+          {error ? (
+            <p className="mt-1.5 text-[11px] text-spark">{error}</p>
+          ) : null}
+        </div>
+      ) : error ? (
+        <span className="absolute left-0 top-full z-20 mt-1 whitespace-nowrap text-[11px] text-spark">
+          {error}
+        </span>
+      ) : null}
+    </div>
   )
 }
