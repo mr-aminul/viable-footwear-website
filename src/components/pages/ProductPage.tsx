@@ -87,6 +87,7 @@ export function ProductPage({
 
   const selectedColor =
     colorIndex != null ? colorOptions[colorIndex] : undefined
+  const hasSingleColor = colorOptions.length <= 1
   const sizesForColor = useMemo(() => {
     if (!selectedColor) return product.sizes
     const matched = product.variants
@@ -94,10 +95,32 @@ export function ProductPage({
         return colorwayKey(v.color) === selectedColor.key && v.stock > 0
       })
       .map((v) => v.sizeEu)
+      .filter((s) => s > 0)
     return matched.length > 0
       ? [...new Set(matched)].sort((a, b) => a - b)
       : product.sizes
   }, [product, selectedColor])
+  const hasSingleSize = sizesForColor.length === 1
+  const showColorPicker = colorOptions.length > 1
+  const showSizePicker =
+    product.requiresSize !== false && sizesForColor.length > 1
+
+  // Sole color / size are locked in — shopper never needs to tap them.
+  useEffect(() => {
+    if (colorOptions.length === 1) setColorIndex(0)
+  }, [colorOptions.length])
+
+  useEffect(() => {
+    if (product.requiresSize === false) return
+    if (sizesForColor.length === 1) {
+      setSize(sizesForColor[0]!)
+      return
+    }
+    // Drop a size that no longer exists for the new colorway.
+    if (size != null && !sizesForColor.includes(size)) {
+      setSize(null)
+    }
+  }, [product.requiresSize, sizesForColor, size])
 
   const gallery = useMemo(() => {
     return galleryForColorway(
@@ -125,8 +148,17 @@ export function ProductPage({
   }, [product.id, product.name, product.category, product.categoryLabel, product.price])
 
   const resolveSelectedVariant = () => {
+    const color =
+      selectedColor ??
+      (colorOptions.length === 1 ? colorOptions[0] : undefined)
+    const resolvedSize =
+      size ??
+      (product.requiresSize !== false && sizesForColor.length === 1
+        ? sizesForColor[0]!
+        : null)
+
     if (product.requiresSize !== false) {
-      if (size == null) {
+      if (resolvedSize == null) {
         setError('Select a size')
         return null
       }
@@ -134,12 +166,14 @@ export function ProductPage({
       const variant =
         product.variants.find((v) => {
           return (
-            v.sizeEu === size &&
-            (!selectedColor || colorwayKey(v.color) === selectedColor.key) &&
+            v.sizeEu === resolvedSize &&
+            (!color || colorwayKey(v.color) === color.key) &&
             v.stock > 0
           )
         }) ??
-        product.variants.find((v) => v.sizeEu === size && v.stock > 0)
+        product.variants.find(
+          (v) => v.sizeEu === resolvedSize && v.stock > 0,
+        )
 
       if (!variant) {
         setError('That size is out of stock')
@@ -153,8 +187,7 @@ export function ProductPage({
     const variant =
       product.variants.find((v) => {
         return (
-          (!selectedColor || colorwayKey(v.color) === selectedColor.key) &&
-          v.stock > 0
+          (!color || colorwayKey(v.color) === color.key) && v.stock > 0
         )
       }) ?? product.variants.find((v) => v.stock > 0)
 
@@ -334,7 +367,7 @@ export function ProductPage({
             Prices in BDT · Delivery calculated at checkout
           </p>
 
-          {colorOptions.length > 0 ? (
+          {showColorPicker ? (
             <div className="mt-8">
               <p className="text-[13px] font-semibold text-ink">
                 Color
@@ -352,9 +385,10 @@ export function ProductPage({
                     aria-label={c.name ? `Color ${c.name}` : `Color ${i + 1}`}
                     title={c.name ?? undefined}
                     onClick={() => {
-                      setColorIndex((prev) => (prev === i ? null : i))
+                      setColorIndex(i)
                       setSize(null)
                       setImageIndex(0)
+                      setError('')
                     }}
                     className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
                       colorIndex === i
@@ -378,6 +412,13 @@ export function ProductPage({
                 ))}
               </div>
             </div>
+          ) : hasSingleColor && colorOptions[0]?.name ? (
+            <p className="mt-8 text-[13px] font-semibold text-ink">
+              Color
+              <span className="font-normal text-mute">
+                : {colorOptions[0].name}
+              </span>
+            </p>
           ) : null}
 
           {product.note ? (
@@ -396,7 +437,11 @@ export function ProductPage({
                     :{' '}
                     {size != null
                       ? formatSizeLabel(size, sizeUnit)
-                      : 'Please select'}
+                      : showSizePicker
+                        ? 'Please select'
+                        : hasSingleSize
+                          ? formatSizeLabel(sizesForColor[0]!, sizeUnit)
+                          : 'Please select'}
                   </span>
                 </p>
                 <div className="flex items-center gap-3">
@@ -407,48 +452,52 @@ export function ProductPage({
                   >
                     Size guide
                   </button>
-                  <div
-                    role="group"
-                    aria-label="Size unit"
-                    className="inline-flex rounded-full border border-cloud p-0.5 text-[11px] font-semibold"
-                  >
-                    {(['EU', 'UK'] as const).map((unit) => (
-                      <button
-                        key={unit}
-                        type="button"
-                        onClick={() => setSizeUnit(unit)}
-                        className={`rounded-full px-2.5 py-1 transition ${
-                          sizeUnit === unit
-                            ? 'bg-navy text-white'
-                            : 'text-mute hover:text-ink'
-                        }`}
-                      >
-                        {unit}
-                      </button>
-                    ))}
-                  </div>
+                  {showSizePicker ? (
+                    <div
+                      role="group"
+                      aria-label="Size unit"
+                      className="inline-flex rounded-full border border-cloud p-0.5 text-[11px] font-semibold"
+                    >
+                      {(['EU', 'UK'] as const).map((unit) => (
+                        <button
+                          key={unit}
+                          type="button"
+                          onClick={() => setSizeUnit(unit)}
+                          className={`rounded-full px-2.5 py-1 transition ${
+                            sizeUnit === unit
+                              ? 'bg-navy text-white'
+                              : 'text-mute hover:text-ink'
+                          }`}
+                        >
+                          {unit}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {sizesForColor.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      setSize((prev) => (prev === s ? null : s))
-                      setError('')
-                    }}
-                    className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                      size === s
-                        ? 'border-navy bg-navy text-white'
-                        : 'border-cloud bg-white text-ink hover:border-navy/40'
-                    }`}
-                    aria-pressed={size === s}
-                  >
-                    {formatSizeLabel(s, sizeUnit)}
-                  </button>
-                ))}
-              </div>
+              {showSizePicker ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {sizesForColor.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setSize(s)
+                        setError('')
+                      }}
+                      className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
+                        size === s
+                          ? 'border-navy bg-navy text-white'
+                          : 'border-cloud bg-white text-ink hover:border-navy/40'
+                      }`}
+                      aria-pressed={size === s}
+                    >
+                      {formatSizeLabel(s, sizeUnit)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {error && <p className="mt-2 text-[13px] text-spark">{error}</p>}
             </div>
           ) : error ? (
