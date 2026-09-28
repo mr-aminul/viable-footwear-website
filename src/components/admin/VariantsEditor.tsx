@@ -468,15 +468,16 @@ export function VariantsEditor({
                             <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
                               Size (EU)
                             </th>
-                          ) : (
-                            <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
-                              Stock
-                            </th>
-                          )}
-                          <th className="px-3 py-2 font-semibold">SKU</th>
-                          {requiresSize ? (
-                            <th className="px-3 py-2 font-semibold">Stock</th>
                           ) : null}
+                          <th
+                            className={[
+                              'px-3 py-2 font-semibold',
+                              requiresSize ? '' : 'sm:pl-[3.25rem]',
+                            ].join(' ')}
+                          >
+                            SKU
+                          </th>
+                          <th className="px-3 py-2 font-semibold">Stock</th>
                           <th className="px-3 py-2 font-semibold">On sale</th>
                           {requiresSize ? (
                             <th className="w-10 px-2 py-2" />
@@ -506,21 +507,13 @@ export function VariantsEditor({
                                   aria-label="Size EU"
                                 />
                               </td>
-                            ) : (
-                              <td className="px-3 py-1.5 sm:pl-[3.25rem]">
-                                <StockStepper
-                                  value={row.stock}
-                                  onChange={(stock) =>
-                                    onChange(
-                                      rows.map((r) =>
-                                        r.key === row.key ? { ...r, stock } : r,
-                                      ),
-                                    )
-                                  }
-                                />
-                              </td>
-                            )}
-                            <td className="px-3 py-1.5">
+                            ) : null}
+                            <td
+                              className={[
+                                'px-3 py-1.5',
+                                requiresSize ? '' : 'sm:pl-[3.25rem]',
+                              ].join(' ')}
+                            >
                               <input
                                 value={row.sku}
                                 onChange={(e) =>
@@ -536,20 +529,18 @@ export function VariantsEditor({
                                 aria-label="SKU"
                               />
                             </td>
-                            {requiresSize ? (
-                              <td className="px-3 py-1.5">
-                                <StockStepper
-                                  value={row.stock}
-                                  onChange={(stock) =>
-                                    onChange(
-                                      rows.map((r) =>
-                                        r.key === row.key ? { ...r, stock } : r,
-                                      ),
-                                    )
-                                  }
-                                />
-                              </td>
-                            ) : null}
+                            <td className="px-3 py-1.5">
+                              <StockStepper
+                                value={row.stock}
+                                onChange={(stock) =>
+                                  onChange(
+                                    rows.map((r) =>
+                                      r.key === row.key ? { ...r, stock } : r,
+                                    ),
+                                  )
+                                }
+                              />
+                            </td>
                             <td className="px-3 py-1.5">
                               <button
                                 type="button"
