@@ -180,7 +180,9 @@ function InventoryRow({ row }: { row: AdminInventoryRow }) {
           </div>
         </div>
       </td>
-      <td className="px-3 py-3 tabular-nums text-ink">{row.sizeEu}</td>
+      <td className="px-3 py-3 tabular-nums text-ink">
+        {row.sizeEu > 0 ? row.sizeEu : '—'}
+      </td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-2">
           {row.colorHex ? (

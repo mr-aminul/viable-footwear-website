@@ -22,6 +22,11 @@ export type Product = {
   videoUrl?: string
   colors: string[]
   sizes: number[]
+  /**
+   * When true (default), shoppers pick an EU size.
+   * When false, product is one-size (bags, accessories) — no size UI.
+   */
+  requiresSize: boolean
   /** Active variants for stock-aware add-to-cart. */
   variants: ProductVariantView[]
   badge: ProductBadge

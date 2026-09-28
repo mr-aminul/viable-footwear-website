@@ -74,9 +74,9 @@ function mapProduct(
     mediaById,
     !options?.includeInactiveVariants,
   )
-  const sizes = [...new Set(variantViews.map((v) => v.sizeEu))].sort(
-    (a, b) => a - b,
-  )
+  const sizes = [...new Set(variantViews.map((v) => v.sizeEu))]
+    .filter((s) => s > 0)
+    .sort((a, b) => a - b)
   const colors = [
     ...new Set(
       variantViews
@@ -100,6 +100,7 @@ function mapProduct(
       : undefined,
     colors,
     sizes,
+    requiresSize: row.requires_size !== false,
     variants: variantViews,
     badge: parseBadge(row.badge),
     description: row.description,

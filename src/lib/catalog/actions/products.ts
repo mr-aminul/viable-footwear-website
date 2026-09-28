@@ -11,6 +11,7 @@ import {
   RELATED_PRODUCTS_DISPLAY_CAP,
 } from '@/lib/catalog/constants'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
+import { ONE_SIZE_EU } from '@/lib/catalog/sizing'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
@@ -74,7 +75,8 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
       const row = item as Record<string, unknown>
       const size = Number(row.size_eu)
       const stock = Number(row.stock ?? 0)
-      if (!Number.isFinite(size) || size <= 0) {
+      // size_eu 0 is the one-size sentinel (bags / accessories).
+      if (!Number.isFinite(size) || size < 0) {
         return { error: 'Each variant needs a valid EU size.' }
       }
       if (!Number.isFinite(stock) || stock < 0) {
@@ -137,16 +139,32 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
   }
 }
 
-async function countActiveVariants(
+/**
+ * Why this product cannot go live — missing sellable variants or color names.
+ * Used by publish / update paths so incomplete listings stay draft.
+ */
+async function getPublishBlockReason(
   productId: string,
-): Promise<number> {
+): Promise<string | null> {
   const supabase = await createClient()
-  const { count } = await supabase
+  const { data: variants, error } = await supabase
     .from('product_variants')
-    .select('id', { count: 'exact', head: true })
+    .select('id, color, active')
     .eq('product_id', productId)
     .eq('active', true)
-  return count ?? 0
+
+  if (error) return error.message
+
+  const active = variants ?? []
+  if (active.length < 1) {
+    return 'Add at least one active size/color variant before publishing.'
+  }
+  for (const variant of active) {
+    if (!variant.color?.trim()) {
+      return 'Every active variant needs a color name (e.g. Navy, Black) before publishing.'
+    }
+  }
+  return null
 }
 
 /** One sheet row = one product. Variants expand from sizes × colors lists. */
@@ -243,17 +261,22 @@ function parseColorToken(raw: string): { color: string; color_hex: string } {
 
 function parseColorsList(
   raw: string,
-): Array<{ color: string | null; color_hex: string }> | { error: string } {
+): Array<{ color: string; color_hex: string }> | { error: string } {
   const parts = splitList(raw)
   if (parts.length === 0) {
-    return [{ color: null, color_hex: '#1A3668' }]
+    return {
+      error: 'Add at least one color name (e.g. Black, Grey).',
+    }
   }
 
-  const colors: Array<{ color: string | null; color_hex: string }> = []
+  const colors: Array<{ color: string; color_hex: string }> = []
   const seen = new Set<string>()
   for (const part of parts) {
     const parsed = parseColorToken(part)
-    const key = `${(parsed.color || '').toLowerCase()}|${parsed.color_hex}`
+    if (!parsed.color.trim()) {
+      return { error: 'Every color needs a name (e.g. Grey, Black).' }
+    }
+    const key = `${parsed.color.toLowerCase()}|${parsed.color_hex}`
     if (seen.has(key)) continue
     seen.add(key)
     colors.push(parsed)
@@ -269,7 +292,7 @@ function expandVariants(input: {
   | {
       variants: Array<{
         size_eu: number
-        color: string | null
+        color: string
         color_hex: string
         stock: number
         sku: string | null
@@ -496,8 +519,8 @@ export async function createProduct(
   const seoDescription = readString(formData, 'seo_description') || null
   const featured =
     formData.get('featured') === 'on' || formData.get('featured') === 'true'
-  // Products are published by default.
-  const active = true
+  // Draft until colors/sizes pass publish checks and an admin flips Live.
+  const active = false
 
   if (!name) return { ok: false, error: 'Name is required.' }
   if (!isValidSlug(slug)) {
@@ -575,6 +598,13 @@ export async function updateProduct(
     formData.get('featured') === 'on' || formData.get('featured') === 'true'
   const active =
     formData.get('active') === 'on' || formData.get('active') === 'true'
+  const requiresSizeRaw = formData.get('requires_size')
+  const requiresSize =
+    requiresSizeRaw == null
+      ? true
+      : requiresSizeRaw === 'on' ||
+        requiresSizeRaw === 'true' ||
+        requiresSizeRaw === '1'
 
   if (!name) return { ok: false, error: 'Name is required.' }
   if (!isValidSlug(slug)) {
@@ -591,13 +621,8 @@ export async function updateProduct(
   }
 
   if (active) {
-    const activeVariants = await countActiveVariants(productId)
-    if (activeVariants < 1) {
-      return {
-        ok: false,
-        error: 'Add at least one active size/color variant before publishing.',
-      }
-    }
+    const blockReason = await getPublishBlockReason(productId)
+    if (blockReason) return { ok: false, error: blockReason }
   }
 
   const { data: existing } = await supabase
@@ -625,6 +650,7 @@ export async function updateProduct(
       seo_description: seoDescription,
       featured,
       active,
+      requires_size: requiresSize,
     })
     .eq('id', productId)
 
@@ -671,13 +697,8 @@ export async function setProductActive(
   if (existing.active === active) return { ok: true }
 
   if (active) {
-    const activeVariants = await countActiveVariants(productId)
-    if (activeVariants < 1) {
-      return {
-        ok: false,
-        error: 'Add at least one active size/color variant before publishing.',
-      }
-    }
+    const blockReason = await getPublishBlockReason(productId)
+    if (blockReason) return { ok: false, error: blockReason }
   }
 
   const { error } = await supabase
@@ -849,6 +870,43 @@ export async function saveProductVariants(
   const parsed = parseVariantsJson(readString(formData, 'variants_json'))
   if ('error' in parsed) return { ok: false, error: parsed.error }
 
+  const requiresSizeRaw = formData.get('requires_size')
+  const requiresSize =
+    requiresSizeRaw == null
+      ? true
+      : requiresSizeRaw === 'on' ||
+        requiresSizeRaw === 'true' ||
+        requiresSizeRaw === '1'
+
+  if (requiresSize) {
+    for (const variant of parsed.filter((v) => v.active)) {
+      if (variant.size_eu <= 0) {
+        return {
+          ok: false,
+          error: 'Every active size row needs a valid EU size greater than zero.',
+        }
+      }
+    }
+  } else {
+    const byColor = new Map<string, typeof parsed>()
+    for (const variant of parsed) {
+      variant.size_eu = ONE_SIZE_EU
+      if (!variant.active) continue
+      const key = (variant.color ?? '').trim().toLowerCase()
+      const list = byColor.get(key) ?? []
+      list.push(variant)
+      byColor.set(key, list)
+    }
+    for (const [, group] of byColor) {
+      if (group.length > 1) {
+        return {
+          ok: false,
+          error: `“${group[0]?.color}” should only have one stock row when size variation is off.`,
+        }
+      }
+    }
+  }
+
   const { data: product } = await supabase
     .from('products')
     .select('slug, active')
@@ -1001,12 +1059,17 @@ export async function saveProductVariants(
     }
   }
 
-  const activeCount = parsed.filter((v) => v.active).length
-  if (product.active && activeCount < 1) {
-    await supabase
-      .from('products')
-      .update({ active: false })
-      .eq('id', productId)
+  // Stay draft (or drop to draft) when sellable variants are incomplete.
+  if (product.active) {
+    const stillReady = parsed.some(
+      (v) => v.active && Boolean(v.color?.trim()),
+    )
+    if (!stillReady) {
+      await supabase
+        .from('products')
+        .update({ active: false })
+        .eq('id', productId)
+    }
   }
 
   revalidateProductSurfaces(product.slug)

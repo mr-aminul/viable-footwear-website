@@ -356,7 +356,9 @@ export default async function OrderDetailPage({
                   ) : null}
                 </td>
                 <td className="px-4 py-3 text-mute">
-                  {item.size_eu != null ? `EU ${item.size_eu}` : '—'}
+                  {item.size_eu != null && Number(item.size_eu) > 0
+                    ? `EU ${item.size_eu}`
+                    : '—'}
                 </td>
                 <td className="px-4 py-3">{item.quantity}</td>
                 <td className="px-4 py-3">

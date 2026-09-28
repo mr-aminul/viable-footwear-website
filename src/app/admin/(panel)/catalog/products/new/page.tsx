@@ -14,7 +14,7 @@ export default async function NewProductPage() {
     <>
       <AdminPageHeader
         title="New product"
-        description="Create the core listing first. Variants and media come next. Need many at once? Use the bulk sheet."
+        description="Create the core listing first (starts as draft). Add colors & sizes next, then flip Live."
         actions={
           <AdminButton href="/admin/catalog/products/bulk" variant="secondary">
             Bulk sheet

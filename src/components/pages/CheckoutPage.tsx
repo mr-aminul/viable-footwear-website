@@ -10,6 +10,7 @@ import { useCart } from '@/context/CartContext'
 import { useOrders } from '@/context/OrdersContext'
 import { SearchableSelect, type SearchableSelectHandle } from '@/components/SearchableSelect'
 import { formatPrice } from '@/lib/brand'
+import { formatCartVariantLabel } from '@/lib/catalog/sizing'
 import {
   isValidBdMobile,
   PATHAO_ADDRESS_MAX_LENGTH,
@@ -304,7 +305,11 @@ export function CheckoutPage() {
         item_category: item.product.categoryLabel || item.product.category,
         price: item.product.price,
         quantity: item.quantity,
-        item_variant: `EU ${item.size}`,
+        item_variant: formatCartVariantLabel(
+          item.product.requiresSize !== false,
+          item.size,
+          item.product.variants.find((v) => v.id === item.variantId)?.color,
+        ) ?? undefined,
       })),
     })
     // Once per checkout visit with a cart
@@ -816,7 +821,11 @@ export function CheckoutPage() {
             item_category: item.product.categoryLabel || item.product.category,
             price: item.product.price,
             quantity: item.quantity,
-            item_variant: `EU ${item.size}`,
+            item_variant: formatCartVariantLabel(
+          item.product.requiresSize !== false,
+          item.size,
+          item.product.variants.find((v) => v.id === item.variantId)?.color,
+        ) ?? undefined,
           })),
         })
       }
@@ -1388,10 +1397,22 @@ export function CheckoutPage() {
                     {item.product.name}
                   </Link>
                   <p className="mt-0.5 text-[12px] text-mute">
-                    Size EU {item.size}
-                    {item.quantity > 1
-                      ? ` · ${item.quantity} × ${formatPrice(item.product.price)}`
-                      : null}
+                    {(() => {
+                      const color =
+                        item.product.variants.find(
+                          (v) => v.id === item.variantId,
+                        )?.color ?? null
+                      const label = formatCartVariantLabel(
+                        item.product.requiresSize !== false,
+                        item.size,
+                        color,
+                      )
+                      const qty =
+                        item.quantity > 1
+                          ? `${item.quantity} × ${formatPrice(item.product.price)}`
+                          : null
+                      return [label, qty].filter(Boolean).join(' · ')
+                    })()}
                   </p>
                 </div>
                 <span className="shrink-0 text-[13px] font-semibold tabular-nums">

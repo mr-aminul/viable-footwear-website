@@ -24,7 +24,9 @@ import { colorwayKey } from '@/lib/catalog/colorway'
 import {
   VariantsEditor,
   buildVariantsPayload,
+  collapseToOneSizePerColor,
   createEmptyVariantDraft,
+  expandFromOneSize,
   validateVariantDrafts,
   type VariantDraft,
 } from '@/components/admin/VariantsEditor'
@@ -74,7 +76,13 @@ export function AdminProductEditor({
 }: AdminProductEditorProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => {
+    if (!product.active) return null
+    return validateVariantDrafts(
+      initialVariants.length > 0 ? initialVariants : [createEmptyVariantDraft()],
+      { requiresSize: product.requiresSize !== false, forPublish: true },
+    )
+  })
   const [success, setSuccess] = useState<string | null>(null)
 
   const [name, setName] = useState(product.name)
@@ -103,6 +111,9 @@ export function AdminProductEditor({
   const [variantRows, setVariantRows] = useState<VariantDraft[]>(
     initialVariants.length > 0 ? initialVariants : [createEmptyVariantDraft()],
   )
+  const [requiresSize, setRequiresSize] = useState(
+    product.requiresSize !== false,
+  )
   const [relatedIds, setRelatedIds] = useState<string[]>(initialRelatedIds)
 
   const [size, setSize] = useState<number | null>(null)
@@ -126,6 +137,7 @@ export function AdminProductEditor({
       weightKg,
       seoTitle,
       seoDescription,
+      requiresSize,
       variantRows,
       relatedIds,
     }),
@@ -146,6 +158,7 @@ export function AdminProductEditor({
       weightKg,
       seoTitle,
       seoDescription,
+      requiresSize,
       variantRows,
       relatedIds,
     ],
@@ -242,7 +255,10 @@ export function AdminProductEditor({
     setError(null)
     setSuccess(null)
 
-    const variantError = validateVariantDrafts(variantRows)
+    const variantError = validateVariantDrafts(variantRows, {
+      requiresSize,
+      forPublish: active,
+    })
     if (variantError) {
       setError(variantError)
       return false
@@ -263,11 +279,13 @@ export function AdminProductEditor({
     formData.set('badge', badge)
     formData.set('seo_title', seoTitle)
     formData.set('seo_description', seoDescription)
+    formData.set('requires_size', requiresSize ? 'true' : 'false')
     if (featured) formData.set('featured', 'on')
     if (active) formData.set('active', 'on')
 
     const variantsData = new FormData()
     variantsData.set('variants_json', buildVariantsPayload(variantRows))
+    variantsData.set('requires_size', requiresSize ? 'true' : 'false')
 
     const relatedData = new FormData()
     relatedData.set('related_ids_json', JSON.stringify(relatedIds))
@@ -308,6 +326,25 @@ export function AdminProductEditor({
     })
   }
 
+  const toggleLive = () => {
+    if (active) {
+      setActive(false)
+      setError(null)
+      return
+    }
+
+    const publishError = validateVariantDrafts(variantRows, {
+      requiresSize,
+      forPublish: true,
+    })
+    if (publishError) {
+      setError(publishError)
+      return
+    }
+    setError(null)
+    setActive(true)
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -333,7 +370,7 @@ export function AdminProductEditor({
             role="switch"
             aria-checked={active}
             disabled={pending}
-            onClick={() => setActive((value) => !value)}
+            onClick={toggleLive}
             className={[
               'inline-flex items-center gap-2.5 rounded-full border bg-white px-3 py-2 text-[12px] font-medium disabled:opacity-60',
               active
@@ -559,33 +596,42 @@ export function AdminProductEditor({
           </label>
 
           <div className="mt-7">
-            <p className="text-[13px] font-semibold text-ink">Size (EU)</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(sizesForColor.length > 0 ? sizesForColor : product.sizes).map(
-                (s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() =>
-                      setSize((prev) => (prev === s ? null : s))
-                    }
-                    className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                      size === s
-                        ? 'border-navy bg-navy text-white'
-                        : 'border-cloud bg-white text-ink hover:border-navy/40'
-                    }`}
-                    aria-pressed={size === s}
-                  >
-                    {s}
-                  </button>
-                ),
-              )}
-              {product.sizes.length === 0 ? (
-                <p className="text-[13px] text-mute">
-                  Add sizes in Variants & SKUs below.
-                </p>
-              ) : null}
-            </div>
+            {requiresSize ? (
+              <>
+                <p className="text-[13px] font-semibold text-ink">Size (EU)</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(sizesForColor.length > 0 ? sizesForColor : product.sizes)
+                    .filter((s) => s > 0)
+                    .map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() =>
+                          setSize((prev) => (prev === s ? null : s))
+                        }
+                        className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
+                          size === s
+                            ? 'border-navy bg-navy text-white'
+                            : 'border-cloud bg-white text-ink hover:border-navy/40'
+                        }`}
+                        aria-pressed={size === s}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  {product.sizes.length === 0 &&
+                  sizesForColor.filter((s) => s > 0).length === 0 ? (
+                    <p className="text-[13px] text-mute">
+                      Add sizes in Colors & sizes below.
+                    </p>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="text-[13px] text-mute">
+                One size — shoppers won’t pick a size on the product page.
+              </p>
+            )}
           </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -679,13 +725,64 @@ export function AdminProductEditor({
       </div>
 
       <section className="mt-14">
-        <h2 className="text-[15px] font-semibold text-ink">Colors & sizes</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">
+              {requiresSize ? 'Colors & sizes' : 'Colors'}
+            </h2>
+            <p className="mt-1 text-[13px] text-mute">
+              {requiresSize
+                ? 'Each color can have multiple EU sizes with their own stock.'
+                : 'One stock row per color — for bags and other one-size items.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={requiresSize}
+            aria-label="Size variation"
+            onClick={() => {
+              setRequiresSize((prev) => {
+                const next = !prev
+                setVariantRows((rows) =>
+                  next
+                    ? expandFromOneSize(rows)
+                    : collapseToOneSizePerColor(rows),
+                )
+                setSize(null)
+                return next
+              })
+            }}
+            className={[
+              'inline-flex items-center gap-2.5 rounded-full border bg-white px-3 py-2 text-[12px] font-medium',
+              requiresSize ? 'border-navy text-ink' : 'border-cloud text-ink',
+            ].join(' ')}
+          >
+            <span className={requiresSize ? 'text-navy' : 'text-mute'}>
+              Size variation
+            </span>
+            <span
+              className={[
+                'relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200',
+                requiresSize ? 'bg-navy' : 'bg-cloud',
+              ].join(' ')}
+            >
+              <span
+                className={[
+                  'absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                  requiresSize ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')}
+              />
+            </span>
+          </button>
+        </div>
         <div className="mt-4">
           <VariantsEditor
             productId={product.id}
             rows={variantRows}
             onChange={setVariantRows}
             images={variantImageOptions}
+            requiresSize={requiresSize}
           />
         </div>
       </section>

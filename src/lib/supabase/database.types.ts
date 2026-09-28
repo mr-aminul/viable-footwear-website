@@ -105,6 +105,7 @@ export interface Database {
           badge: string | null
           featured: boolean
           active: boolean
+          requires_size: boolean
           related_product_ids: string[]
           seo_title: string | null
           seo_description: string | null
@@ -129,6 +130,7 @@ export interface Database {
           badge?: string | null
           featured?: boolean
           active?: boolean
+          requires_size?: boolean
           related_product_ids?: string[]
           seo_title?: string | null
           seo_description?: string | null

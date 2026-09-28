@@ -125,23 +125,41 @@ export function ProductPage({
   }, [product.id, product.name, product.category, product.categoryLabel, product.price])
 
   const resolveSelectedVariant = () => {
-    if (size == null) {
-      setError('Select a size')
-      return null
+    if (product.requiresSize !== false) {
+      if (size == null) {
+        setError('Select a size')
+        return null
+      }
+
+      const variant =
+        product.variants.find((v) => {
+          return (
+            v.sizeEu === size &&
+            (!selectedColor || colorwayKey(v.color) === selectedColor.key) &&
+            v.stock > 0
+          )
+        }) ??
+        product.variants.find((v) => v.sizeEu === size && v.stock > 0)
+
+      if (!variant) {
+        setError('That size is out of stock')
+        return null
+      }
+
+      setError('')
+      return variant
     }
 
     const variant =
       product.variants.find((v) => {
         return (
-          v.sizeEu === size &&
           (!selectedColor || colorwayKey(v.color) === selectedColor.key) &&
           v.stock > 0
         )
-      }) ??
-      product.variants.find((v) => v.sizeEu === size && v.stock > 0)
+      }) ?? product.variants.find((v) => v.stock > 0)
 
     if (!variant) {
-      setError('That size is out of stock')
+      setError('Out of stock')
       return null
     }
 
@@ -149,14 +167,17 @@ export function ProductPage({
     return variant
   }
 
-  const trackSelectedVariantAdd = () => {
+  const trackSelectedVariantAdd = (variantSize: number) => {
     trackAddToCart({
       item_id: product.id,
       item_name: product.name,
       item_category: product.categoryLabel || product.category,
       price: product.price,
       quantity: 1,
-      item_variant: [selectedColor?.name, `EU ${size}`]
+      item_variant: [
+        selectedColor?.name,
+        product.requiresSize !== false ? `EU ${variantSize}` : null,
+      ]
         .filter(Boolean)
         .join(' / '),
     })
@@ -164,20 +185,20 @@ export function ProductPage({
 
   const handleAdd = () => {
     const variant = resolveSelectedVariant()
-    if (!variant || size == null) return
+    if (!variant) return
 
-    addToCart(product, size, 1, variant.id)
-    trackSelectedVariantAdd()
+    addToCart(product, variant.sizeEu, 1, variant.id)
+    trackSelectedVariantAdd(variant.sizeEu)
     setAdded(true)
     window.setTimeout(() => setAdded(false), 2000)
   }
 
   const handleBuyNow = () => {
     const variant = resolveSelectedVariant()
-    if (!variant || size == null) return
+    if (!variant) return
 
-    startBuyNow(product, size, 1, variant.id)
-    trackSelectedVariantAdd()
+    startBuyNow(product, variant.sizeEu, 1, variant.id)
+    trackSelectedVariantAdd(variant.sizeEu)
     router.push('/checkout')
   }
 
@@ -366,66 +387,73 @@ export function ProductPage({
             </div>
           ) : null}
 
-          <div className="mt-7">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[13px] font-semibold text-ink">
-                Size
-                <span className="font-normal text-mute">
-                  : {size != null ? formatSizeLabel(size, sizeUnit) : 'Please select'}
-                </span>
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSizeGuideOpen(true)}
-                  className="text-[12px] font-medium text-navy underline-offset-2 hover:underline"
-                >
-                  Size guide
-                </button>
-                <div
-                  role="group"
-                  aria-label="Size unit"
-                  className="inline-flex rounded-full border border-cloud p-0.5 text-[11px] font-semibold"
-                >
-                  {(['EU', 'UK'] as const).map((unit) => (
-                    <button
-                      key={unit}
-                      type="button"
-                      onClick={() => setSizeUnit(unit)}
-                      className={`rounded-full px-2.5 py-1 transition ${
-                        sizeUnit === unit
-                          ? 'bg-navy text-white'
-                          : 'text-mute hover:text-ink'
-                      }`}
-                    >
-                      {unit}
-                    </button>
-                  ))}
+          {product.requiresSize !== false ? (
+            <div className="mt-7">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[13px] font-semibold text-ink">
+                  Size
+                  <span className="font-normal text-mute">
+                    :{' '}
+                    {size != null
+                      ? formatSizeLabel(size, sizeUnit)
+                      : 'Please select'}
+                  </span>
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSizeGuideOpen(true)}
+                    className="text-[12px] font-medium text-navy underline-offset-2 hover:underline"
+                  >
+                    Size guide
+                  </button>
+                  <div
+                    role="group"
+                    aria-label="Size unit"
+                    className="inline-flex rounded-full border border-cloud p-0.5 text-[11px] font-semibold"
+                  >
+                    {(['EU', 'UK'] as const).map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        onClick={() => setSizeUnit(unit)}
+                        className={`rounded-full px-2.5 py-1 transition ${
+                          sizeUnit === unit
+                            ? 'bg-navy text-white'
+                            : 'text-mute hover:text-ink'
+                        }`}
+                      >
+                        {unit}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {sizesForColor.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setSize((prev) => (prev === s ? null : s))
+                      setError('')
+                    }}
+                    className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
+                      size === s
+                        ? 'border-navy bg-navy text-white'
+                        : 'border-cloud bg-white text-ink hover:border-navy/40'
+                    }`}
+                    aria-pressed={size === s}
+                  >
+                    {formatSizeLabel(s, sizeUnit)}
+                  </button>
+                ))}
+              </div>
+              {error && <p className="mt-2 text-[13px] text-spark">{error}</p>}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {sizesForColor.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    setSize((prev) => (prev === s ? null : s))
-                    setError('')
-                  }}
-                  className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                    size === s
-                      ? 'border-navy bg-navy text-white'
-                      : 'border-cloud bg-white text-ink hover:border-navy/40'
-                  }`}
-                  aria-pressed={size === s}
-                >
-                  {formatSizeLabel(s, sizeUnit)}
-                </button>
-              ))}
-            </div>
-            {error && <p className="mt-2 text-[13px] text-spark">{error}</p>}
-          </div>
+          ) : error ? (
+            <p className="mt-4 text-[13px] text-spark">{error}</p>
+          ) : null}
 
           <div className="mt-8 flex flex-wrap gap-3">
             <button

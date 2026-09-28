@@ -253,10 +253,12 @@ export async function POST(request: NextRequest) {
         )
       }
       if (variant.stock < line.quantity) {
+        const sizeHint =
+          Number(variant.size_eu) > 0 ? ` (EU ${variant.size_eu})` : ''
         return NextResponse.json(
           {
             success: false,
-            error: `Not enough stock for ${product.name} (EU ${variant.size_eu}).`,
+            error: `Not enough stock for ${product.name}${sizeHint}.`,
           },
           { status: 409, headers: NO_STORE_HEADERS },
         )

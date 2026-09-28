@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { formatPrice } from '@/lib/brand'
+import { formatCartVariantLabel } from '@/lib/catalog/sizing'
 import { EASE_OUT } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 
@@ -106,9 +107,21 @@ export function CartPage() {
                   >
                     {item.product.name}
                   </Link>
-                  <p className="mt-0.5 text-[12px] text-mute sm:text-[13px]">
-                    Size EU {item.size}
-                  </p>
+                  {(() => {
+                    const color =
+                      item.product.variants.find((v) => v.id === item.variantId)
+                        ?.color ?? null
+                    const label = formatCartVariantLabel(
+                      item.product.requiresSize !== false,
+                      item.size,
+                      color,
+                    )
+                    return label ? (
+                      <p className="mt-0.5 text-[12px] text-mute sm:text-[13px]">
+                        {label}
+                      </p>
+                    ) : null
+                  })()}
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5 sm:gap-4">
                   <div className="inline-flex items-center rounded-full border border-cloud">

@@ -139,7 +139,7 @@ const COLUMNS: Array<{
     label: 'Colors',
     width: 'minmax(0, 12rem)',
     kind: 'text',
-    placeholder: 'Black, White',
+    placeholder: 'Black, White (required)',
   },
   {
     key: 'stock',
@@ -220,7 +220,8 @@ function countListItems(raw: string): number {
 /** Live preview of how many variants this row will create. */
 function previewVariantCount(row: SheetRow): number {
   const sizes = Math.max(1, countListItems(row.sizes))
-  const colors = Math.max(1, countListItems(row.colors))
+  const colors = countListItems(row.colors)
+  if (colors === 0) return 0
   return sizes * colors
 }
 

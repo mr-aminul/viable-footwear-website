@@ -1,4 +1,27 @@
 /**
+ * Sentinel EU size stored on one-size products (bags, accessories).
+ * Keeps `product_variants.size_eu NOT NULL` and the unique (product, size, color) key.
+ */
+export const ONE_SIZE_EU = 0
+
+export function isOneSizeEu(sizeEu: number): boolean {
+  return sizeEu === ONE_SIZE_EU
+}
+
+/** Cart / checkout line label — omit size when the product does not use sizes. */
+export function formatCartVariantLabel(
+  requiresSize: boolean,
+  sizeEu: number,
+  color?: string | null,
+): string | null {
+  const colorLabel = color?.trim() || null
+  if (requiresSize && !isOneSizeEu(sizeEu)) {
+    return colorLabel ? `Size EU ${sizeEu} · ${colorLabel}` : `Size EU ${sizeEu}`
+  }
+  return colorLabel
+}
+
+/**
  * Approximate EU → UK adults conversion used for the size-unit toggle.
  * Display-only; stock matching stays on EU sizes.
  */

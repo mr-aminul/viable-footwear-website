@@ -64,7 +64,9 @@ function ProductCardInteractive({
           item_category: product.categoryLabel || product.category,
           price: product.price,
           quantity: 1,
-          item_variant: `EU ${defaultVariant.sizeEu}`,
+          item_variant: product.requiresSize !== false
+            ? `EU ${defaultVariant.sizeEu}`
+            : defaultVariant.color?.trim() || undefined,
         })
       }}
     />

@@ -26,6 +26,7 @@ import {
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { colorwayKey } from '@/lib/catalog/colorway'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { ONE_SIZE_EU } from '@/lib/catalog/sizing'
 
 export type VariantDraft = {
   key: string
@@ -45,10 +46,13 @@ export type VariantImageOption = {
   color: string | null
 }
 
-export function createEmptyVariantDraft(color = ''): VariantDraft {
+export function createEmptyVariantDraft(
+  color = '',
+  requiresSize = true,
+): VariantDraft {
   return {
     key: crypto.randomUUID(),
-    size_eu: '40',
+    size_eu: requiresSize ? '40' : String(ONE_SIZE_EU),
     color,
     color_hex: '',
     media_id: null,
@@ -56,6 +60,32 @@ export function createEmptyVariantDraft(color = ''): VariantDraft {
     stock: '0',
     active: true,
   }
+}
+
+/**
+ * Collapse each color to a single one-size row (keeps first row's id/stock/sku).
+ */
+export function collapseToOneSizePerColor(rows: VariantDraft[]): VariantDraft[] {
+  const groups = groupByColor(rows)
+  return groups.map((group) => {
+    const primary = group.rows[0]!
+    return {
+      ...primary,
+      size_eu: String(ONE_SIZE_EU),
+      color: group.color || primary.color,
+    }
+  })
+}
+
+/** Restore editable sizes when turning size variation back on. */
+export function expandFromOneSize(rows: VariantDraft[]): VariantDraft[] {
+  return rows.map((row) => ({
+    ...row,
+    size_eu:
+      Number(row.size_eu) === ONE_SIZE_EU || !row.size_eu.trim()
+        ? '40'
+        : row.size_eu,
+  }))
 }
 
 export function buildVariantsPayload(rows: VariantDraft[]): string {
@@ -78,13 +108,36 @@ function normalizeColorName(value: string): string {
 }
 
 /** Client-side check before save — mirrors server rules. */
-export function validateVariantDrafts(rows: VariantDraft[]): string | null {
+export function validateVariantDrafts(
+  rows: VariantDraft[],
+  requiresSizeOrOptions:
+    | boolean
+    | { requiresSize?: boolean; forPublish?: boolean } = true,
+): string | null {
+  const options =
+    typeof requiresSizeOrOptions === 'boolean'
+      ? { requiresSize: requiresSizeOrOptions, forPublish: false }
+      : requiresSizeOrOptions
+  const requiresSize = options.requiresSize !== false
+  const forPublish = Boolean(options.forPublish)
+
   const active = rows.filter((r) => r.active)
+  if (forPublish && active.length === 0) {
+    return requiresSize
+      ? 'Add at least one size/color on sale before going live.'
+      : 'Add at least one color on sale before going live.'
+  }
   if (active.length === 0) return null
 
   for (const row of active) {
     if (!normalizeColorName(row.color)) {
       return 'Every color needs a name (e.g. Grey, Black).'
+    }
+    if (requiresSize) {
+      const size = Number(row.size_eu)
+      if (!Number.isFinite(size) || size <= 0) {
+        return 'Every size row needs a valid EU size.'
+      }
     }
   }
 
@@ -97,6 +150,9 @@ export function validateVariantDrafts(rows: VariantDraft[]): string | null {
   }
 
   for (const [, group] of byColor) {
+    if (!requiresSize && group.length > 1) {
+      return `“${group[0].color.trim()}” should only have one stock row when sizes are off.`
+    }
     const sizes = group.map((r) => r.size_eu.trim())
     if (new Set(sizes).size !== sizes.length) {
       return `“${group[0].color.trim()}” has the same size twice.`
@@ -149,22 +205,25 @@ const fieldClass =
   'w-full rounded-md border border-cloud bg-white px-2 py-1.5 text-[13px] text-ink outline-none transition placeholder:text-mute/70 focus:border-navy'
 
 /**
- * Simple nested list: each color holds its photos + sizes.
- * Designed so a first-time merchant gets it without instructions.
+ * Nested list: each color holds its photos + sizes (or a single stock row when
+ * the product does not use size variation).
  */
 export function VariantsEditor({
   productId,
   rows,
   onChange,
   images,
+  requiresSize = true,
 }: {
   productId: string
   rows: VariantDraft[]
   onChange: (rows: VariantDraft[]) => void
   images: VariantImageOption[]
+  /** When false, each color is one-size — no size column / add-size. */
+  requiresSize?: boolean
 }) {
   const groups = useMemo(() => groupByColor(rows), [rows])
-  const draftError = validateVariantDrafts(rows)
+  const draftError = validateVariantDrafts(rows, requiresSize)
 
   // Optimistic color tags — UI updates instantly; server syncs in background.
   const [colorByMediaId, setColorByMediaId] = useState(() =>
@@ -285,6 +344,7 @@ export function VariantsEditor({
   }
 
   const addSize = (groupKey: string) => {
+    if (!requiresSize) return
     const group = groups.find((g) => g.key === groupKey)
     if (!group) return
     const primary =
@@ -295,7 +355,7 @@ export function VariantsEditor({
       null
     const sizes = group.rows
       .map((r) => Number(r.size_eu))
-      .filter((n) => Number.isFinite(n))
+      .filter((n) => Number.isFinite(n) && n > 0)
     const nextSize = sizes.length > 0 ? String(Math.max(...sizes) + 1) : '40'
     setCollapsed((prev) => {
       const next = new Set(prev)
@@ -305,7 +365,7 @@ export function VariantsEditor({
     replaceGroupRows(groupKey, [
       ...group.rows,
       {
-        ...createEmptyVariantDraft(group.color),
+        ...createEmptyVariantDraft(group.color, true),
         size_eu: nextSize,
         media_id: primary,
       },
@@ -313,7 +373,7 @@ export function VariantsEditor({
   }
 
   const addColor = () => {
-    const draft = createEmptyVariantDraft('')
+    const draft = createEmptyVariantDraft('', requiresSize)
     onChange([...rows, draft])
   }
 
@@ -401,16 +461,26 @@ export function VariantsEditor({
               {open ? (
                 <div className="border-t border-cloud">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-left text-[13px]">
+                    <table className="w-full min-w-[420px] text-left text-[13px]">
                       <thead>
                         <tr className="text-[11px] uppercase tracking-wider text-mute">
-                          <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
-                            Size (EU)
-                          </th>
+                          {requiresSize ? (
+                            <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
+                              Size (EU)
+                            </th>
+                          ) : (
+                            <th className="px-3 py-2 font-semibold sm:pl-[3.25rem]">
+                              Stock
+                            </th>
+                          )}
                           <th className="px-3 py-2 font-semibold">SKU</th>
-                          <th className="px-3 py-2 font-semibold">Stock</th>
+                          {requiresSize ? (
+                            <th className="px-3 py-2 font-semibold">Stock</th>
+                          ) : null}
                           <th className="px-3 py-2 font-semibold">On sale</th>
-                          <th className="w-10 px-2 py-2" />
+                          {requiresSize ? (
+                            <th className="w-10 px-2 py-2" />
+                          ) : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -419,22 +489,37 @@ export function VariantsEditor({
                             key={row.key}
                             className="border-t border-cloud/70"
                           >
-                            <td className="px-3 py-1.5 sm:pl-[3.25rem]">
-                              <input
-                                value={row.size_eu}
-                                onChange={(e) =>
-                                  onChange(
-                                    rows.map((r) =>
-                                      r.key === row.key
-                                        ? { ...r, size_eu: e.target.value }
-                                        : r,
-                                    ),
-                                  )
-                                }
-                                className={`${fieldClass} w-[4.5rem]`}
-                                aria-label="Size EU"
-                              />
-                            </td>
+                            {requiresSize ? (
+                              <td className="px-3 py-1.5 sm:pl-[3.25rem]">
+                                <input
+                                  value={row.size_eu}
+                                  onChange={(e) =>
+                                    onChange(
+                                      rows.map((r) =>
+                                        r.key === row.key
+                                          ? { ...r, size_eu: e.target.value }
+                                          : r,
+                                      ),
+                                    )
+                                  }
+                                  className={`${fieldClass} w-[4.5rem]`}
+                                  aria-label="Size EU"
+                                />
+                              </td>
+                            ) : (
+                              <td className="px-3 py-1.5 sm:pl-[3.25rem]">
+                                <StockStepper
+                                  value={row.stock}
+                                  onChange={(stock) =>
+                                    onChange(
+                                      rows.map((r) =>
+                                        r.key === row.key ? { ...r, stock } : r,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </td>
+                            )}
                             <td className="px-3 py-1.5">
                               <input
                                 value={row.sku}
@@ -451,18 +536,20 @@ export function VariantsEditor({
                                 aria-label="SKU"
                               />
                             </td>
-                            <td className="px-3 py-1.5">
-                              <StockStepper
-                                value={row.stock}
-                                onChange={(stock) =>
-                                  onChange(
-                                    rows.map((r) =>
-                                      r.key === row.key ? { ...r, stock } : r,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
+                            {requiresSize ? (
+                              <td className="px-3 py-1.5">
+                                <StockStepper
+                                  value={row.stock}
+                                  onChange={(stock) =>
+                                    onChange(
+                                      rows.map((r) =>
+                                        r.key === row.key ? { ...r, stock } : r,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </td>
+                            ) : null}
                             <td className="px-3 py-1.5">
                               <button
                                 type="button"
@@ -495,36 +582,40 @@ export function VariantsEditor({
                                 />
                               </button>
                             </td>
-                            <td className="px-2 py-1.5">
-                              <button
-                                type="button"
-                                aria-label="Remove size"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
-                                onClick={() =>
-                                  onChange(
-                                    rows.filter((r) => r.key !== row.key),
-                                  )
-                                }
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </td>
+                            {requiresSize ? (
+                              <td className="px-2 py-1.5">
+                                <button
+                                  type="button"
+                                  aria-label="Remove size"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-spark transition hover:bg-spark/10"
+                                  onClick={() =>
+                                    onChange(
+                                      rows.filter((r) => r.key !== row.key),
+                                    )
+                                  }
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            ) : null}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
 
-                  <div className="border-t border-cloud px-3 py-2 sm:pl-[3.25rem]">
-                    <button
-                      type="button"
-                      onClick={() => addSize(group.key)}
-                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-navy transition hover:underline"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Add a size
-                    </button>
-                  </div>
+                  {requiresSize ? (
+                    <div className="border-t border-cloud px-3 py-2 sm:pl-[3.25rem]">
+                      <button
+                        type="button"
+                        onClick={() => addSize(group.key)}
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-navy transition hover:underline"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add a size
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
