@@ -14,9 +14,13 @@ export const metadata = {
 export default async function NewProductPage() {
   const result = await createDraftProduct()
 
-  if (result.ok) {
+  if (result.ok && result.data) {
     redirect(`${adminProductPath(result.data.slug)}?fresh=1`)
   }
+
+  const errorMessage = result.ok
+    ? 'Couldn’t create a draft product.'
+    : result.error
 
   return (
     <>
@@ -25,7 +29,7 @@ export default async function NewProductPage() {
         description="Couldn’t start a draft. Try again, or go back to the catalog."
       />
       <div className="mt-8 space-y-4">
-        <p className="text-[14px] text-red-700">{result.error}</p>
+        <p className="text-[14px] text-red-700">{errorMessage}</p>
         <div className="flex flex-wrap gap-2">
           <AdminButton href="/admin/catalog/products/new">Try again</AdminButton>
           <AdminButton href="/admin/catalog" variant="secondary">
