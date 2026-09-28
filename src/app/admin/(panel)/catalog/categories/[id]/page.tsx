@@ -27,6 +27,7 @@ export default async function EditCategoryPage({ params }: Props) {
         name: category.name,
         slug: category.slug,
         active: category.active,
+        image_path: category.image_path ?? '',
         seo_title: category.seo_title ?? '',
         seo_description: category.seo_description ?? '',
       }}
