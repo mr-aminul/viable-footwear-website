@@ -13,14 +13,21 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = {
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ fresh?: string }>
+}
 
 /**
  * Visual PDP editor at public URL + /admin
  * e.g. /product/skyform-crocs/admin
  */
-export default async function ProductAdminEditPage({ params }: Props) {
+export default async function ProductAdminEditPage({
+  params,
+  searchParams,
+}: Props) {
   const { slug } = await params
+  const { fresh } = await searchParams
 
   const product = await getAdminProductViewBySlug(slug)
   if (!product) notFound()
@@ -58,6 +65,7 @@ export default async function ProductAdminEditPage({ params }: Props) {
       }))}
       relatedCatalog={relatedCatalog}
       initialRelatedIds={product.relatedProductIds}
+      freshDraft={fresh === '1'}
     />
   )
 }

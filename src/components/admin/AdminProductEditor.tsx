@@ -60,6 +60,8 @@ type AdminProductEditorProps = {
   initialVariants: VariantDraft[]
   relatedCatalog: RelatedPickerProduct[]
   initialRelatedIds: string[]
+  /** Fresh draft from “New product” — keep slug in sync until they edit it. */
+  freshDraft?: boolean
 }
 
 /**
@@ -73,6 +75,7 @@ export function AdminProductEditor({
   initialVariants,
   relatedCatalog,
   initialRelatedIds,
+  freshDraft = false,
 }: AdminProductEditorProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -85,9 +88,9 @@ export function AdminProductEditor({
   })
   const [success, setSuccess] = useState<string | null>(null)
 
-  const [name, setName] = useState(product.name)
+  const [name, setName] = useState(freshDraft ? '' : product.name)
   const [slug, setSlug] = useState(product.slug)
-  const [slugTouched, setSlugTouched] = useState(true)
+  const [slugTouched, setSlugTouched] = useState(!freshDraft)
   const [description, setDescription] = useState(product.description)
   const [subtitle, setSubtitle] = useState(product.subtitle ?? '')
   const [note, setNote] = useState(product.note ?? '')
@@ -255,6 +258,18 @@ export function AdminProductEditor({
     setError(null)
     setSuccess(null)
 
+    if (!name.trim()) {
+      setError('Name is required.')
+      return false
+    }
+
+    const nextSlug = slugTouched
+      ? slug
+      : slugify(name.trim()) || product.slug
+    if (!slugTouched && nextSlug !== slug) {
+      setSlug(nextSlug)
+    }
+
     const variantError = validateVariantDrafts(variantRows, {
       requiresSize,
       forPublish: active,
@@ -265,8 +280,8 @@ export function AdminProductEditor({
     }
 
     const formData = new FormData()
-    formData.set('name', name)
-    formData.set('slug', slug)
+    formData.set('name', name.trim())
+    formData.set('slug', nextSlug)
     formData.set('description', description)
     formData.set('subtitle', subtitle)
     formData.set('note', note)
@@ -308,10 +323,16 @@ export function AdminProductEditor({
       return false
     }
 
-    setSavedSnapshot(JSON.stringify(draft))
+    setSavedSnapshot(
+      JSON.stringify({
+        ...draft,
+        name: name.trim(),
+        slug: nextSlug,
+      }),
+    )
     setSuccess('Product saved.')
-    if (slug !== product.slug) {
-      router.replace(adminProductPath(slug))
+    if (nextSlug !== product.slug || freshDraft) {
+      router.replace(adminProductPath(nextSlug))
     } else {
       router.refresh()
     }
@@ -476,7 +497,9 @@ export function AdminProductEditor({
             onChange={(e) => {
               const next = e.target.value
               setName(next)
-              if (!slugTouched) setSlug(slugify(next))
+              if (!slugTouched) {
+                setSlug(slugify(next) || product.slug)
+              }
             }}
             className={`${pdpTitleClassName} mt-2`}
             placeholder="Product name"

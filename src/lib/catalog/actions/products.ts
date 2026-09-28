@@ -495,73 +495,55 @@ export async function bulkCreateProducts(
 }
 
 /**
- * Create product core fields, then edit page for variants/media.
+ * Bootstrap a blank draft and send the admin straight to the visual editor.
+ * Name/slug stay unique placeholders until they fill the PDP fields.
  */
-export async function createProduct(
-  formData: FormData,
-): Promise<ActionResult<{ id: string; slug: string }>> {
+export async function createDraftProduct(): Promise<
+  ActionResult<{ id: string; slug: string }>
+> {
   await requireRole(['admin', 'manager'])
   const supabase = await createClient()
 
-  const name = readString(formData, 'name')
-  const slug = readString(formData, 'slug') || slugify(name)
-  const description = readString(formData, 'description')
-  const subtitle = readString(formData, 'subtitle') || null
-  const note = readString(formData, 'note') || null
-  const materials = readString(formData, 'materials')
-  const careInfo = readString(formData, 'care_info')
-  const price = readNumber(formData, 'price')
-  const compareAt = readNumber(formData, 'compare_at')
-  const weightKg = readNumber(formData, 'weight_kg') ?? 0.5
-  const categoryId = readString(formData, 'category_id') || null
-  const badge = normalizeProductBadge(readString(formData, 'badge'))
-  const seoTitle = readString(formData, 'seo_title') || null
-  const seoDescription = readString(formData, 'seo_description') || null
-  const featured =
-    formData.get('featured') === 'on' || formData.get('featured') === 'true'
-  // Draft until colors/sizes pass publish checks and an admin flips Live.
-  const active = false
+  const baseName = 'Untitled product'
+  const baseSlug = 'untitled-product'
+  let slug = baseSlug
 
-  if (!name) return { ok: false, error: 'Name is required.' }
-  if (!isValidSlug(slug)) {
-    return { ok: false, error: 'Slug must be lowercase letters, numbers, and hyphens.' }
-  }
-  if (price == null || price < 0) {
-    return { ok: false, error: 'Price must be zero or greater.' }
-  }
-  if (compareAt != null && compareAt < 0) {
-    return { ok: false, error: 'Compare-at price must be zero or greater.' }
-  }
-  if (weightKg <= 0) {
-    return { ok: false, error: 'Weight must be greater than zero.' }
+  for (let attempt = 2; attempt < 50; attempt++) {
+    const { data: existing } = await supabase
+      .from('products')
+      .select('id')
+      .eq('slug', slug)
+      .maybeSingle()
+    if (!existing) break
+    slug = `${baseSlug}-${attempt}`
   }
 
   const { data, error } = await supabase
     .from('products')
     .insert({
-      name,
+      name: baseName,
       slug,
-      description,
-      subtitle,
-      note,
-      materials,
-      care_info: careInfo,
-      price,
-      compare_at: compareAt,
-      weight_kg: weightKg,
-      category_id: categoryId,
-      badge,
-      seo_title: seoTitle,
-      seo_description: seoDescription,
-      featured,
-      active,
+      description: '',
+      subtitle: null,
+      note: null,
+      materials: '',
+      care_info: '',
+      price: 0,
+      compare_at: null,
+      weight_kg: 0.5,
+      category_id: null,
+      badge: 'New',
+      seo_title: null,
+      seo_description: null,
+      featured: false,
+      active: false,
     })
     .select('id')
     .single()
 
   if (error) {
     if (error.code === '23505') {
-      return { ok: false, error: 'That slug is already in use.' }
+      return { ok: false, error: 'Could not allocate a unique slug. Try again.' }
     }
     return { ok: false, error: error.message }
   }
