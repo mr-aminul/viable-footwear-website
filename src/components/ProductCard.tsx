@@ -16,7 +16,6 @@ import { DiscountChip } from '@/components/DiscountChip'
 import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { trackAddToCart } from '@/lib/analytics/events'
-import { sampleDominantColorFromUrl } from '@/lib/catalog/sample-dominant-color-client'
 
 interface ProductCardProps {
   product: Product
@@ -326,7 +325,23 @@ function ColorSwatchRow({
                 interactive ? 'cursor-pointer' : 'pointer-events-none',
               ].join(' ')}
             >
-              <ColorSwatchFill colorway={colorway} />
+              {colorway.imageUrl ? (
+                <img
+                  src={colorway.imageUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  draggable={false}
+                />
+              ) : colorway.colorHex ? (
+                <span
+                  className="absolute inset-0"
+                  style={{ backgroundColor: colorway.colorHex }}
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-mist text-[7px] font-semibold uppercase text-mute">
+                  {(colorway.name ?? '?').slice(0, 1)}
+                </span>
+              )}
             </button>
           )
         })}
@@ -347,41 +362,5 @@ function ColorSwatchRow({
         </button>
       ) : null}
     </div>
-  )
-}
-
-/**
- * Solid swatch: sample the colorway photo when available; else stored/named hex.
- */
-function ColorSwatchFill({ colorway }: { colorway: ProductColorwayOption }) {
-  const [sampledHex, setSampledHex] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!colorway.imageUrl) {
-      setSampledHex(null)
-      return
-    }
-
-    let cancelled = false
-    void sampleDominantColorFromUrl(colorway.imageUrl).then((hex) => {
-      if (!cancelled) setSampledHex(hex)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [colorway.imageUrl])
-
-  const fill = sampledHex ?? colorway.colorHex
-  if (fill) {
-    return (
-      <span
-        className="absolute inset-0"
-        style={{ backgroundColor: fill }}
-      />
-    )
-  }
-
-  return (
-    <span className="absolute inset-0 bg-mist" />
   )
 }

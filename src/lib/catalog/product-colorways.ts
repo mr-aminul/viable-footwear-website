@@ -1,13 +1,13 @@
 import { colorwayKey } from '@/lib/catalog/colorway'
-import { resolveColorHex } from '@/lib/catalog/named-color-hex'
+import { normalizeColorHex } from '@/lib/catalog/gallery'
 import type { Product, ProductImage, ProductVariantView } from '@/lib/catalog/types'
 
 export type ProductColorwayOption = {
   key: string
   name: string | null
-  /** Lead image for this colorway (card image swap). */
+  /** Lead image for this colorway (card + swatch thumb). */
   imageUrl: string | null
-  /** Solid swatch fill. */
+  /** Solid swatch when no thumb is available. */
   colorHex: string | null
 }
 
@@ -39,7 +39,7 @@ export function productColorways(
     next: Partial<ColorwayAccum> & { name?: string | null },
   ) => {
     const existing = unique.get(key)
-    const nextHex = resolveColorHex(next.colorHex, next.name)
+    const nextHex = normalizeColorHex(next.colorHex)
     if (!existing) {
       unique.set(key, {
         name: next.name?.trim() || null,
@@ -57,8 +57,6 @@ export function productColorways(
     // Gallery-derived hex should win over variant name defaults.
     if (nextHex && (!existing.colorHex || next.imageUrl)) {
       existing.colorHex = nextHex
-    } else if (!existing.colorHex) {
-      existing.colorHex = resolveColorHex(null, existing.name)
     }
   }
 
@@ -92,8 +90,7 @@ export function productColorways(
     key,
     name: value.name,
     imageUrl: value.imageUrl,
-    colorHex:
-      value.colorHex ?? resolveColorHex(null, value.name),
+    colorHex: value.colorHex,
   }))
 }
 
