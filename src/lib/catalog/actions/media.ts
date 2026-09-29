@@ -13,6 +13,8 @@ import {
   PRODUCT_VIDEO_BUCKET,
   VIDEO_MAX_BYTES,
 } from '@/lib/catalog/constants'
+import { colorwayKey } from '@/lib/catalog/colorway'
+import { extractDominantColor } from '@/lib/catalog/extract-dominant-color'
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import type { ActionResult } from '@/lib/catalog/types'
 import { createClient } from '@/lib/supabase/server'
@@ -111,6 +113,10 @@ export async function uploadProductMedia(
   let ext = extensionFor(file.type)
 
   if (!isVideo) {
+    if (!colorHex) {
+      colorHex = await extractDominantColor(originalBytes)
+    }
+
     try {
       const optimized = await optimizeProductImage(originalBytes, file.type, {
         square: true,
@@ -167,6 +173,25 @@ export async function uploadProductMedia(
   if (error) {
     await supabase.storage.from(bucket).remove([storagePath])
     return { ok: false, error: error.message }
+  }
+
+  // Keep variant swatches in sync when this upload is tagged to a colorway.
+  if (mediaType === 'image' && color && colorHex) {
+    const { data: variants } = await supabase
+      .from('product_variants')
+      .select('id, color')
+      .eq('product_id', productId)
+
+    const matchingIds = (variants ?? [])
+      .filter((variant) => colorwayKey(variant.color) === colorwayKey(color))
+      .map((variant) => variant.id)
+
+    if (matchingIds.length > 0) {
+      await supabase
+        .from('product_variants')
+        .update({ color_hex: colorHex })
+        .in('id', matchingIds)
+    }
   }
 
   revalidateProduct(productId, product.slug)

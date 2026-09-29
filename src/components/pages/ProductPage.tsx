@@ -19,6 +19,7 @@ import { productBadgeClassName } from '@/lib/catalog/badge'
 import { DiscountChip } from '@/components/DiscountChip'
 import { galleryForColorway } from '@/lib/catalog/gallery'
 import { colorwayKey } from '@/lib/catalog/colorway'
+import { productColorways } from '@/lib/catalog/product-colorways'
 import { formatSizeLabel } from '@/lib/catalog/sizing'
 import type { Product } from '@/lib/catalog/types'
 import { enterTransition } from '@/lib/motion'
@@ -51,39 +52,7 @@ export function ProductPage({
   const [error, setError] = useState('')
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
 
-  const colorOptions = useMemo(() => {
-    const unique = new Map<
-      string,
-      { name: string | null; thumb: string | null }
-    >()
-    for (const variant of product.variants) {
-      const key = colorwayKey(variant.color)
-      const fromGallery = product.images.find(
-        (img) =>
-          Boolean(img.color?.trim()) && colorwayKey(img.color) === key,
-      )?.url
-      const thumb = fromGallery ?? variant.imageUrl
-      const existing = unique.get(key)
-      if (!existing) {
-        unique.set(key, {
-          name: variant.color?.trim() || null,
-          thumb,
-        })
-      } else if (!existing.thumb && thumb) {
-        existing.thumb = thumb
-      }
-    }
-    if (unique.size === 0 && product.colors.length > 0) {
-      product.colors.forEach((c) =>
-        unique.set(colorwayKey(c), { name: c, thumb: null }),
-      )
-    }
-    return [...unique.entries()].map(([key, value]) => ({
-      key,
-      name: value.name,
-      thumb: value.thumb,
-    }))
-  }, [product])
+  const colorOptions = useMemo(() => productColorways(product), [product])
 
   const selectedColor =
     colorIndex != null ? colorOptions[colorIndex] : undefined
@@ -91,19 +60,43 @@ export function ProductPage({
   const sizesForColor = useMemo(() => {
     if (!selectedColor) return product.sizes
     const matched = product.variants
-      .filter((v) => {
-        return colorwayKey(v.color) === selectedColor.key && v.stock > 0
-      })
+      .filter((v) => colorwayKey(v.color) === selectedColor.key)
       .map((v) => v.sizeEu)
       .filter((s) => s > 0)
     return matched.length > 0
       ? [...new Set(matched)].sort((a, b) => a - b)
       : product.sizes
   }, [product, selectedColor])
-  const hasSingleSize = sizesForColor.length === 1
+
+  const inStockSizesForColor = useMemo(() => {
+    const matched = product.variants
+      .filter((v) => {
+        if (v.stock < 1 || v.sizeEu <= 0) return false
+        if (!selectedColor) return true
+        return colorwayKey(v.color) === selectedColor.key
+      })
+      .map((v) => v.sizeEu)
+    return [...new Set(matched)].sort((a, b) => a - b)
+  }, [product.variants, selectedColor])
+
+  const isSizeAvailable = (sizeEu: number) =>
+    inStockSizesForColor.includes(sizeEu)
+
+  const hasSingleSize =
+    sizesForColor.length === 1 && inStockSizesForColor.length === 1
   const showColorPicker = colorOptions.length > 1
+  // Show the grid when there are multiple sizes, or a lone out-of-stock size
+  // so shoppers can still see what exists but is unavailable.
   const showSizePicker =
-    product.requiresSize !== false && sizesForColor.length > 1
+    product.requiresSize !== false &&
+    (sizesForColor.length > 1 ||
+      (sizesForColor.length === 1 && inStockSizesForColor.length === 0))
+  const isProductUnavailable = useMemo(
+    () =>
+      product.variants.length === 0 ||
+      product.variants.every((variant) => variant.stock < 1),
+    [product.variants],
+  )
 
   // Sole color / size are locked in — shopper never needs to tap them.
   useEffect(() => {
@@ -112,15 +105,15 @@ export function ProductPage({
 
   useEffect(() => {
     if (product.requiresSize === false) return
-    if (sizesForColor.length === 1) {
-      setSize(sizesForColor[0]!)
+    if (hasSingleSize) {
+      setSize(inStockSizesForColor[0]!)
       return
     }
-    // Drop a size that no longer exists for the new colorway.
-    if (size != null && !sizesForColor.includes(size)) {
+    // Drop a size that no longer exists or is out of stock for the new colorway.
+    if (size != null && !inStockSizesForColor.includes(size)) {
       setSize(null)
     }
-  }, [product.requiresSize, sizesForColor, size])
+  }, [product.requiresSize, hasSingleSize, inStockSizesForColor, size])
 
   const gallery = useMemo(() => {
     return galleryForColorway(
@@ -153,8 +146,8 @@ export function ProductPage({
       (colorOptions.length === 1 ? colorOptions[0] : undefined)
     const resolvedSize =
       size ??
-      (product.requiresSize !== false && sizesForColor.length === 1
-        ? sizesForColor[0]!
+      (product.requiresSize !== false && hasSingleSize
+        ? inStockSizesForColor[0]!
         : null)
 
     if (product.requiresSize !== false) {
@@ -217,6 +210,7 @@ export function ProductPage({
   }
 
   const handleAdd = () => {
+    if (isProductUnavailable) return
     const variant = resolveSelectedVariant()
     if (!variant) return
 
@@ -227,6 +221,7 @@ export function ProductPage({
   }
 
   const handleBuyNow = () => {
+    if (isProductUnavailable) return
     const variant = resolveSelectedVariant()
     if (!variant) return
 
@@ -397,11 +392,16 @@ export function ProductPage({
                     }`}
                     aria-pressed={colorIndex === i}
                   >
-                    {c.thumb ? (
+                    {c.imageUrl ? (
                       <img
-                        src={c.thumb}
+                        src={c.imageUrl}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : c.colorHex ? (
+                      <span
+                        className="absolute inset-0"
+                        style={{ backgroundColor: c.colorHex }}
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-mist text-[10px] font-semibold uppercase text-mute">
@@ -419,6 +419,13 @@ export function ProductPage({
                 : {colorOptions[0].name}
               </span>
             </p>
+          ) : null}
+
+          {isProductUnavailable ? (
+            <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-spark/10 px-3.5 py-3 text-[13px] leading-snug text-ink">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-spark" />
+              <p>This product is currently unavailable.</p>
+            </div>
           ) : null}
 
           {product.note ? (
@@ -478,24 +485,46 @@ export function ProductPage({
               </div>
               {showSizePicker ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {sizesForColor.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setSize(s)
-                        setError('')
-                      }}
-                      className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                        size === s
-                          ? 'border-navy bg-navy text-white'
-                          : 'border-cloud bg-white text-ink hover:border-navy/40'
-                      }`}
-                      aria-pressed={size === s}
-                    >
-                      {formatSizeLabel(s, sizeUnit)}
-                    </button>
-                  ))}
+                  {sizesForColor.map((s) => {
+                    const available = isSizeAvailable(s)
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={!available}
+                        onClick={() => {
+                          if (!available) return
+                          setSize(s)
+                          setError('')
+                        }}
+                        className={`group relative min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
+                          !available
+                            ? 'cursor-not-allowed border-cloud/70 bg-mist/40 text-mute line-through opacity-45'
+                            : size === s
+                              ? 'border-navy bg-navy text-white'
+                              : 'border-cloud bg-white text-ink hover:border-navy/40'
+                        }`}
+                        aria-pressed={available ? size === s : undefined}
+                        aria-disabled={!available}
+                        aria-label={
+                          available
+                            ? formatSizeLabel(s, sizeUnit)
+                            : `${formatSizeLabel(s, sizeUnit)} — Unavailable`
+                        }
+                        title={available ? undefined : 'Unavailable'}
+                      >
+                        {formatSizeLabel(s, sizeUnit)}
+                        {!available ? (
+                          <span
+                            role="tooltip"
+                            className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                          >
+                            Unavailable
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
                 </div>
               ) : null}
               {error && <p className="mt-2 text-[13px] text-spark">{error}</p>}
@@ -520,7 +549,8 @@ export function ProductPage({
             <button
               type="button"
               onClick={handleAdd}
-              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:border-navy/30 hover:bg-mist sm:flex-none"
+              disabled={isProductUnavailable}
+              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:border-navy/30 hover:bg-mist disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cloud disabled:hover:bg-white sm:flex-none"
             >
               {added ? (
                 <>
@@ -536,7 +566,8 @@ export function ProductPage({
             <button
               type="button"
               onClick={handleBuyNow}
-              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft sm:flex-none"
+              disabled={isProductUnavailable}
+              className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy sm:flex-none"
             >
               Buy now
             </button>

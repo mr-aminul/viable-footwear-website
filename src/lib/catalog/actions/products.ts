@@ -11,6 +11,7 @@ import {
   RELATED_PRODUCTS_DISPLAY_CAP,
 } from '@/lib/catalog/constants'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
+import { NAMED_COLOR_HEX } from '@/lib/catalog/named-color-hex'
 import { ONE_SIZE_EU } from '@/lib/catalog/sizing'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
@@ -198,31 +199,6 @@ export type BulkProductRowResult = {
 }
 
 const MAX_VARIANTS_PER_PRODUCT = 80
-
-const NAMED_COLOR_HEX: Record<string, string> = {
-  black: '#111111',
-  white: '#F5F5F5',
-  ivory: '#FFFFF0',
-  cream: '#FFFDD0',
-  navy: '#1A3668',
-  blue: '#2563EB',
-  red: '#DC2626',
-  green: '#16A34A',
-  brown: '#8B5E3C',
-  tan: '#D2B48C',
-  beige: '#E8DCC8',
-  grey: '#6B7280',
-  gray: '#6B7280',
-  charcoal: '#374151',
-  pink: '#DB2777',
-  purple: '#7C3AED',
-  yellow: '#EAB308',
-  orange: '#EA580C',
-  olive: '#6B8E23',
-  maroon: '#7F1D1D',
-  gold: '#C9A227',
-  silver: '#C0C0C0',
-}
 
 function splitList(raw: string): string[] {
   return raw
