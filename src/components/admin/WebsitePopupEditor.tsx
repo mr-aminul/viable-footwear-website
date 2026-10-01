@@ -19,6 +19,7 @@ import {
 } from '@/lib/website/constants'
 import {
   fromDatetimeLocalValue,
+  normalizeSiteHref,
   toDatetimeLocalValue,
 } from '@/lib/website/marketing-popup'
 import type {
@@ -206,14 +207,15 @@ export function WebsitePopupEditor({
 
             <Field
               label="Click-through link"
-              hint="Where the image takes shoppers, e.g. /shop or /shop?sale=1. Leave empty to only dismiss."
+              hint="Paste /shop, or a full Viable URL like https://viable.fashion/test — the domain is stripped automatically. Other http(s) links stay external. Leave empty to only dismiss."
             >
               <input
                 className={softFieldClassName}
                 value={popup.href}
                 onChange={(e) => setPopup('href', e.target.value)}
+                onBlur={(e) => setPopup('href', normalizeSiteHref(e.target.value))}
                 disabled={pending}
-                placeholder="/shop"
+                placeholder="/shop or https://viable.inventivelab.bd/test"
               />
             </Field>
 

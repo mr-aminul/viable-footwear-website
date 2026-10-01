@@ -11,6 +11,7 @@ import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import {
   isMarketingPopupLive,
   markMarketingPopupDismissed,
+  normalizeSiteHref,
   shouldSkipMarketingPopup,
   wasMarketingPopupDismissed,
 } from '@/lib/website/marketing-popup'
@@ -70,7 +71,7 @@ export function MarketingPopup() {
   const imageUrl = resolveSiteMediaUrl(popup.image, '')
   if (!imageUrl) return null
 
-  const href = popup.href.trim()
+  const href = normalizeSiteHref(popup.href)
   const isExternal =
     href.startsWith('http://') || href.startsWith('https://')
 

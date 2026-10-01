@@ -2,8 +2,62 @@ import type { MarketingPopupContent } from '@/lib/website/types'
 
 const STORAGE_PREFIX = 'viable-marketing-popup'
 
+/** Store / staging hosts — full URLs from these become path-only links. */
+const OWN_SITE_HOSTS = new Set([
+  'viable.inventivelab.bd',
+  'viable.fashion',
+])
+
 export function marketingPopupStorageKey(campaignKey: string): string {
   return `${STORAGE_PREFIX}:${campaignKey || 'default'}`
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname
+    .trim()
+    .toLowerCase()
+    .replace(/\.+$/, '')
+    .replace(/^www\./, '')
+}
+
+/**
+ * Accept relative paths or full URLs from Viable domains.
+ * `https://viable.inventivelab.bd/test` → `/test`
+ * `https://viable.fashion/testpush` → `/testpush`
+ * Other absolute URLs (http/https) are kept for external click-through.
+ */
+export function normalizeSiteHref(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed
+  }
+
+  let candidate = trimmed
+  if (candidate.startsWith('//')) {
+    candidate = `https:${candidate}`
+  } else if (!/^[a-z][a-z0-9+.-]*:/i.test(candidate)) {
+    // Bare host/path pasted without a protocol.
+    candidate = `https://${candidate}`
+  }
+
+  try {
+    const url = new URL(candidate)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return trimmed
+    }
+
+    const host = normalizeHostname(url.hostname)
+    if (OWN_SITE_HOSTS.has(host)) {
+      const path = `${url.pathname}${url.search}${url.hash}`
+      return path || '/'
+    }
+
+    return url.href
+  } catch {
+    return trimmed
+  }
 }
 
 /** True when the popup should be eligible to show right now (ignoring dismiss state). */

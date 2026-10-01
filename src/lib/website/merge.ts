@@ -13,6 +13,7 @@ import {
   DEFAULT_MARKETING_POPUP,
   DEFAULT_SITE_CONTENT,
 } from '@/lib/website/defaults'
+import { normalizeSiteHref } from '@/lib/website/marketing-popup'
 import type {
   AboutPageContent,
   AboutStatContent,
@@ -282,7 +283,7 @@ export function mergeMarketingPopup(raw: unknown): MarketingPopupContent {
     enabled: asBoolean(row.enabled, d.enabled),
     image: asString(row.image, d.image),
     alt: asString(row.alt, d.alt),
-    href: asString(row.href, d.href),
+    href: normalizeSiteHref(asString(row.href, d.href)),
     delaySeconds: delay,
     startsAt: asString(row.startsAt, d.startsAt),
     endsAt: asString(row.endsAt, d.endsAt),
