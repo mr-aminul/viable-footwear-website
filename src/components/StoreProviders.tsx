@@ -8,6 +8,7 @@ import { Header } from '@/components/Header'
 import { Footer } from '@/components/Footer'
 import { PageTransition } from '@/components/PageTransition'
 import { ToastHost } from '@/components/ToastHost'
+import { MarketingPopup } from '@/components/MarketingPopup'
 import { WhatsAppBubble } from '@/components/WhatsAppBubble'
 import type { SiteContent } from '@/lib/website/types'
 
@@ -32,6 +33,7 @@ export function StoreProviders({
           </main>
           <Footer />
           <WhatsAppBubble />
+          <MarketingPopup />
           <ToastHost />
         </OrdersProvider>
       </CartProvider>

@@ -3,8 +3,21 @@ import { DEFAULT_SLIDE_INTERVAL_MS } from '@/lib/website/constants'
 import type {
   AboutPageContent,
   HomePageContent,
+  MarketingPopupContent,
   SiteContent,
 } from '@/lib/website/types'
+
+export const DEFAULT_MARKETING_POPUP: MarketingPopupContent = {
+  enabled: false,
+  image: '',
+  alt: 'Special offer',
+  href: '/shop',
+  delaySeconds: 3,
+  startsAt: '',
+  endsAt: '',
+  frequency: 'once',
+  campaignKey: 'default',
+}
 
 export const DEFAULT_HOME_SECTIONS: HomePageContent['sections'] = {
   hero: true,
@@ -157,4 +170,5 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     authenticLabel: 'Authentic:',
     authenticText: 'Genuine footwear, curated for Bangladesh',
   },
+  marketingPopup: { ...DEFAULT_MARKETING_POPUP },
 }

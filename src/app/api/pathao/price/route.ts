@@ -4,6 +4,10 @@ import { listActiveCampaignsForCheckout } from '@/lib/campaigns/queries'
 import { pickCampaignDelivery } from '@/lib/campaigns/rules'
 import { computeCodCheckoutTotals } from '@/lib/orders/cod-total'
 import { computePrepaidCheckoutTotals } from '@/lib/payments/bkash'
+import {
+  DELIVERY_REGION_PROBE_WEIGHT_KG,
+  websiteDeliveryFromPathaoQuote,
+} from '@/lib/orders/delivery-rates'
 import { getPathaoPrice } from '@/lib/pathao'
 import {
   getActivePromoByCode,
@@ -30,20 +34,22 @@ export async function POST(request: NextRequest) {
       promo_code?: string
       items?: CartItemInput[]
     }
-    const { city_id, zone_id, item_weight, subtotal } = body
+    const { city_id, zone_id, subtotal } = body
     if (city_id == null || zone_id == null) {
       return NextResponse.json(
         { success: false, error: 'city_id and zone_id are required' },
         { status: 400, headers: NO_STORE_HEADERS },
       )
     }
+    // Probe Pathao at a fixed weight only to classify ISD / Suburb / OSD.
     const result = await getPathaoPrice({
       recipient_city: Number(city_id),
       recipient_zone: Number(zone_id),
-      item_weight: item_weight != null ? Number(item_weight) : undefined,
+      item_weight: DELIVERY_REGION_PROBE_WEIGHT_KG,
     })
 
-    const pathaoDeliveryFee = Number(result.final_price) || 0
+    const delivery = websiteDeliveryFromPathaoQuote(Number(result.final_price) || 0)
+    const pathaoDeliveryFee = delivery.websiteFee
     let cartSubtotal = Math.max(0, Number(subtotal) || 0)
 
     // Prefer authoritative line prices when cart items are provided.
@@ -137,6 +143,8 @@ export async function POST(request: NextRequest) {
         success: true,
         price: pathaoDeliveryFee,
         pathaoDeliveryFee,
+        pathaoQuotedFee: delivery.pathaoQuotedFee,
+        deliveryRegion: delivery.region,
         deliveryAfterCampaign,
         campaign: match
           ? {

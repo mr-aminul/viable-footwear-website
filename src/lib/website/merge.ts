@@ -1,5 +1,8 @@
 import {
+  DEFAULT_MARKETING_POPUP_DELAY_SECONDS,
   DEFAULT_SLIDE_INTERVAL_MS,
+  MARKETING_POPUP_DELAY_MAX,
+  MARKETING_POPUP_DELAY_MIN,
   MAX_HERO_SLIDES,
   type SitePageKey,
 } from '@/lib/website/constants'
@@ -7,6 +10,7 @@ import {
   DEFAULT_ABOUT_CONTENT,
   DEFAULT_HOME_CONTENT,
   DEFAULT_HOME_SECTIONS,
+  DEFAULT_MARKETING_POPUP,
   DEFAULT_SITE_CONTENT,
 } from '@/lib/website/defaults'
 import type {
@@ -18,6 +22,8 @@ import type {
   HomePageContent,
   HomeSectionKey,
   HomeSectionsVisibility,
+  MarketingPopupContent,
+  MarketingPopupFrequency,
   PromoCardContent,
   SaleBannerContent,
   SiteContent,
@@ -249,6 +255,42 @@ export function mergeAboutContent(raw: unknown): AboutPageContent {
   }
 }
 
+function asPopupFrequency(
+  value: unknown,
+  fallback: MarketingPopupFrequency,
+): MarketingPopupFrequency {
+  if (value === 'once' || value === 'session' || value === 'always') {
+    return value
+  }
+  return fallback
+}
+
+export function mergeMarketingPopup(raw: unknown): MarketingPopupContent {
+  const d = DEFAULT_MARKETING_POPUP
+  const row = asRecord(raw)
+  const delay = Math.min(
+    MARKETING_POPUP_DELAY_MAX,
+    Math.max(
+      MARKETING_POPUP_DELAY_MIN,
+      Math.round(
+        asNumber(row.delaySeconds, d.delaySeconds || DEFAULT_MARKETING_POPUP_DELAY_SECONDS),
+      ),
+    ),
+  )
+
+  return {
+    enabled: asBoolean(row.enabled, d.enabled),
+    image: asString(row.image, d.image),
+    alt: asString(row.alt, d.alt),
+    href: asString(row.href, d.href),
+    delaySeconds: delay,
+    startsAt: asString(row.startsAt, d.startsAt),
+    endsAt: asString(row.endsAt, d.endsAt),
+    frequency: asPopupFrequency(row.frequency, d.frequency),
+    campaignKey: asString(row.campaignKey, d.campaignKey) || d.campaignKey,
+  }
+}
+
 export function mergeSiteContent(raw: unknown): SiteContent {
   const d = DEFAULT_SITE_CONTENT
   const root = asRecord(raw)
@@ -292,6 +334,7 @@ export function mergeSiteContent(raw: unknown): SiteContent {
         d.productPromises.authenticText,
       ),
     },
+    marketingPopup: mergeMarketingPopup(root.marketingPopup),
   }
 }
 

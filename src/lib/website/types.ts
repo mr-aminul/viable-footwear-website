@@ -117,6 +117,37 @@ export type AboutPageContent = {
   }
 }
 
+/**
+ * Full-screen marketing interstitial (image popup) shown after a short delay
+ * on any storefront landing. Controlled from Website → Marketing popup.
+ */
+export type MarketingPopupFrequency = 'once' | 'session' | 'always'
+
+export type MarketingPopupContent = {
+  enabled: boolean
+  image: string
+  alt: string
+  /** Optional click-through path or URL. Empty = image is not a link. */
+  href: string
+  /** Seconds to wait after landing before showing the popup. */
+  delaySeconds: number
+  /** ISO datetime (local from admin) or empty — live only after this. */
+  startsAt: string
+  /** ISO datetime or empty — live only before this. */
+  endsAt: string
+  /**
+   * How often to re-show after the shopper dismisses.
+   * `once` = until campaignKey changes; `session` = once per tab session;
+   * `always` = every visit (use sparingly).
+   */
+  frequency: MarketingPopupFrequency
+  /**
+   * Identity for dismiss persistence. Change when posting a new creative so
+   * shoppers who dismissed the previous popup see the new one.
+   */
+  campaignKey: string
+}
+
 /** Global brand, footer, and product-page promises (Website → Site settings). */
 export type SiteContent = {
   brand: {
@@ -151,6 +182,7 @@ export type SiteContent = {
     authenticLabel: string
     authenticText: string
   }
+  marketingPopup: MarketingPopupContent
 }
 
 export type SitePageContentMap = {

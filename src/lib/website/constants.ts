@@ -4,6 +4,13 @@ export const MAX_HERO_SLIDES = 6
 /** Default autoplay interval for hero slideshow (ms). */
 export const DEFAULT_SLIDE_INTERVAL_MS = 5000
 
+/** Default delay before the marketing popup appears (seconds). */
+export const DEFAULT_MARKETING_POPUP_DELAY_SECONDS = 3
+
+/** Clamp range for marketing popup delay. */
+export const MARKETING_POPUP_DELAY_MIN = 0
+export const MARKETING_POPUP_DELAY_MAX = 60
+
 export const SITE_MEDIA_BUCKET = 'site-media'
 
 export const SITE_IMAGE_MAX_BYTES = 20 * 1024 * 1024

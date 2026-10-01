@@ -53,6 +53,7 @@ function revalidateSitePage(pageKey: SitePageKey) {
     revalidatePath('/about')
     revalidatePath('/terms')
     revalidatePath('/privacy')
+    revalidatePath('/admin/website/popup')
     revalidateTag(CAMPAIGNS_ANNOUNCEMENT_TAG)
   }
 }

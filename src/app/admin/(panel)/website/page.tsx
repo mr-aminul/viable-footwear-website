@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, FileText, Home, Settings2 } from 'lucide-react'
+import { ArrowRight, FileText, Home, ImageIcon, Settings2 } from 'lucide-react'
 import { AdminPageHeader } from '@/components/admin/ui'
 
 const pages = [
@@ -20,6 +20,15 @@ const pages = [
       'About hero media, story copy, stats, size-guide headings, and contact section title.',
     icon: FileText,
     preview: '/about',
+  },
+  {
+    key: 'popup',
+    href: '/admin/website/popup',
+    title: 'Marketing popup',
+    description:
+      'Full-screen offer image that pauses shoppers a few seconds after they land — on any storefront page.',
+    icon: ImageIcon,
+    preview: '/',
   },
   {
     key: 'site',

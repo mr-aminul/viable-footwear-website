@@ -21,6 +21,10 @@ import {
   emitOmsWebhook,
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
+import {
+  DELIVERY_REGION_PROBE_WEIGHT_KG,
+  websiteDeliveryFromPathaoQuote,
+} from '@/lib/orders/delivery-rates'
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
 import { decrementOrderStock } from '@/lib/orders/stock'
 import { enforceRateLimit } from '@/lib/rate-limit'
@@ -219,7 +223,6 @@ export async function POST(request: NextRequest) {
     )
 
     let subtotal = 0
-    let totalWeight = 0
     const orderItemsPayload: Array<{
       product_id: string
       variant_id: string
@@ -267,7 +270,6 @@ export async function POST(request: NextRequest) {
       const unitPrice = Number(variant.price_override ?? product.price)
       const weightKg = Math.max(0.1, Number(product.weight_kg) || 0.5)
       subtotal += unitPrice * line.quantity
-      totalWeight += weightKg * line.quantity
       orderItemsPayload.push({
         product_id: product.id,
         variant_id: variant.id,
@@ -281,15 +283,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const itemWeight = Math.max(0.5, totalWeight)
     let pathaoDeliveryFee = 0
     try {
+      // Classify ISD / Suburb / OSD from Pathao; charge fixed website rates.
       const quote = await getPathaoPrice({
         recipient_city: cityId,
         recipient_zone: zoneId,
-        item_weight: itemWeight,
+        item_weight: DELIVERY_REGION_PROBE_WEIGHT_KG,
       })
-      pathaoDeliveryFee = Number(quote.final_price) || 0
+      pathaoDeliveryFee = websiteDeliveryFromPathaoQuote(
+        Number(quote.final_price) || 0,
+      ).websiteFee
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error('[orders] Pathao quote', message)

@@ -571,7 +571,7 @@ export function CheckoutPage() {
               title: 'Delivery quote failed',
               message:
                 j.error ||
-                'We couldn’t get a Pathao rate for that address. Try again or pick another area.',
+                'We couldn’t get a delivery rate for that address. Try again or pick another area.',
             })
           }
         })
