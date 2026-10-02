@@ -98,6 +98,30 @@ export function ProductPage({
     [product.variants],
   )
 
+  // Colorway can be fully sold out even when other colors still have stock.
+  const hasSelectableVariant = useMemo(() => {
+    if (product.requiresSize !== false) {
+      return inStockSizesForColor.length > 0
+    }
+    return product.variants.some(
+      (variant) =>
+        variant.stock >= 1 &&
+        (!selectedColor || colorwayKey(variant.color) === selectedColor.key),
+    )
+  }, [
+    product.requiresSize,
+    product.variants,
+    inStockSizesForColor,
+    selectedColor,
+  ])
+
+  const isPurchaseUnavailable = isProductUnavailable || !hasSelectableVariant
+  const unavailableMessage = isProductUnavailable
+    ? 'This product is currently unavailable.'
+    : showColorPicker
+      ? 'This color is currently unavailable. Try another color.'
+      : 'This product is currently out of stock.'
+
   // Sole color / size are locked in — shopper never needs to tap them.
   useEffect(() => {
     if (colorOptions.length === 1) setColorIndex(0)
@@ -210,7 +234,7 @@ export function ProductPage({
   }
 
   const handleAdd = () => {
-    if (isProductUnavailable) return
+    if (isPurchaseUnavailable) return
     const variant = resolveSelectedVariant()
     if (!variant) return
 
@@ -221,7 +245,7 @@ export function ProductPage({
   }
 
   const handleBuyNow = () => {
-    if (isProductUnavailable) return
+    if (isPurchaseUnavailable) return
     const variant = resolveSelectedVariant()
     if (!variant) return
 
@@ -421,10 +445,10 @@ export function ProductPage({
             </p>
           ) : null}
 
-          {isProductUnavailable ? (
+          {isPurchaseUnavailable ? (
             <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-spark/10 px-3.5 py-3 text-[13px] leading-snug text-ink">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-spark" />
-              <p>This product is currently unavailable.</p>
+              <p>{unavailableMessage}</p>
             </div>
           ) : null}
 
@@ -444,11 +468,13 @@ export function ProductPage({
                     :{' '}
                     {size != null
                       ? formatSizeLabel(size, sizeUnit)
-                      : showSizePicker
-                        ? 'Please select'
-                        : hasSingleSize
-                          ? formatSizeLabel(sizesForColor[0]!, sizeUnit)
-                          : 'Please select'}
+                      : !hasSelectableVariant
+                        ? 'Unavailable'
+                        : showSizePicker
+                          ? 'Please select'
+                          : hasSingleSize
+                            ? formatSizeLabel(sizesForColor[0]!, sizeUnit)
+                            : 'Please select'}
                   </span>
                 </p>
                 <div className="flex items-center gap-3">
@@ -527,9 +553,11 @@ export function ProductPage({
                   })}
                 </div>
               ) : null}
-              {error && <p className="mt-2 text-[13px] text-spark">{error}</p>}
+              {error && !isPurchaseUnavailable ? (
+                <p className="mt-2 text-[13px] text-spark">{error}</p>
+              ) : null}
             </div>
-          ) : error ? (
+          ) : error && !isPurchaseUnavailable ? (
             <p className="mt-4 text-[13px] text-spark">{error}</p>
           ) : null}
 
@@ -549,10 +577,12 @@ export function ProductPage({
             <button
               type="button"
               onClick={handleAdd}
-              disabled={isProductUnavailable}
+              disabled={isPurchaseUnavailable}
               className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full border border-cloud bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:border-navy/30 hover:bg-mist disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cloud disabled:hover:bg-white sm:flex-none"
             >
-              {added ? (
+              {isPurchaseUnavailable ? (
+                'Out of stock'
+              ) : added ? (
                 <>
                   <Check className="h-4 w-4" /> Added
                 </>
@@ -566,10 +596,10 @@ export function ProductPage({
             <button
               type="button"
               onClick={handleBuyNow}
-              disabled={isProductUnavailable}
+              disabled={isPurchaseUnavailable}
               className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy sm:flex-none"
             >
-              Buy now
+              {isPurchaseUnavailable ? 'Out of stock' : 'Buy now'}
             </button>
           </div>
 
