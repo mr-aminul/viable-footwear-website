@@ -11,7 +11,7 @@ export type CampaignRules = {
   min_subtotal?: number
   /** For delivery_percent_off (0–100) */
   percent_off?: number
-  /** For delivery_fixed — customer delivery before COD inflate */
+  /** For delivery_fixed — customer delivery charge */
   fixed_delivery?: number
   /** Optional Pathao city_id allow list (empty = all) */
   city_ids_allow?: number[]
@@ -123,7 +123,7 @@ function applyRuleToDelivery(
 
 /**
  * Highest priority active campaign that matches wins.
- * Applied to Pathao delivery fee before COD inflate + ceil.
+ * Applied to the website delivery fee before checkout totals.
  */
 export function pickCampaignDelivery(
   campaigns: CampaignRow[],
