@@ -31,12 +31,11 @@ export type ColorwayVariantImage = {
 /**
  * Gallery for a selected colorway.
  *
- * Includes:
- * 1. Photos tagged for that color
- * 2. Untagged / shared photos (usable by every colorway)
- * 3. Variant thumbs for that color (if not already listed)
- *
- * Never includes photos tagged for a different colorway.
+ * Matches admin preview behavior:
+ * 1. If this color has tagged photos → only those (never mix in other colors
+ *    or untagged shots that belong to another upload batch).
+ * 2. Else fall back to untagged / shared photos, plus this color’s variant
+ *    thumbs — still excluding anything tagged or assigned to another colorway.
  */
 export function galleryForColorway(
   variants: ColorwayVariantImage[],
@@ -51,6 +50,19 @@ export function galleryForColorway(
     return [fallbackImage]
   }
 
+  const taggedForColor = images
+    .filter(
+      (img) =>
+        Boolean(img.color?.trim()) &&
+        colorwayKey(img.color) === selectedColorKey,
+    )
+    .map((img) => img.url)
+
+  // Prefer explicit colorway tags — same rule as AdminProductGallery.
+  if (taggedForColor.length > 0) {
+    return [...new Set(taggedForColor)]
+  }
+
   const otherColorUrls = new Set<string>()
   for (const img of images) {
     if (img.color?.trim() && colorwayKey(img.color) !== selectedColorKey) {
@@ -62,14 +74,6 @@ export function galleryForColorway(
       otherColorUrls.add(v.imageUrl)
     }
   }
-
-  const taggedForColor = images
-    .filter(
-      (img) =>
-        Boolean(img.color?.trim()) &&
-        colorwayKey(img.color) === selectedColorKey,
-    )
-    .map((img) => img.url)
 
   const untaggedShared = images
     .filter((img) => !img.color?.trim())
@@ -83,7 +87,7 @@ export function galleryForColorway(
     .map((v) => v.imageUrl as string)
 
   const ordered = [
-    ...new Set([...taggedForColor, ...untaggedShared, ...fromVariants]),
+    ...new Set([...untaggedShared, ...fromVariants]),
   ].filter((url) => !otherColorUrls.has(url))
 
   if (ordered.length > 0) return ordered

@@ -315,7 +315,6 @@ export async function updateMediaAlt(
 
 /**
  * Tag a gallery image with a colorway name (null = shared / unassigned).
- * Skips cache revalidation so admin picks stay instant — Save product refreshes.
  */
 export async function updateMediaColorway(
   mediaId: string,
@@ -326,7 +325,7 @@ export async function updateMediaColorway(
 
   const { data: media, error: loadError } = await supabase
     .from('product_media')
-    .select('id, media_type')
+    .select('id, media_type, product_id')
     .eq('id', mediaId)
     .maybeSingle()
 
@@ -345,6 +344,14 @@ export async function updateMediaColorway(
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('slug')
+    .eq('id', media.product_id)
+    .maybeSingle()
+
+  revalidateProduct(media.product_id, product?.slug)
   return { ok: true }
 }
 
