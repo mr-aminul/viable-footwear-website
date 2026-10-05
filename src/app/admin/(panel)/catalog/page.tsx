@@ -64,7 +64,7 @@ export default async function ProductsPage({ searchParams }: Props) {
         description="Manage catalog styles — switch layout anytime, click a product to edit."
         actions={
           <>
-            <AdminButton href="/admin/catalog/products/new">
+            <AdminButton href="/admin/catalog/products/new" prefetch={false}>
               New product
             </AdminButton>
             <AdminButton
@@ -135,7 +135,7 @@ export default async function ProductsPage({ searchParams }: Props) {
             description="Create a category, then add your first product with sizes and photos."
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <AdminButton href="/admin/catalog/products/new">
+                <AdminButton href="/admin/catalog/products/new" prefetch={false}>
                   Create product
                 </AdminButton>
                 <AdminButton

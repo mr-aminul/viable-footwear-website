@@ -494,62 +494,85 @@ export async function bulkCreateProducts(
   return { ok: true, data: { created, results } }
 }
 
+function uniqueDraftSlug(): string {
+  const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
+  return `untitled-${suffix}`
+}
+
 /**
  * Bootstrap a blank draft and send the admin straight to the visual editor.
  * Name/slug stay unique placeholders until they fill the PDP fields.
+ * Call only from a Client Component / form — never during RSC render.
  */
 export async function createDraftProduct(): Promise<
   ActionResult<{ id: string; slug: string }>
 > {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
 
-  const baseName = 'Untitled product'
-  const baseSlug = 'untitled-product'
-  let slug = baseSlug
+  try {
+    const supabase = await createClient()
+    let lastError = 'Could not create a draft product. Try again.'
 
-  for (let attempt = 2; attempt < 50; attempt++) {
-    const { data: existing } = await supabase
-      .from('products')
-      .select('id')
-      .eq('slug', slug)
-      .maybeSingle()
-    if (!existing) break
-    slug = `${baseSlug}-${attempt}`
-  }
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const slug = uniqueDraftSlug()
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          name: 'Untitled product',
+          slug,
+          description: '',
+          subtitle: null,
+          note: null,
+          materials: '',
+          care_info: '',
+          price: 0,
+          compare_at: null,
+          weight_kg: 0.5,
+          category_id: null,
+          badge: 'New',
+          seo_title: null,
+          seo_description: null,
+          featured: false,
+          active: false,
+        })
+        .select('id, slug')
+        .maybeSingle()
 
-  const { data, error } = await supabase
-    .from('products')
-    .insert({
-      name: baseName,
-      slug,
-      description: '',
-      subtitle: null,
-      note: null,
-      materials: '',
-      care_info: '',
-      price: 0,
-      compare_at: null,
-      weight_kg: 0.5,
-      category_id: null,
-      badge: 'New',
-      seo_title: null,
-      seo_description: null,
-      featured: false,
-      active: false,
-    })
-    .select('id')
-    .single()
+      if (error) {
+        lastError =
+          error.code === '23505'
+            ? 'Could not allocate a unique slug. Try again.'
+            : error.message
+        if (error.code === '23505') continue
+        return { ok: false, error: lastError }
+      }
 
-  if (error) {
-    if (error.code === '23505') {
-      return { ok: false, error: 'Could not allocate a unique slug. Try again.' }
+      if (!data?.id || !data.slug) {
+        return {
+          ok: false,
+          error: 'Could not create a draft product. Try again.',
+        }
+      }
+
+      try {
+        revalidateProductSurfaces(data.slug)
+      } catch {
+        // Product exists; cache will catch up. Don't fail the create.
+      }
+
+      return { ok: true, data: { id: data.id, slug: data.slug } }
     }
-    return { ok: false, error: error.message }
-  }
 
-  revalidateProductSurfaces(slug)
-  return { ok: true, data: { id: data.id, slug } }
+    return { ok: false, error: lastError }
+  } catch (caught) {
+    return {
+      ok: false,
+      error:
+        caught instanceof Error
+          ? caught.message
+          : 'Could not create a draft product. Try again.',
+    }
+  }
 }
 
 /**

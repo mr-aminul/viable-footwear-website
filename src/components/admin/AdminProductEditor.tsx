@@ -205,7 +205,7 @@ export function AdminProductEditor({
       const existing = unique.get(key)
       if (!existing) {
         unique.set(key, {
-          name: row.color.trim() || null,
+          name: row.color?.trim() || null,
           thumb,
         })
       } else if (!existing.thumb && thumb) {

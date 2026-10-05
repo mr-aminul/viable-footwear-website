@@ -29,15 +29,28 @@ export default async function ProductAdminEditPage({
   const { slug } = await params
   const { fresh } = await searchParams
 
-  const product = await getAdminProductViewBySlug(slug)
+  let product
+  try {
+    product = await getAdminProductViewBySlug(slug)
+  } catch {
+    throw new Error('Could not load this product. Try again.')
+  }
   if (!product) notFound()
 
-  const [categories, media, variants, relatedCatalog] = await Promise.all([
-    getCategoryOptions(),
-    getAdminProductMedia(product.id),
-    getAdminProductVariants(product.id),
-    listRelatedPickerProducts(product.id),
-  ])
+  let categories
+  let media
+  let variants
+  let relatedCatalog
+  try {
+    ;[categories, media, variants, relatedCatalog] = await Promise.all([
+      getCategoryOptions(),
+      getAdminProductMedia(product.id),
+      getAdminProductVariants(product.id),
+      listRelatedPickerProducts(product.id),
+    ])
+  } catch {
+    throw new Error('Could not load the product editor. Try again.')
+  }
 
   return (
     <AdminProductEditor
