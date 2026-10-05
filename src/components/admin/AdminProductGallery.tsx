@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import { Reorder, useMotionValue, useReducedMotion } from 'framer-motion'
-import { ImagePlus, Trash2, Upload } from 'lucide-react'
+import { Image as ImageIcon, ImagePlus, Trash2, Upload } from 'lucide-react'
 import {
   deleteProductMedia,
   reorderProductMedia,
@@ -48,8 +48,6 @@ type AdminProductGalleryProps = {
   colorways?: string[]
   /** When set, left thumbs filter to this colorway (storefront preview). */
   previewColorKey?: string | null
-  /** Fallback when no uploaded images exist yet. */
-  placeholderSrc: string
 }
 
 function sameOrder(a: GalleryImage[], b: GalleryImage[]) {
@@ -186,7 +184,6 @@ export function AdminProductGallery({
   media,
   colorways = [],
   previewColorKey = null,
-  placeholderSrc,
 }: AdminProductGalleryProps) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -260,9 +257,7 @@ export function AdminProductGallery({
     images.findIndex((img) => img.id === selectedId),
   )
   const current =
-    images.length > 0
-      ? images[selectedIndex] ?? images[0]
-      : { id: '', url: placeholderSrc, alt: productName }
+    images.length > 0 ? (images[selectedIndex] ?? images[0]) : null
   const currentIsReal = Boolean(current?.id)
   const canDrag = images.length > 1 && !pending && !filteringByColor
 
@@ -409,12 +404,25 @@ export function AdminProductGallery({
           </div>
 
         <div className="relative min-w-0 flex-1">
-          <div className="group relative aspect-square overflow-hidden rounded-[1.5rem] bg-white">
-            <img
-              src={current?.url ?? placeholderSrc}
-              alt={current?.alt || productName}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+          <div className="group relative aspect-square overflow-hidden rounded-[1.5rem] bg-mist/60">
+            {current ? (
+              <img
+                src={current.url}
+                alt={current.alt || productName}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => fileRef.current?.click()}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-mute transition hover:bg-ink/[0.03] hover:text-navy disabled:opacity-60"
+                aria-label="Upload product image"
+              >
+                <ImageIcon className="h-14 w-14 stroke-[1.25]" />
+                <span className="text-[13px] font-semibold">Add product image</span>
+              </button>
+            )}
 
             {isDraft ? (
               <span className="absolute right-4 top-4 z-10 rounded-md bg-ink/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white">
@@ -422,34 +430,36 @@ export function AdminProductGallery({
               </span>
             ) : null}
 
-            <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-ink/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-card transition hover:bg-mist disabled:opacity-60"
-              >
-                {pending ? (
-                  'Uploading…'
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    Upload
-                  </>
-                )}
-              </button>
-              {currentIsReal ? (
+            {current ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-ink/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => removeMedia(current.id)}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-[13px] font-semibold text-spark shadow-card transition hover:bg-white disabled:opacity-60"
+                  onClick={() => fileRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-ink shadow-card transition hover:bg-mist disabled:opacity-60"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Remove
+                  {pending ? (
+                    'Uploading…'
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      Upload
+                    </>
+                  )}
                 </button>
-              ) : null}
-            </div>
+                {currentIsReal ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => removeMedia(current.id)}
+                    className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2.5 text-[13px] font-semibold text-spark shadow-card transition hover:bg-white disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {onBadgeChange ? (

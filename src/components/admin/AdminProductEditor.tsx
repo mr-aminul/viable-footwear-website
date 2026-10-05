@@ -443,7 +443,6 @@ export function AdminProductEditor({
             media={media}
             colorways={colorwayNames}
             previewColorKey={selectedColor?.key ?? null}
-            placeholderSrc={product.image}
           />
 
           <label className="block">
