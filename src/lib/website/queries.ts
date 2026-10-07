@@ -48,7 +48,7 @@ const getAboutCached = unstable_cache(
 
 const getSiteCached = unstable_cache(
   async () => mergeSiteContent(await fetchPageRaw('site')),
-  ['site-page-site'],
+  ['site-page-site-v2'],
   { tags: [SITE_PAGES_TAG, pageTag('site')], revalidate: 60 },
 )
 

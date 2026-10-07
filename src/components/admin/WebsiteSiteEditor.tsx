@@ -179,11 +179,27 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
               disabled={pending}
             />
           </Field>
-          <Field label="City / location">
+          <Field label="Address">
             <input
               className={softFieldClassName}
               value={content.brand.city}
               onChange={(e) => setBrand('city', e.target.value)}
+              disabled={pending}
+            />
+          </Field>
+          <Field label="Maps URL">
+            <input
+              className={softFieldClassName}
+              value={content.brand.mapsUrl}
+              onChange={(e) => setBrand('mapsUrl', e.target.value)}
+              disabled={pending}
+            />
+          </Field>
+          <Field label="Maps embed URL">
+            <input
+              className={softFieldClassName}
+              value={content.brand.mapsEmbedUrl}
+              onChange={(e) => setBrand('mapsEmbedUrl', e.target.value)}
               disabled={pending}
             />
           </Field>

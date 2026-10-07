@@ -119,7 +119,7 @@ export const DEFAULT_ABOUT_CONTENT: AboutPageContent = {
   },
   whoWeAre: {
     title: 'Who we are',
-    body1: `Based in ${BRAND.city}, Viable exists for people who want comfort without compromising style. We skip formal leather and dress shoes — our racks are filled with sculptural foam, chunky sneakers, and easy slides you'll actually wear every day.`,
+    body1: `Based in Dhaka, Viable exists for people who want comfort without compromising style. We skip formal leather and dress shoes — our racks are filled with sculptural foam, chunky sneakers, and easy slides you'll actually wear every day.`,
     body2: `With ${BRAND.followers}+ followers on Facebook and a ${BRAND.recommend} recommend rate from real customers, we've become a go-to stop for campus, café, and city-street fits.`,
     stats: [
       { value: BRAND.followers, label: 'Facebook followers' },
@@ -149,6 +149,8 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     instagramHandle: '@viable.bd',
     facebook: BRAND.facebook,
     city: BRAND.city,
+    mapsUrl: BRAND.mapsUrl,
+    mapsEmbedUrl: BRAND.mapsEmbedUrl,
     followers: BRAND.followers,
     recommend: BRAND.recommend,
   },

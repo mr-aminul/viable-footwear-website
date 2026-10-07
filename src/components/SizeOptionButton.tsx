@@ -1,10 +1,8 @@
 'use client'
 
-import { Bell } from 'lucide-react'
-
 /**
  * Size chip for the product page (and admin PDP preview).
- * Out-of-stock sizes stay visible — grayed, bell + diagonal slash — so shoppers
+ * Out-of-stock sizes stay visible — grayed with a diagonal slash — so shoppers
  * see the full size run even when a size has zero stock.
  */
 export function SizeOptionButton({
@@ -26,7 +24,7 @@ export function SizeOptionButton({
         if (!available) return
         onSelect?.()
       }}
-      className={`group relative inline-flex min-w-12 items-center justify-center gap-1 overflow-hidden rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
+      className={`group relative inline-flex min-w-12 items-center justify-center overflow-hidden rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
         !available
           ? 'cursor-not-allowed border-cloud bg-mist text-mute'
           : selected
@@ -38,12 +36,6 @@ export function SizeOptionButton({
       aria-label={available ? label : `${label} — Unavailable`}
       title={available ? undefined : 'Unavailable'}
     >
-      {!available ? (
-        <Bell
-          className="relative z-[1] h-3 w-3 shrink-0 opacity-70"
-          aria-hidden
-        />
-      ) : null}
       <span className="relative z-[1]">{label}</span>
       {!available ? (
         <>

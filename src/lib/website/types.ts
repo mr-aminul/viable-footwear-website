@@ -162,6 +162,10 @@ export type SiteContent = {
     instagramHandle: string
     facebook: string
     city: string
+    /** Google Maps (or similar) link for the storefront address. */
+    mapsUrl: string
+    /** Google Maps iframe `src` for the About page embed. */
+    mapsEmbedUrl: string
     followers: string
     recommend: string
   }

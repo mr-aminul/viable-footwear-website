@@ -92,10 +92,15 @@ export function Footer() {
             <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {brand.email}
           </a>
-          <p className="flex items-center justify-center gap-2">
-            <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            {brand.city}
-          </p>
+          <a
+            href={brand.mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mx-auto flex max-w-[18rem] items-start justify-center gap-2 text-center hover:text-white"
+          >
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <span>{brand.city}</span>
+          </a>
         </div>
       </div>
 

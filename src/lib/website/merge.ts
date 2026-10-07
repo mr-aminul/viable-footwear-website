@@ -310,6 +310,8 @@ export function mergeSiteContent(raw: unknown): SiteContent {
       instagramHandle: asString(brand.instagramHandle, d.brand.instagramHandle),
       facebook: asString(brand.facebook, d.brand.facebook),
       city: asString(brand.city, d.brand.city),
+      mapsUrl: asString(brand.mapsUrl, d.brand.mapsUrl),
+      mapsEmbedUrl: asString(brand.mapsEmbedUrl, d.brand.mapsEmbedUrl),
       followers: asString(brand.followers, d.brand.followers),
       recommend: asString(brand.recommend, d.brand.recommend),
     },

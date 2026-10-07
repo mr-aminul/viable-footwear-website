@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { EASE_OUT } from '@/lib/motion'
+import { DEFAULT_MARKETING_POPUP } from '@/lib/website/defaults'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import {
   isMarketingPopupLive,
@@ -21,7 +22,8 @@ import {
  * any storefront page (except checkout / order tracking) when enabled in admin.
  */
 export function MarketingPopup() {
-  const { marketingPopup: popup } = useSiteSettings()
+  const site = useSiteSettings()
+  const popup = site.marketingPopup ?? DEFAULT_MARKETING_POPUP
   const pathname = usePathname()
   const reduceMotion = useReducedMotion()
   const titleId = useId()

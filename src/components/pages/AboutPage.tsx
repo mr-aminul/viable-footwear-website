@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowRight, Mail, Phone } from 'lucide-react'
+import { ArrowRight, Mail, MapPin, Phone } from 'lucide-react'
 import { SIZE_CHART_ROWS } from '@/lib/catalog/size-chart'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
@@ -150,6 +150,29 @@ export function AboutPage({ content }: { content: AboutPageContent }) {
             </div>
           </a>
         </div>
+
+        <div className="mt-8">
+          <a
+            href={brand.mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex max-w-xl items-start gap-2 text-[14px] text-mute transition hover:text-navy"
+          >
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-navy" strokeWidth={1.75} />
+            <span>{brand.city}</span>
+          </a>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-cloud bg-mist/40">
+            <iframe
+              title="Viable store on Google Maps"
+              src={brand.mapsEmbedUrl}
+              className="h-[260px] w-full border-0 md:h-[360px]"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
+          </div>
+        </div>
+
         <Link
           href="/shop"
           className="mt-10 inline-flex items-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft"
