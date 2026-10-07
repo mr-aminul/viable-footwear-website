@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Heart, Info, RotateCcw, Star, Truck } from 'lucide-react'
+import { SizeOptionButton } from '@/components/SizeOptionButton'
 import {
   saveProductVariants,
   saveRelatedProducts,
@@ -229,6 +230,7 @@ export function AdminProductEditor({
 
   const selectedColor =
     colorIndex != null ? colorOptions[colorIndex] : undefined
+  // Include zero-stock sizes so the preview matches the storefront.
   const sizesForColor = useMemo(() => {
     if (!selectedColor) {
       return [
@@ -236,23 +238,33 @@ export function AdminProductEditor({
           variantRows
             .filter((r) => r.active)
             .map((r) => Number(r.size_eu))
-            .filter((n) => Number.isFinite(n)),
+            .filter((n) => Number.isFinite(n) && n > 0),
         ),
       ].sort((a, b) => a - b)
     }
     const matched = variantRows
       .filter(
-        (r) =>
-          r.active &&
-          colorwayKey(r.color) === selectedColor.key &&
-          Number(r.stock) > 0,
+        (r) => r.active && colorwayKey(r.color) === selectedColor.key,
       )
       .map((r) => Number(r.size_eu))
-      .filter((n) => Number.isFinite(n))
+      .filter((n) => Number.isFinite(n) && n > 0)
     return matched.length > 0
       ? [...new Set(matched)].sort((a, b) => a - b)
       : product.sizes
   }, [variantRows, selectedColor, product.sizes])
+
+  const inStockSizesForColor = useMemo(() => {
+    const matched = variantRows
+      .filter((r) => {
+        if (!r.active || Number(r.stock) < 1) return false
+        const sizeEu = Number(r.size_eu)
+        if (!Number.isFinite(sizeEu) || sizeEu <= 0) return false
+        if (!selectedColor) return true
+        return colorwayKey(r.color) === selectedColor.key
+      })
+      .map((r) => Number(r.size_eu))
+    return [...new Set(matched)].sort((a, b) => a - b)
+  }, [variantRows, selectedColor])
 
   const performSave = async (): Promise<boolean> => {
     setError(null)
@@ -624,23 +636,20 @@ export function AdminProductEditor({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(sizesForColor.length > 0 ? sizesForColor : product.sizes)
                     .filter((s) => s > 0)
-                    .map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() =>
-                          setSize((prev) => (prev === s ? null : s))
-                        }
-                        className={`min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                          size === s
-                            ? 'border-navy bg-navy text-white'
-                            : 'border-cloud bg-white text-ink hover:border-navy/40'
-                        }`}
-                        aria-pressed={size === s}
-                      >
-                        {s}
-                      </button>
-                    ))}
+                    .map((s) => {
+                      const available = inStockSizesForColor.includes(s)
+                      return (
+                        <SizeOptionButton
+                          key={s}
+                          label={String(s)}
+                          available={available}
+                          selected={size === s}
+                          onSelect={() =>
+                            setSize((prev) => (prev === s ? null : s))
+                          }
+                        />
+                      )
+                    })}
                   {product.sizes.length === 0 &&
                   sizesForColor.filter((s) => s > 0).length === 0 ? (
                     <p className="text-[13px] text-mute">
@@ -675,15 +684,17 @@ export function AdminProductEditor({
                 {productPromises.deliveryText}
               </span>
             </li>
-            <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
-              <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
-              <span>
-                <span className="font-semibold text-ink">
-                  {productPromises.returnsLabel}{' '}
+            {productPromises.returnsLabel || productPromises.returnsText ? (
+              <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
+                <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+                <span>
+                  <span className="font-semibold text-ink">
+                    {productPromises.returnsLabel}{' '}
+                  </span>
+                  {productPromises.returnsText}
                 </span>
-                {productPromises.returnsText}
-              </span>
-            </li>
+              </li>
+            ) : null}
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Star className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>

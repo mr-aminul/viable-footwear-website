@@ -164,11 +164,11 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
   },
   productPromises: {
     deliveryLabel: 'Delivery:',
-    deliveryText: '24hrs within Dhaka, 48–72hrs outside Dhaka',
-    returnsLabel: 'Free returns:',
-    returnsText: '7-day return policy on unused pairs',
+    deliveryText: '24hrs within Dhaka, 24–72hrs outside Dhaka',
+    returnsLabel: '',
+    returnsText: '',
     authenticLabel: 'Authentic:',
-    authenticText: 'Genuine footwear, curated for Bangladesh',
+    authenticText: 'Genuine footwear imported directly from China',
   },
   marketingPopup: { ...DEFAULT_MARKETING_POPUP },
 }

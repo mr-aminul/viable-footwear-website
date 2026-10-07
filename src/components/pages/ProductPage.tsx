@@ -29,6 +29,7 @@ import { ProductAccordion } from '@/components/ProductAccordion'
 import { ProductCard } from '@/components/ProductCard'
 import { ProductImageZoom } from '@/components/ProductImageZoom'
 import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
+import { SizeOptionButton } from '@/components/SizeOptionButton'
 import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
 
 type SizeUnit = 'EU' | 'UK'
@@ -511,46 +512,18 @@ export function ProductPage({
               </div>
               {showSizePicker ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {sizesForColor.map((s) => {
-                    const available = isSizeAvailable(s)
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        disabled={!available}
-                        onClick={() => {
-                          if (!available) return
-                          setSize(s)
-                          setError('')
-                        }}
-                        className={`group relative min-w-12 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition ${
-                          !available
-                            ? 'cursor-not-allowed border-cloud/70 bg-mist/40 text-mute line-through opacity-45'
-                            : size === s
-                              ? 'border-navy bg-navy text-white'
-                              : 'border-cloud bg-white text-ink hover:border-navy/40'
-                        }`}
-                        aria-pressed={available ? size === s : undefined}
-                        aria-disabled={!available}
-                        aria-label={
-                          available
-                            ? formatSizeLabel(s, sizeUnit)
-                            : `${formatSizeLabel(s, sizeUnit)} — Unavailable`
-                        }
-                        title={available ? undefined : 'Unavailable'}
-                      >
-                        {formatSizeLabel(s, sizeUnit)}
-                        {!available ? (
-                          <span
-                            role="tooltip"
-                            className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-                          >
-                            Unavailable
-                          </span>
-                        ) : null}
-                      </button>
-                    )
-                  })}
+                  {sizesForColor.map((s) => (
+                    <SizeOptionButton
+                      key={s}
+                      label={formatSizeLabel(s, sizeUnit)}
+                      available={isSizeAvailable(s)}
+                      selected={size === s}
+                      onSelect={() => {
+                        setSize(s)
+                        setError('')
+                      }}
+                    />
+                  ))}
                 </div>
               ) : null}
               {error && !isPurchaseUnavailable ? (
@@ -613,15 +586,17 @@ export function ProductPage({
                 {productPromises.deliveryText}
               </span>
             </li>
-            <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
-              <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
-              <span>
-                <span className="font-semibold text-ink">
-                  {productPromises.returnsLabel}{' '}
+            {productPromises.returnsLabel || productPromises.returnsText ? (
+              <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
+                <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+                <span>
+                  <span className="font-semibold text-ink">
+                    {productPromises.returnsLabel}{' '}
+                  </span>
+                  {productPromises.returnsText}
                 </span>
-                {productPromises.returnsText}
-              </span>
-            </li>
+              </li>
+            ) : null}
             <li className="flex items-start gap-3 text-[13px] leading-relaxed text-mute">
               <Star className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
               <span>
