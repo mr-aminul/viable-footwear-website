@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { amountsMatch } from '@/lib/payments/amount-match'
 import { executeBkashPayment } from '@/lib/payments/bkash'
 import { completeGatewayPaidOrder } from '@/lib/payments/complete-order'
+import { notifyDiscordNewOrderById } from '@/lib/integrations/discord-orders'
 import {
   emitOmsWebhook,
   orderPayloadFromRow,
@@ -137,6 +138,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
     if (paidOrder) {
       void emitOmsWebhook('order.paid', orderPayloadFromRow(paidOrder))
+      void notifyDiscordNewOrderById(supabase, attempt.order_id)
     }
 
     return NextResponse.redirect(

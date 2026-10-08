@@ -17,6 +17,7 @@ import {
   createBkashPayment,
 } from '@/lib/payments/bkash'
 import { createNagadPayment } from '@/lib/payments/nagad'
+import { notifyDiscordNewOrder } from '@/lib/integrations/discord-orders'
 import {
   emitOmsWebhook,
   orderPayloadFromRow,
@@ -464,6 +465,29 @@ export async function POST(request: NextRequest) {
       })
       // COD is not prepaid — only signal creation. Paid/collected is ops-side.
       void emitOmsWebhook('order.created', omsOrder)
+      void notifyDiscordNewOrder({
+        orderId: insertedOrder.order_number,
+        fullName,
+        email: email || null,
+        phone,
+        secondaryPhone,
+        address,
+        cityName,
+        zoneName,
+        areaName,
+        paymentMethod,
+        items: orderItemsPayload.map((item) => ({
+          name: item.product_name,
+          sizeEu: item.size_eu,
+          color: item.color,
+          price: item.unit_price,
+          quantity: item.quantity,
+        })),
+        subtotal,
+        discount: discountAmount,
+        shipping,
+        total,
+      })
 
       return NextResponse.json(
         {
