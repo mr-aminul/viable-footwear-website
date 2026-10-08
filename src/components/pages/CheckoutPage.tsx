@@ -10,6 +10,7 @@ import { useCart } from '@/context/CartContext'
 import { useOrders } from '@/context/OrdersContext'
 import { SearchableSelect, type SearchableSelectHandle } from '@/components/SearchableSelect'
 import { formatPrice } from '@/lib/brand'
+import { imageForCartLine } from '@/lib/catalog/product-colorways'
 import { formatCartVariantLabel } from '@/lib/catalog/sizing'
 import {
   isValidBdMobile,
@@ -1379,7 +1380,7 @@ export function CheckoutPage() {
                   className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-mist/60"
                 >
                   <img
-                    src={item.product.image}
+                    src={imageForCartLine(item.product, item.variantId)}
                     alt={item.product.name}
                     className="h-full w-full object-contain"
                   />

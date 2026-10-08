@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { formatPrice } from '@/lib/brand'
+import { imageForCartLine } from '@/lib/catalog/product-colorways'
 import { formatCartVariantLabel } from '@/lib/catalog/sizing'
 import { EASE_OUT } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
@@ -95,7 +96,7 @@ export function CartPage() {
                   className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white sm:h-20 sm:w-20"
                 >
                   <img
-                    src={item.product.image}
+                    src={imageForCartLine(item.product, item.variantId)}
                     alt={item.product.name}
                     className="h-full w-full object-contain"
                   />

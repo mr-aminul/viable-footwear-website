@@ -94,6 +94,24 @@ export function productColorways(
   }))
 }
 
+/**
+ * Thumbnail for a cart/checkout line — selected colorway photo, not the
+ * product’s default (first gallery) image.
+ */
+export function imageForCartLine(
+  product: Pick<Product, 'image' | 'images' | 'variants'>,
+  variantId?: string,
+): string {
+  const variant = product.variants.find((v) => v.id === variantId)
+  if (!variant) return product.image
+
+  const fromGallery = firstGalleryForColor(
+    product.images,
+    colorwayKey(variant.color),
+  )
+  return fromGallery?.url ?? variant.imageUrl ?? product.image
+}
+
 /** First in-stock (or any) variant matching a colorway key. */
 export function variantForColorway(
   variants: ProductVariantView[],
