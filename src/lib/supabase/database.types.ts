@@ -279,6 +279,22 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['site_pages']['Insert']>
         Relationships: []
       }
+      site_daily_visitors: {
+        Row: {
+          visit_date: string
+          visitor_key: string
+          hit_count: number
+          last_seen_at: string
+        }
+        Insert: {
+          visit_date: string
+          visitor_key: string
+          hit_count?: number
+          last_seen_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['site_daily_visitors']['Insert']>
+        Relationships: []
+      }
       orders: {
         Row: {
           id: string
@@ -418,6 +434,10 @@ export interface Database {
       admin_logistics_analytics: {
         Args: Record<string, never>
         Returns: Json
+      }
+      record_site_visit: {
+        Args: { p_visitor_key: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -361,9 +361,10 @@ export function WebsiteHomeEditor({
                 video={hero.video}
                 slides={hero.slides}
                 slideIntervalMs={hero.slideIntervalMs}
+                showSoundToggle={false}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-navy-deep/92 via-navy-deep/58 to-navy-deep/20" />
-              <div className="absolute inset-0 bg-gradient-to-t from-navy-deep/75 via-transparent to-navy-deep/25" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-navy-deep/92 via-navy-deep/58 to-navy-deep/20" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-navy-deep/75 via-transparent to-navy-deep/25" />
               <div className="grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
             </div>
 
@@ -698,33 +699,27 @@ export function WebsiteHomeEditor({
                 setSectionEnabled('categories', enabled)
               }
             />
-            <div className="flex items-end justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <WysiwygInput
-                  value={content.categories.title}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      categories: { ...p.categories, title: e.target.value },
-                    }))
-                  }
-                  className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
-                />
-                <WysiwygInput
-                  value={content.categories.subtitle}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      categories: { ...p.categories, subtitle: e.target.value },
-                    }))
-                  }
-                  className="mt-2 text-[14px] text-mute md:text-[15px]"
-                />
-              </div>
-              <span className="hidden items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white sm:inline-flex">
-                View all
-                <ArrowRight className="h-3.5 w-3.5" />
-              </span>
+            <div className="min-w-0">
+              <WysiwygInput
+                value={content.categories.title}
+                onChange={(e) =>
+                  setContent((p) => ({
+                    ...p,
+                    categories: { ...p.categories, title: e.target.value },
+                  }))
+                }
+                className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
+              />
+              <WysiwygInput
+                value={content.categories.subtitle}
+                onChange={(e) =>
+                  setContent((p) => ({
+                    ...p,
+                    categories: { ...p.categories, subtitle: e.target.value },
+                  }))
+                }
+                className="mt-2 text-[14px] text-mute md:text-[15px]"
+              />
             </div>
             <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-6">
               {categories.map((cat) => (
@@ -752,6 +747,12 @@ export function WebsiteHomeEditor({
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="mt-8 flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white">
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </span>
             </div>
           </section>
         </SectionFrame>
@@ -801,41 +802,41 @@ export function WebsiteHomeEditor({
                 setSectionEnabled('mostPopular', enabled)
               }
             />
-            <div className="flex items-end justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <WysiwygInput
-                  value={content.mostPopular.title}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      mostPopular: { ...p.mostPopular, title: e.target.value },
-                    }))
-                  }
-                  className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
-                />
-                <WysiwygInput
-                  value={content.mostPopular.subtitle}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      mostPopular: {
-                        ...p.mostPopular,
-                        subtitle: e.target.value,
-                      },
-                    }))
-                  }
-                  className="mt-2 text-[14px] text-mute md:text-[15px]"
-                />
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white">
-                View all
-                <ArrowRight className="h-3.5 w-3.5" />
-              </span>
+            <div className="min-w-0">
+              <WysiwygInput
+                value={content.mostPopular.title}
+                onChange={(e) =>
+                  setContent((p) => ({
+                    ...p,
+                    mostPopular: { ...p.mostPopular, title: e.target.value },
+                  }))
+                }
+                className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
+              />
+              <WysiwygInput
+                value={content.mostPopular.subtitle}
+                onChange={(e) =>
+                  setContent((p) => ({
+                    ...p,
+                    mostPopular: {
+                      ...p.mostPopular,
+                      subtitle: e.target.value,
+                    },
+                  }))
+                }
+                className="mt-2 text-[14px] text-mute md:text-[15px]"
+              />
             </div>
             <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
               {featured.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} preview />
               ))}
+            </div>
+            <div className="mt-8 flex justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white">
+                View all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </span>
             </div>
           </section>
         </SectionFrame>
@@ -850,41 +851,41 @@ export function WebsiteHomeEditor({
                   setSectionEnabled('foamCrocs', enabled)
                 }
               />
-              <div className="flex items-end justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <WysiwygInput
-                    value={content.foamCrocs.title}
-                    onChange={(e) =>
-                      setContent((p) => ({
-                        ...p,
-                        foamCrocs: { ...p.foamCrocs, title: e.target.value },
-                      }))
-                    }
-                    className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
-                  />
-                  <WysiwygInput
-                    value={content.foamCrocs.subtitle}
-                    onChange={(e) =>
-                      setContent((p) => ({
-                        ...p,
-                        foamCrocs: {
-                          ...p.foamCrocs,
-                          subtitle: e.target.value,
-                        },
-                      }))
-                    }
-                    className="mt-2 text-[14px] text-mute md:text-[15px]"
-                  />
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white">
-                  See all
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </span>
+              <div className="min-w-0">
+                <WysiwygInput
+                  value={content.foamCrocs.title}
+                  onChange={(e) =>
+                    setContent((p) => ({
+                      ...p,
+                      foamCrocs: { ...p.foamCrocs, title: e.target.value },
+                    }))
+                  }
+                  className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
+                />
+                <WysiwygInput
+                  value={content.foamCrocs.subtitle}
+                  onChange={(e) =>
+                    setContent((p) => ({
+                      ...p,
+                      foamCrocs: {
+                        ...p.foamCrocs,
+                        subtitle: e.target.value,
+                      },
+                    }))
+                  }
+                  className="mt-2 text-[14px] text-mute md:text-[15px]"
+                />
               </div>
               <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
                 {foamPicks.map((product, i) => (
                   <ProductCard key={product.id} product={product} index={i} preview />
                 ))}
+              </div>
+              <div className="mt-8 flex justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white">
+                  See all
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </span>
               </div>
             </div>
           </section>

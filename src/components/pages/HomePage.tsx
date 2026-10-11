@@ -66,8 +66,8 @@ export function HomePage({
               slides={hero.slides}
               slideIntervalMs={hero.slideIntervalMs}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-navy-deep/92 via-navy-deep/58 to-navy-deep/20" />
-            <div className="absolute inset-0 bg-gradient-to-t from-navy-deep/75 via-transparent to-navy-deep/25" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-navy-deep/92 via-navy-deep/58 to-navy-deep/20" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-navy-deep/75 via-transparent to-navy-deep/25" />
             <div className="grain pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay" />
           </div>
 
@@ -139,22 +139,13 @@ export function HomePage({
 
       {sections.categories ? (
         <section className="mx-auto max-w-7xl px-4 py-14 md:px-6 md:py-16 lg:px-8 lg:py-20">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
-                {content.categories.title}
-              </h2>
-              <p className="mt-2 text-[14px] text-mute md:text-[15px]">
-                {content.categories.subtitle}
-              </p>
-            </div>
-            <Link
-              href="/shop"
-              className="hidden items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep sm:inline-flex"
-            >
-              View all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+          <div>
+            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
+              {content.categories.title}
+            </h2>
+            <p className="mt-2 text-[14px] text-mute md:text-[15px]">
+              {content.categories.subtitle}
+            </p>
           </div>
 
           <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-6">
@@ -192,6 +183,16 @@ export function HomePage({
                 </Link>
               </motion.div>
             ))}
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <Link
+              href="/shop"
+              className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
+            >
+              View all
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </section>
       ) : null}
@@ -238,27 +239,27 @@ export function HomePage({
 
       {sections.mostPopular ? (
         <section className="mx-auto max-w-7xl px-4 py-14 md:px-6 md:py-16 lg:px-8">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
-                {content.mostPopular.title}
-              </h2>
-              <p className="mt-2 text-[14px] text-mute md:text-[15px]">
-                {content.mostPopular.subtitle}
-              </p>
-            </div>
-            <Link
-              href="/shop"
-              className="inline-flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
-            >
-              View all
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+          <div>
+            <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
+              {content.mostPopular.title}
+            </h2>
+            <p className="mt-2 text-[14px] text-mute md:text-[15px]">
+              {content.mostPopular.subtitle}
+            </p>
           </div>
           <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
             {featured.map((product, i) => (
               <ProductCard key={product.id} product={product} index={i} />
             ))}
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Link
+              href="/shop"
+              className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
+            >
+              View all
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </section>
       ) : null}
@@ -266,27 +267,27 @@ export function HomePage({
       {sections.foamCrocs ? (
         <section className="bg-sand/80 py-14 md:py-16">
           <div className="mx-auto max-w-7xl px-4 md:px-6 lg:px-8">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
-                  {content.foamCrocs.title}
-                </h2>
-                <p className="mt-2 text-[14px] text-mute md:text-[15px]">
-                  {content.foamCrocs.subtitle}
-                </p>
-              </div>
-              <Link
-                href="/shop?category=crocs"
-                className="inline-flex items-center gap-1.5 rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
-              >
-                See all
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+            <div>
+              <h2 className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl">
+                {content.foamCrocs.title}
+              </h2>
+              <p className="mt-2 text-[14px] text-mute md:text-[15px]">
+                {content.foamCrocs.subtitle}
+              </p>
             </div>
             <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
               {foamPicks.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} />
               ))}
+            </div>
+            <div className="mt-8 flex justify-center">
+              <Link
+                href="/shop?category=crocs"
+                className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
+              >
+                See all
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </div>
         </section>

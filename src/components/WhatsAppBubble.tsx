@@ -30,9 +30,17 @@ export function WhatsAppBubble() {
       target="_blank"
       rel="noreferrer"
       aria-label="Chat on WhatsApp"
-      className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-[75] flex h-14 w-14 items-center justify-center rounded-full bg-whatsapp text-white shadow-lift transition duration-200 hover:scale-105 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp active:scale-95"
+      className="whatsapp-bubble-pulse fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))] z-[75] flex h-14 w-14 items-center justify-center rounded-full bg-whatsapp text-white shadow-lift transition duration-200 hover:scale-105 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp active:scale-95"
     >
-      <WhatsAppIcon className="h-7 w-7" />
+      <span
+        aria-hidden
+        className="whatsapp-bubble-ring pointer-events-none absolute inset-0 rounded-full bg-whatsapp"
+      />
+      <span
+        aria-hidden
+        className="whatsapp-bubble-ring whatsapp-bubble-ring-delayed pointer-events-none absolute inset-0 rounded-full bg-whatsapp"
+      />
+      <WhatsAppIcon className="relative z-10 h-7 w-7" />
     </a>
   )
 }

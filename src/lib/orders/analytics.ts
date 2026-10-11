@@ -2,8 +2,13 @@ import { unstable_cache } from 'next/cache'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { OrderStatus, PaymentMethod } from '@/lib/supabase/database.types'
+import {
+  rangePresetLabel,
+  type DateRangePreset,
+} from '@/lib/orders/analytics-range'
 
-export type DateRangePreset = 7 | 30 | 90
+export type { DateRangePreset }
+export { rangePresetLabel }
 
 export type SalesKpis = {
   orderCount: number
@@ -111,9 +116,15 @@ export function resolveAnalyticsRange(days: DateRangePreset): {
   }
 }
 
-export function parseRangePreset(raw: string | undefined): DateRangePreset {
-  if (raw === '7' || raw === '90') return Number(raw) as DateRangePreset
-  return 30
+export function parseRangePreset(
+  raw: string | undefined,
+  fallback: DateRangePreset = 30,
+): DateRangePreset {
+  if (raw === 'today' || raw === '1') return 1
+  if (raw === '7' || raw === '30' || raw === '90') {
+    return Number(raw) as DateRangePreset
+  }
+  return fallback
 }
 
 function isGmvOrder(order: OrderLite): boolean {

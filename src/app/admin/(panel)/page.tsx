@@ -1,6 +1,11 @@
 import { Suspense } from 'react'
 import AdminDashboard from '@/components/admin/AdminDashboard'
-import { getSalesAnalytics } from '@/lib/orders/analytics'
+import { getVisitorStats } from '@/lib/analytics/visitors'
+import {
+  getSalesAnalytics,
+  parseRangePreset,
+  type DateRangePreset,
+} from '@/lib/orders/analytics'
 import { countUndispatchedOrders } from '@/lib/orders/queries'
 
 export const metadata = {
@@ -8,32 +13,40 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
+type Props = {
+  searchParams: Promise<{ range?: string }>
+}
+
 /**
  * Shell streams immediately; KPI data loads inside Suspense.
  */
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage({ searchParams }: Props) {
+  const params = await searchParams
+  const days = parseRangePreset(params.range, 7)
+
   return (
-    <Suspense fallback={<DashboardFallback />}>
-      <DashboardData />
+    <Suspense key={days} fallback={<DashboardFallback />}>
+      <DashboardData days={days} />
     </Suspense>
   )
 }
 
-async function DashboardData() {
-  const [pendingDispatchCount, sales7] = await Promise.all([
+async function DashboardData({ days }: { days: DateRangePreset }) {
+  const [pendingDispatchCount, sales, visitors] = await Promise.all([
     countUndispatchedOrders(),
-    getSalesAnalytics(7),
+    getSalesAnalytics(days),
+    getVisitorStats(days),
   ])
-
-  const todayPoint = sales7.series.find((d) => d.date === sales7.to)
 
   return (
     <AdminDashboard
+      days={days}
       pendingDispatchCount={pendingDispatchCount}
-      sales7DayGmv={sales7.kpis.gmv}
-      sales7DayOrders={sales7.kpis.orderCount}
-      ordersToday={todayPoint?.orders ?? 0}
-      gmvToday={todayPoint?.gmv ?? 0}
+      salesGmv={sales.kpis.gmv}
+      salesOrders={sales.kpis.orderCount}
+      visitorsInRange={visitors.visitorsInRange}
+      rangeFrom={sales.from}
+      rangeTo={sales.to}
     />
   )
 }
@@ -43,7 +56,14 @@ function DashboardFallback() {
     <div className="animate-pulse space-y-6">
       <div className="h-8 w-48 rounded-lg bg-cloud/80" />
       <div className="h-4 w-80 max-w-full rounded bg-cloud/60" />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="flex gap-2">
+        <div className="h-9 w-16 rounded-full bg-cloud/70" />
+        <div className="h-9 w-20 rounded-full bg-cloud/70" />
+        <div className="h-9 w-20 rounded-full bg-cloud/70" />
+        <div className="h-9 w-20 rounded-full bg-cloud/70" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="h-28 rounded-2xl bg-white/80" />
         <div className="h-28 rounded-2xl bg-white/80" />
         <div className="h-28 rounded-2xl bg-white/80" />
         <div className="h-28 rounded-2xl bg-white/80" />

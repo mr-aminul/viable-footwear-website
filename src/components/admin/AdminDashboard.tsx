@@ -14,26 +14,43 @@ import {
 } from 'lucide-react'
 import { formatPrice } from '@/lib/brand'
 import { useStaffProfile } from '@/components/admin/AdminStaffContext'
+import {
+  rangePresetLabel,
+  type DateRangePreset,
+} from '@/lib/orders/analytics-range'
+
+const RANGE_PRESETS = [7, 30, 90] as const
 
 /**
  * Soft navigations skip a server data round-trip; role comes from AdminShell.
  */
 export default function AdminDashboard({
+  days = 7,
   pendingDispatchCount = 0,
-  sales7DayGmv = 0,
-  sales7DayOrders = 0,
-  ordersToday = 0,
-  gmvToday = 0,
+  salesGmv = 0,
+  salesOrders = 0,
+  visitorsInRange = 0,
+  rangeFrom,
+  rangeTo,
 }: {
+  days?: DateRangePreset
   pendingDispatchCount?: number
-  sales7DayGmv?: number
-  sales7DayOrders?: number
-  ordersToday?: number
-  gmvToday?: number
+  salesGmv?: number
+  salesOrders?: number
+  visitorsInRange?: number
+  rangeFrom?: string
+  rangeTo?: string
 }) {
   const profile = useStaffProfile()
   const searchParams = useSearchParams()
   const showAdminOnlyError = searchParams.get('error') === 'admin_only'
+  const periodLabel = rangePresetLabel(days)
+  const periodHint =
+    days === 1
+      ? 'Today'
+      : rangeFrom && rangeTo
+        ? `${rangeFrom} → ${rangeTo}`
+        : periodLabel
 
   const links: QuickLink[] = [
     { href: '/admin/catalog', label: 'Products', icon: Package },
@@ -76,22 +93,56 @@ export default function AdminDashboard({
         your catalog and keep the storefront up to date.
       </p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 flex flex-wrap gap-2">
+        <Link
+          href="/admin?range=today"
+          scroll={false}
+          className={[
+            'rounded-full px-4 py-2 text-[13px] font-semibold transition',
+            days === 1
+              ? 'bg-navy text-white'
+              : 'border border-cloud bg-white text-ink hover:border-navy/30',
+          ].join(' ')}
+        >
+          Today
+        </Link>
+        {RANGE_PRESETS.map((preset) => {
+          const active = days === preset
+          return (
+            <Link
+              key={preset}
+              href={`/admin?range=${preset}`}
+              scroll={false}
+              className={[
+                'rounded-full px-4 py-2 text-[13px] font-semibold transition',
+                active
+                  ? 'bg-navy text-white'
+                  : 'border border-cloud bg-white text-ink hover:border-navy/30',
+              ].join(' ')}
+            >
+              {preset} days
+            </Link>
+          )
+        })}
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          title="Sales (7d)"
-          value={formatPrice(Math.round(sales7DayGmv))}
-          hint={`${sales7DayOrders} orders · last 7 days`}
-          href="/admin/analytics?range=7"
+          title="Sales"
+          value={formatPrice(Math.round(salesGmv))}
+          hint={`${salesOrders} orders · ${periodHint}`}
+          href={`/admin/analytics?range=${days === 1 ? 7 : days}`}
         />
         <KpiCard
-          title="Orders today"
-          value={String(ordersToday)}
-          hint={
-            ordersToday === 0
-              ? 'No orders yet today'
-              : `${formatPrice(Math.round(gmvToday))} GMV today`
-          }
-          href="/admin/analytics?range=7"
+          title="Orders"
+          value={String(salesOrders)}
+          hint={periodLabel}
+          href={`/admin/analytics?range=${days === 1 ? 7 : days}`}
+        />
+        <KpiCard
+          title="Visitors"
+          value={visitorsInRange.toLocaleString('en-US')}
+          hint={periodLabel}
         />
         <KpiCard
           title="To ship"
