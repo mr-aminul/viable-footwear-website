@@ -56,10 +56,6 @@ export function AdminProductsBrowser({
         products.map((product) => [product.id, Boolean(product.featured)]),
       ),
   )
-  const [featuredPendingId, setFeaturedPendingId] = useState<string | null>(
-    null,
-  )
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
@@ -91,12 +87,10 @@ export function AdminProductsBrowser({
   const onFeaturedChange = (productId: string, featured: boolean) => {
     const previous = featuredById[productId] ?? false
     setFeaturedById((prev) => ({ ...prev, [productId]: featured }))
-    setFeaturedPendingId(productId)
     setBulkError(null)
     setBulkSummary(null)
     startTransition(async () => {
       const result = await setProductFeatured(productId, featured)
-      setFeaturedPendingId(null)
       if (!result.ok) {
         setFeaturedById((prev) => ({ ...prev, [productId]: previous }))
         setBulkError(result.error)
