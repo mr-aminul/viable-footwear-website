@@ -1469,11 +1469,7 @@ export function WebsiteHomeEditor({
             : 'Most popular products'
         }
         titleId={productPickerTitleId}
-        hint={
-          productPicker === 'foamCrocs'
-            ? 'Pick up to 4 products (order = display order). Leave empty to hide this grid.'
-            : 'Pick up to 4 products (order = display order). Leave empty to hide this grid.'
-        }
+        hint={`Pick up to ${HOME_SECTION_PRODUCT_CAP} products (order = display order). Leave empty to hide this grid.`}
         catalog={catalog}
         selectedIds={
           productPicker === 'foamCrocs'

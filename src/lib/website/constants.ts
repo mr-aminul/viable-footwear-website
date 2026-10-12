@@ -2,7 +2,7 @@
 export const MAX_HERO_SLIDES = 6
 
 /** Max products per home grid section (Most popular / Foam & crocs). */
-export const HOME_SECTION_PRODUCT_CAP = 4
+export const HOME_SECTION_PRODUCT_CAP = 8
 
 /** Default autoplay interval for hero slideshow (ms). */
 export const DEFAULT_SLIDE_INTERVAL_MS = 5000
