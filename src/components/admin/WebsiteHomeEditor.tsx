@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  useEffect,
+  useId,
   useMemo,
   useState,
   useTransition,
@@ -14,12 +16,14 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  LayoutGrid,
   MessageCircle,
   Plus,
   RefreshCw,
   ShieldCheck,
   Trash2,
   Truck,
+  X,
 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { RelatedProductsPicker } from '@/components/admin/RelatedProductsPicker'
@@ -136,6 +140,118 @@ function SectionToggleBar({
         </span>
         <SectionToggle enabled={enabled} onChange={onEnabledChange} />
       </div>
+    </div>
+  )
+}
+
+function EditProductsButton({
+  count,
+  onClick,
+}: {
+  count: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-5 inline-flex items-center gap-2 rounded-full border border-navy/20 bg-paper/95 px-3.5 py-2 text-[12px] font-semibold text-navy shadow-sm transition hover:border-navy/40 hover:bg-white"
+    >
+      <LayoutGrid className="h-3.5 w-3.5" />
+      Edit products
+      <span className="rounded-full bg-mist px-1.5 py-0.5 text-[10px] font-bold text-mute">
+        {count}/{HOME_SECTION_PRODUCT_CAP}
+      </span>
+    </button>
+  )
+}
+
+function HomeProductPickerDrawer({
+  open,
+  title,
+  titleId,
+  hint,
+  catalog,
+  selectedIds,
+  onChange,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  titleId: string
+  hint: string
+  catalog: RelatedPickerProduct[]
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className={[
+        'fixed inset-0 z-[80]',
+        open ? 'pointer-events-auto' : 'pointer-events-none',
+      ].join(' ')}
+      aria-hidden={!open}
+    >
+      <button
+        type="button"
+        tabIndex={open ? 0 : -1}
+        aria-label="Close product picker"
+        onClick={onClose}
+        className={[
+          'absolute inset-0 bg-ink/40 transition-opacity duration-200',
+          open ? 'opacity-100' : 'opacity-0',
+        ].join(' ')}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={[
+          'absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-paper shadow-lift transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:max-w-2xl',
+          open ? 'translate-x-0' : 'translate-x-full',
+        ].join(' ')}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-cloud px-5 py-4">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-[16px] font-semibold text-ink">
+              {title}
+            </h2>
+            <p className="mt-0.5 text-[12px] text-mute">
+              Preview updates live behind this panel · Save on the home editor
+              when done
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-mute transition hover:bg-mist hover:text-ink"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          {open ? (
+            <RelatedProductsPicker
+              catalog={catalog}
+              selectedIds={selectedIds}
+              maxSelected={HOME_SECTION_PRODUCT_CAP}
+              hint={hint}
+              onChange={onChange}
+            />
+          ) : null}
+        </div>
+        <div className="border-t border-cloud px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-full bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-navy-deep"
+          >
+            Done
+          </button>
+        </div>
+      </aside>
     </div>
   )
 }
@@ -260,6 +376,10 @@ export function WebsiteHomeEditor({
     Record<string, boolean>
   >({})
   const [showHeroMediaControls, setShowHeroMediaControls] = useState(false)
+  const [productPicker, setProductPicker] = useState<
+    null | 'mostPopular' | 'foamCrocs'
+  >(null)
+  const productPickerTitleId = useId()
 
   const hero = content.hero
   const isDirty = JSON.stringify(content) !== savedSnapshot
@@ -282,6 +402,25 @@ export function WebsiteHomeEditor({
       ),
     [products, content.foamCrocs.productIds],
   )
+
+  useEffect(() => {
+    if (!productPicker) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProductPicker(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [productPicker])
+
+  useEffect(() => {
+    if (!productPicker) return
+    const { body } = document
+    const prev = body.style.overflow
+    body.style.overflow = 'hidden'
+    return () => {
+      body.style.overflow = prev
+    }
+  }, [productPicker])
 
   const setHero = (patch: Partial<typeof hero>) => {
     setContent((prev) => ({ ...prev, hero: { ...prev.hero, ...patch } }))
@@ -857,21 +996,11 @@ export function WebsiteHomeEditor({
                 className="mt-2 text-[14px] text-mute md:text-[15px]"
               />
             </div>
-            <div className="mt-6 rounded-2xl border border-dashed border-navy/25 bg-mist/40 p-4 md:p-5">
-              <RelatedProductsPicker
-                catalog={catalog}
-                selectedIds={content.mostPopular.productIds}
-                maxSelected={HOME_SECTION_PRODUCT_CAP}
-                hint="Pick up to 4 products for Most popular (order = display order). Leave empty to use Featured products."
-                onChange={(productIds) =>
-                  setContent((p) => ({
-                    ...p,
-                    mostPopular: { ...p.mostPopular, productIds },
-                  }))
-                }
-              />
-            </div>
-            <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
+            <EditProductsButton
+              count={content.mostPopular.productIds.length}
+              onClick={() => setProductPicker('mostPopular')}
+            />
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
               {featured.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} preview />
               ))}
@@ -920,21 +1049,11 @@ export function WebsiteHomeEditor({
                   className="mt-2 text-[14px] text-mute md:text-[15px]"
                 />
               </div>
-              <div className="mt-6 rounded-2xl border border-dashed border-navy/25 bg-white/70 p-4 md:p-5">
-                <RelatedProductsPicker
-                  catalog={catalog}
-                  selectedIds={content.foamCrocs.productIds}
-                  maxSelected={HOME_SECTION_PRODUCT_CAP}
-                  hint="Pick up to 4 products for Foam & crocs (order = display order). Leave empty to use crocs/foam/slides automatically."
-                  onChange={(productIds) =>
-                    setContent((p) => ({
-                      ...p,
-                      foamCrocs: { ...p.foamCrocs, productIds },
-                    }))
-                  }
-                />
-              </div>
-              <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
+              <EditProductsButton
+                count={content.foamCrocs.productIds.length}
+                onClick={() => setProductPicker('foamCrocs')}
+              />
+              <div className="mt-6 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
                 {foamPicks.map((product, i) => (
                   <ProductCard key={product.id} product={product} index={i} preview />
                 ))}
@@ -1351,6 +1470,41 @@ export function WebsiteHomeEditor({
           </section>
         </SectionFrame>
       </div>
+
+      <HomeProductPickerDrawer
+        open={productPicker !== null}
+        title={
+          productPicker === 'foamCrocs'
+            ? 'Foam & crocs products'
+            : 'Most popular products'
+        }
+        titleId={productPickerTitleId}
+        hint={
+          productPicker === 'foamCrocs'
+            ? 'Pick up to 4 products (order = display order). Leave empty to use crocs/foam/slides automatically.'
+            : 'Pick up to 4 products (order = display order). Leave empty to use Featured products.'
+        }
+        catalog={catalog}
+        selectedIds={
+          productPicker === 'foamCrocs'
+            ? content.foamCrocs.productIds
+            : content.mostPopular.productIds
+        }
+        onChange={(productIds) => {
+          if (productPicker === 'foamCrocs') {
+            setContent((p) => ({
+              ...p,
+              foamCrocs: { ...p.foamCrocs, productIds },
+            }))
+            return
+          }
+          setContent((p) => ({
+            ...p,
+            mostPopular: { ...p.mostPopular, productIds },
+          }))
+        }}
+        onClose={() => setProductPicker(null)}
+      />
     </div>
   )
 }
