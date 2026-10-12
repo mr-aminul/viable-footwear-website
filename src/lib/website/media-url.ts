@@ -1,22 +1,13 @@
 import { SITE_MEDIA_BUCKET } from '@/lib/website/constants'
+import { toProxiedMediaUrl } from '@/lib/media/storage-proxy'
 
 /**
  * Resolve a site media path (public `/…`, absolute URL, or storage object path).
+ * Storage objects are served via `/api/media/…` so Vercel caches them.
  */
 export function resolveSiteMediaUrl(
   path: string | null | undefined,
   fallback = '/images/hero.png',
 ): string {
-  if (!path) return fallback
-  if (
-    path.startsWith('http://') ||
-    path.startsWith('https://') ||
-    path.startsWith('/')
-  ) {
-    return path
-  }
-
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!base) return path
-  return `${base}/storage/v1/object/public/${SITE_MEDIA_BUCKET}/${path}`
+  return toProxiedMediaUrl(path, SITE_MEDIA_BUCKET, fallback)
 }
