@@ -151,7 +151,7 @@ function EditProductsButton({
     <button
       type="button"
       onClick={onClick}
-      className="mt-5 inline-flex items-center gap-2 rounded-full border border-navy/20 bg-paper/95 px-3.5 py-2 text-[12px] font-semibold text-navy shadow-sm transition hover:border-navy/40 hover:bg-white"
+      className="inline-flex shrink-0 items-center gap-2 rounded-full border border-navy/20 bg-paper/95 px-3.5 py-2 text-[12px] font-semibold text-navy shadow-sm transition hover:border-navy/40 hover:bg-white"
     >
       <LayoutGrid className="h-3.5 w-3.5" />
       Edit products
@@ -957,36 +957,38 @@ export function WebsiteHomeEditor({
                 setSectionEnabled('mostPopular', enabled)
               }
             />
-            <div className="min-w-0">
-              <WysiwygInput
-                value={content.mostPopular.title}
-                onChange={(e) =>
-                  setContent((p) => ({
-                    ...p,
-                    mostPopular: { ...p.mostPopular, title: e.target.value },
-                  }))
-                }
-                className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
-              />
-              <WysiwygInput
-                value={content.mostPopular.subtitle}
-                onChange={(e) =>
-                  setContent((p) => ({
-                    ...p,
-                    mostPopular: {
-                      ...p.mostPopular,
-                      subtitle: e.target.value,
-                    },
-                  }))
-                }
-                className="mt-2 text-[14px] text-mute md:text-[15px]"
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <WysiwygInput
+                  value={content.mostPopular.title}
+                  onChange={(e) =>
+                    setContent((p) => ({
+                      ...p,
+                      mostPopular: { ...p.mostPopular, title: e.target.value },
+                    }))
+                  }
+                  className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
+                />
+                <WysiwygInput
+                  value={content.mostPopular.subtitle}
+                  onChange={(e) =>
+                    setContent((p) => ({
+                      ...p,
+                      mostPopular: {
+                        ...p.mostPopular,
+                        subtitle: e.target.value,
+                      },
+                    }))
+                  }
+                  className="mt-2 text-[14px] text-mute md:text-[15px]"
+                />
+              </div>
+              <EditProductsButton
+                count={content.mostPopular.productIds.length}
+                onClick={() => setProductPicker('mostPopular')}
               />
             </div>
-            <EditProductsButton
-              count={content.mostPopular.productIds.length}
-              onClick={() => setProductPicker('mostPopular')}
-            />
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
+            <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
               {featured.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} preview />
               ))}
@@ -1010,36 +1012,38 @@ export function WebsiteHomeEditor({
                   setSectionEnabled('foamCrocs', enabled)
                 }
               />
-              <div className="min-w-0">
-                <WysiwygInput
-                  value={content.foamCrocs.title}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      foamCrocs: { ...p.foamCrocs, title: e.target.value },
-                    }))
-                  }
-                  className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
-                />
-                <WysiwygInput
-                  value={content.foamCrocs.subtitle}
-                  onChange={(e) =>
-                    setContent((p) => ({
-                      ...p,
-                      foamCrocs: {
-                        ...p.foamCrocs,
-                        subtitle: e.target.value,
-                      },
-                    }))
-                  }
-                  className="mt-2 text-[14px] text-mute md:text-[15px]"
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <WysiwygInput
+                    value={content.foamCrocs.title}
+                    onChange={(e) =>
+                      setContent((p) => ({
+                        ...p,
+                        foamCrocs: { ...p.foamCrocs, title: e.target.value },
+                      }))
+                    }
+                    className="font-display text-3xl font-extrabold tracking-tight text-ink md:text-4xl"
+                  />
+                  <WysiwygInput
+                    value={content.foamCrocs.subtitle}
+                    onChange={(e) =>
+                      setContent((p) => ({
+                        ...p,
+                        foamCrocs: {
+                          ...p.foamCrocs,
+                          subtitle: e.target.value,
+                        },
+                      }))
+                    }
+                    className="mt-2 text-[14px] text-mute md:text-[15px]"
+                  />
+                </div>
+                <EditProductsButton
+                  count={content.foamCrocs.productIds.length}
+                  onClick={() => setProductPicker('foamCrocs')}
                 />
               </div>
-              <EditProductsButton
-                count={content.foamCrocs.productIds.length}
-                onClick={() => setProductPicker('foamCrocs')}
-              />
-              <div className="mt-6 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
+              <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
                 {foamPicks.map((product, i) => (
                   <ProductCard key={product.id} product={product} index={i} preview />
                 ))}
