@@ -50,11 +50,7 @@ import {
   HOME_SECTION_PRODUCT_CAP,
   MAX_HERO_SLIDES,
 } from '@/lib/website/constants'
-import {
-  legacyFoamCrocsProducts,
-  legacyMostPopularProducts,
-  pickHomeSectionProducts,
-} from '@/lib/website/home-products'
+import { pickHomeSectionProducts } from '@/lib/website/home-products'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import type {
   HeroMediaMode,
@@ -385,21 +381,11 @@ export function WebsiteHomeEditor({
   const isDirty = JSON.stringify(content) !== savedSnapshot
 
   const featured = useMemo(
-    () =>
-      pickHomeSectionProducts(
-        products,
-        content.mostPopular.productIds,
-        legacyMostPopularProducts(products),
-      ),
+    () => pickHomeSectionProducts(products, content.mostPopular.productIds),
     [products, content.mostPopular.productIds],
   )
   const foamPicks = useMemo(
-    () =>
-      pickHomeSectionProducts(
-        products,
-        content.foamCrocs.productIds,
-        legacyFoamCrocsProducts(products),
-      ),
+    () => pickHomeSectionProducts(products, content.foamCrocs.productIds),
     [products, content.foamCrocs.productIds],
   )
 
@@ -1481,8 +1467,8 @@ export function WebsiteHomeEditor({
         titleId={productPickerTitleId}
         hint={
           productPicker === 'foamCrocs'
-            ? 'Pick up to 4 products (order = display order). Leave empty to use crocs/foam/slides automatically.'
-            : 'Pick up to 4 products (order = display order). Leave empty to use Featured products.'
+            ? 'Pick up to 4 products (order = display order). Leave empty to hide this grid.'
+            : 'Pick up to 4 products (order = display order). Leave empty to hide this grid.'
         }
         catalog={catalog}
         selectedIds={

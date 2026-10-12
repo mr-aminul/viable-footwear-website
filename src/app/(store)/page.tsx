@@ -3,11 +3,7 @@ import {
   listStoreCategories,
   listStoreProducts,
 } from '@/lib/catalog/queries'
-import {
-  legacyFoamCrocsProducts,
-  legacyMostPopularProducts,
-  pickHomeSectionProducts,
-} from '@/lib/website/home-products'
+import { pickHomeSectionProducts } from '@/lib/website/home-products'
 import { getHomePageContent } from '@/lib/website/queries'
 
 export default async function Home() {
@@ -20,12 +16,10 @@ export default async function Home() {
   const featured = pickHomeSectionProducts(
     products,
     content.mostPopular.productIds,
-    legacyMostPopularProducts(products),
   )
   const foamPicks = pickHomeSectionProducts(
     products,
     content.foamCrocs.productIds,
-    legacyFoamCrocsProducts(products),
   )
 
   return (
