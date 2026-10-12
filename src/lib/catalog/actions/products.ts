@@ -717,6 +717,38 @@ export async function setProductActive(
   return { ok: true }
 }
 
+/** Toggle the catalog Featured flag from the products list. */
+export async function setProductFeatured(
+  productId: string,
+  featured: boolean,
+): Promise<ActionResult> {
+  await requireRole(['admin', 'manager'])
+  const supabase = await createClient()
+
+  const { data: existing, error: loadError } = await supabase
+    .from('products')
+    .select('id, slug, featured')
+    .eq('id', productId)
+    .maybeSingle()
+
+  if (loadError || !existing) {
+    return { ok: false, error: loadError?.message ?? 'Product not found.' }
+  }
+
+  if (Boolean(existing.featured) === featured) return { ok: true }
+
+  const { error } = await supabase
+    .from('products')
+    .update({ featured })
+    .eq('id', productId)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidateProductSurfaces(existing.slug)
+  revalidateTag(`admin-product-${productId}`)
+  return { ok: true }
+}
+
 /**
  * Permanently delete a product, its media files, and related references.
  */

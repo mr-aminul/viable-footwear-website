@@ -16,6 +16,7 @@ import { adminProductPath } from '@/lib/admin/paths'
 import {
   archiveProducts,
   deleteProducts,
+  setProductFeatured,
   setProductsActive,
 } from '@/lib/catalog/actions/products'
 import type { AdminProductView } from '@/lib/catalog/queries'
@@ -49,6 +50,15 @@ export function AdminProductsBrowser({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [pending, startTransition] = useTransition()
+  const [featuredById, setFeaturedById] = useState<Record<string, boolean>>(
+    () =>
+      Object.fromEntries(
+        products.map((product) => [product.id, Boolean(product.featured)]),
+      ),
+  )
+  const [featuredPendingId, setFeaturedPendingId] = useState<string | null>(
+    null,
+  )
 
   useEffect(() => {
     try {
@@ -71,7 +81,28 @@ export function AdminProductsBrowser({
       }
       return changed ? next : prev
     })
+    setFeaturedById(
+      Object.fromEntries(
+        products.map((product) => [product.id, Boolean(product.featured)]),
+      ),
+    )
   }, [products])
+
+  const onFeaturedChange = (productId: string, featured: boolean) => {
+    const previous = featuredById[productId] ?? false
+    setFeaturedById((prev) => ({ ...prev, [productId]: featured }))
+    setFeaturedPendingId(productId)
+    setBulkError(null)
+    setBulkSummary(null)
+    startTransition(async () => {
+      const result = await setProductFeatured(productId, featured)
+      setFeaturedPendingId(null)
+      if (!result.ok) {
+        setFeaturedById((prev) => ({ ...prev, [productId]: previous }))
+        setBulkError(result.error)
+      }
+    })
+  }
 
   const setViewMode = (next: ViewMode) => {
     setView(next)
@@ -360,7 +391,7 @@ export function AdminProductsBrowser({
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-2xl border border-cloud bg-white">
-          <div className="hidden border-b border-cloud bg-mist/50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-mute md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_1.25rem] md:gap-4">
+          <div className="hidden border-b border-cloud bg-mist/50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-mute md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4">
             <span className="flex items-center justify-center">
               <input
                 type="checkbox"
@@ -377,6 +408,7 @@ export function AdminProductsBrowser({
             <span>Product</span>
             <span>Category</span>
             <span>Price</span>
+            <span className="text-center">Featured</span>
             <span>Status</span>
             <span className="sr-only">Open</span>
           </div>
@@ -404,7 +436,7 @@ export function AdminProductsBrowser({
                   key={product.id}
                   className={isSelected ? 'bg-navy/[0.03]' : undefined}
                 >
-                  <div className="flex items-center gap-2 px-3 py-3 md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_1.25rem] md:gap-4 md:px-4">
+                  <div className="flex items-center gap-2 px-3 py-3 md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4 md:px-4">
                     <div className="flex shrink-0 items-center justify-center">
                       <input
                         type="checkbox"
@@ -437,6 +469,7 @@ export function AdminProductsBrowser({
                           <p className="truncate text-[12px] text-mute md:hidden">
                             {product.categoryLabel || 'Uncategorized'} ·{' '}
                             {formatPrice(product.price)}
+                            {featuredById[product.id] ? ' · Featured' : ''}
                           </p>
                           <p className="hidden truncate text-[12px] text-mute md:block">
                             /{product.slug}
@@ -450,6 +483,25 @@ export function AdminProductsBrowser({
 
                       <span className="hidden text-[13px] font-medium text-ink md:block">
                         {formatPrice(product.price)}
+                      </span>
+
+                      <span
+                        className="hidden items-center justify-center md:flex"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-cloud accent-navy disabled:opacity-40"
+                          checked={Boolean(featuredById[product.id])}
+                          disabled={pending}
+                          onChange={(e) =>
+                            onFeaturedChange(product.id, e.target.checked)
+                          }
+                          aria-label={`Featured ${product.name}`}
+                        />
                       </span>
 
                       <span className="hidden shrink-0 md:inline-flex">
