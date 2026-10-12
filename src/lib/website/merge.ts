@@ -1,6 +1,7 @@
 import {
   DEFAULT_MARKETING_POPUP_DELAY_SECONDS,
   DEFAULT_SLIDE_INTERVAL_MS,
+  HOME_SECTION_PRODUCT_CAP,
   MARKETING_POPUP_DELAY_MAX,
   MARKETING_POPUP_DELAY_MIN,
   MAX_HERO_SLIDES,
@@ -48,6 +49,21 @@ function asNumber(value: unknown, fallback: number): number {
 
 function asBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
+}
+
+function asProductIds(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return fallback
+  const ids: string[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const id = item.trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+    if (ids.length >= HOME_SECTION_PRODUCT_CAP) break
+  }
+  return ids
 }
 
 function asHomeSections(value: unknown): HomeSectionsVisibility {
@@ -199,10 +215,12 @@ export function mergeHomeContent(raw: unknown): HomePageContent {
     mostPopular: {
       title: asString(mostPopular.title, d.mostPopular.title),
       subtitle: asString(mostPopular.subtitle, d.mostPopular.subtitle),
+      productIds: asProductIds(mostPopular.productIds, d.mostPopular.productIds),
     },
     foamCrocs: {
       title: asString(foamCrocs.title, d.foamCrocs.title),
       subtitle: asString(foamCrocs.subtitle, d.foamCrocs.subtitle),
+      productIds: asProductIds(foamCrocs.productIds, d.foamCrocs.productIds),
     },
     saleBanner: asSale(root.saleBanner, d.saleBanner),
     whatsapp: {

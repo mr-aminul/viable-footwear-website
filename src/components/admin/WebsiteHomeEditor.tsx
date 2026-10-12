@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  useMemo,
   useState,
   useTransition,
   type ReactNode,
@@ -21,9 +22,11 @@ import {
   Truck,
 } from 'lucide-react'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
+import { RelatedProductsPicker } from '@/components/admin/RelatedProductsPicker'
 import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
 import { FormError, FormSuccess } from '@/components/admin/ui'
 import { ProductCard } from '@/components/ProductCard'
+import type { RelatedPickerProduct } from '@/lib/catalog/queries'
 import { WhatsAppOrderVisual } from '@/components/WhatsAppOrderVisual'
 import { HeroMediaBackground } from '@/components/website/HeroMediaBackground'
 import {
@@ -39,7 +42,15 @@ import {
 } from '@/components/website/WysiwygFields'
 import type { Product } from '@/lib/catalog/types'
 import { saveHomePageContent } from '@/lib/website/actions'
-import { MAX_HERO_SLIDES } from '@/lib/website/constants'
+import {
+  HOME_SECTION_PRODUCT_CAP,
+  MAX_HERO_SLIDES,
+} from '@/lib/website/constants'
+import {
+  legacyFoamCrocsProducts,
+  legacyMostPopularProducts,
+  pickHomeSectionProducts,
+} from '@/lib/website/home-products'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import type {
   HeroMediaMode,
@@ -56,8 +67,8 @@ type EditorCategory = SiteLinkCategory & {
 type WebsiteHomeEditorProps = {
   initial: HomePageContent
   categories: EditorCategory[]
-  featured: Product[]
-  foamPicks: Product[]
+  products: Product[]
+  catalog: RelatedPickerProduct[]
 }
 
 const SLIDE_INTERVAL_SECONDS = [2, 3, 4, 5, 6, 8] as const
@@ -235,8 +246,8 @@ function PromoEditor({
 export function WebsiteHomeEditor({
   initial,
   categories,
-  featured,
-  foamPicks,
+  products,
+  catalog,
 }: WebsiteHomeEditorProps) {
   const [content, setContent] = useState(initial)
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
@@ -252,6 +263,25 @@ export function WebsiteHomeEditor({
 
   const hero = content.hero
   const isDirty = JSON.stringify(content) !== savedSnapshot
+
+  const featured = useMemo(
+    () =>
+      pickHomeSectionProducts(
+        products,
+        content.mostPopular.productIds,
+        legacyMostPopularProducts(products),
+      ),
+    [products, content.mostPopular.productIds],
+  )
+  const foamPicks = useMemo(
+    () =>
+      pickHomeSectionProducts(
+        products,
+        content.foamCrocs.productIds,
+        legacyFoamCrocsProducts(products),
+      ),
+    [products, content.foamCrocs.productIds],
+  )
 
   const setHero = (patch: Partial<typeof hero>) => {
     setContent((prev) => ({ ...prev, hero: { ...prev.hero, ...patch } }))
@@ -827,6 +857,20 @@ export function WebsiteHomeEditor({
                 className="mt-2 text-[14px] text-mute md:text-[15px]"
               />
             </div>
+            <div className="mt-6 rounded-2xl border border-dashed border-navy/25 bg-mist/40 p-4 md:p-5">
+              <RelatedProductsPicker
+                catalog={catalog}
+                selectedIds={content.mostPopular.productIds}
+                maxSelected={HOME_SECTION_PRODUCT_CAP}
+                hint="Pick up to 4 products for Most popular (order = display order). Leave empty to use Featured products."
+                onChange={(productIds) =>
+                  setContent((p) => ({
+                    ...p,
+                    mostPopular: { ...p.mostPopular, productIds },
+                  }))
+                }
+              />
+            </div>
             <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
               {featured.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} preview />
@@ -874,6 +918,20 @@ export function WebsiteHomeEditor({
                     }))
                   }
                   className="mt-2 text-[14px] text-mute md:text-[15px]"
+                />
+              </div>
+              <div className="mt-6 rounded-2xl border border-dashed border-navy/25 bg-white/70 p-4 md:p-5">
+                <RelatedProductsPicker
+                  catalog={catalog}
+                  selectedIds={content.foamCrocs.productIds}
+                  maxSelected={HOME_SECTION_PRODUCT_CAP}
+                  hint="Pick up to 4 products for Foam & crocs (order = display order). Leave empty to use crocs/foam/slides automatically."
+                  onChange={(productIds) =>
+                    setContent((p) => ({
+                      ...p,
+                      foamCrocs: { ...p.foamCrocs, productIds },
+                    }))
+                  }
                 />
               </div>
               <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">

@@ -1,5 +1,6 @@
 import { WebsiteHomeEditor } from '@/components/admin/WebsiteHomeEditor'
 import {
+  listPromoPickerProducts,
   listStoreCategories,
   listStoreProducts,
 } from '@/lib/catalog/queries'
@@ -11,21 +12,12 @@ export const metadata = {
 }
 
 export default async function WebsiteHomeAdminPage() {
-  const [content, categories, products] = await Promise.all([
+  const [content, categories, products, catalog] = await Promise.all([
     getHomePageContentFresh(),
     listStoreCategories(),
     listStoreProducts(),
+    listPromoPickerProducts(),
   ])
-
-  const featured = products.filter((p) => p.featured).slice(0, 4)
-  const foamPicks = products
-    .filter(
-      (p) =>
-        p.category === 'crocs' ||
-        p.category === 'foam-runners' ||
-        p.category === 'slides',
-    )
-    .slice(0, 4)
 
   return (
     <WebsiteHomeEditor
@@ -36,8 +28,8 @@ export default async function WebsiteHomeAdminPage() {
         image: c.image,
         count: c.count,
       }))}
-      featured={featured.length > 0 ? featured : products.slice(0, 4)}
-      foamPicks={foamPicks}
+      products={products}
+      catalog={catalog}
     />
   )
 }

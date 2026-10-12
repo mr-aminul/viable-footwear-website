@@ -71,8 +71,18 @@ export type HomePageContent = {
   hero: HomeHeroContent
   categories: { title: string; subtitle: string }
   promoDual: { left: PromoCardContent; right: PromoCardContent }
-  mostPopular: { title: string; subtitle: string }
-  foamCrocs: { title: string; subtitle: string }
+  mostPopular: {
+    title: string
+    subtitle: string
+    /** Explicit picks for the grid; empty = legacy featured/fallback. */
+    productIds: string[]
+  }
+  foamCrocs: {
+    title: string
+    subtitle: string
+    /** Explicit picks for the grid; empty = legacy category fallback. */
+    productIds: string[]
+  }
   saleBanner: SaleBannerContent
   whatsapp: {
     title: string

@@ -73,10 +73,12 @@ export const DEFAULT_HOME_CONTENT: HomePageContent = {
   mostPopular: {
     title: 'Most popular',
     subtitle: "What everyone's wearing right now.",
+    productIds: [],
   },
   foamCrocs: {
     title: 'Foam & crocs',
     subtitle: 'Sculptural comfort for all-day Dhaka walks.',
+    productIds: [],
   },
   saleBanner: {
     eyebrow: 'Limited drop',

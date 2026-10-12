@@ -14,20 +14,25 @@ type CategoryChip = {
 }
 
 /**
- * You May Also Like picker — shop-style chips + grid.
- * Selection only; parent Save product persists.
+ * Shop-style product multi-select (related products, home grids, etc.).
+ * Selection only; parent Save persists.
  */
 export function RelatedProductsPicker({
   catalog,
   selectedIds,
   onChange,
+  maxSelected = RELATED_PRODUCTS_DISPLAY_CAP,
+  hint = 'Hover a card and check it to feature here. Selection order matches the product page',
 }: {
   catalog: RelatedPickerProduct[]
   selectedIds: string[]
   onChange: (ids: string[]) => void
+  maxSelected?: number
+  hint?: string
 }) {
   const [category, setCategory] = useState('all')
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const cap = Math.max(1, maxSelected)
 
   const chips = useMemo(() => {
     const byKey = new Map<string, CategoryChip>()
@@ -58,18 +63,16 @@ export function RelatedProductsPicker({
       onChange(selectedIds.filter((x) => x !== id))
       return
     }
-    if (selectedIds.length >= RELATED_PRODUCTS_DISPLAY_CAP) return
+    if (selectedIds.length >= cap) return
     onChange([...selectedIds, id])
   }
 
-  const atCap = selectedIds.length >= RELATED_PRODUCTS_DISPLAY_CAP
+  const atCap = selectedIds.length >= cap
 
   return (
     <div className="space-y-6">
       <p className="text-[13px] text-mute">
-        Hover a card and check it to feature here. Selection order matches the
-        product page · {selectedIds.length}/{RELATED_PRODUCTS_DISPLAY_CAP}{' '}
-        selected
+        {hint} · {selectedIds.length}/{cap} selected
       </p>
 
       {selectedIds.length > 0 ? (
