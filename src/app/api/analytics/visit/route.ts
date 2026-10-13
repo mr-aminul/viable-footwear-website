@@ -7,7 +7,8 @@ import { enforceRateLimit } from '@/lib/rate-limit'
  * Lightweight storefront visit beacon. Counts unique visitors per Dhaka day.
  */
 export async function POST(request: NextRequest) {
-  const limited = enforceRateLimit(request, 'site-visit', 40, 60_000)
+  // Client already sends at most once/day; keep a low ceiling for abuse.
+  const limited = enforceRateLimit(request, 'site-visit', 8, 60_000)
   if (limited) return limited
 
   try {

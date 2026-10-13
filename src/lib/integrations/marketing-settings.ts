@@ -1,5 +1,9 @@
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { createServiceClient } from '@/lib/supabase/admin'
+
+/** Purged when GTM / Meta Pixel settings are saved in admin. */
+export const MARKETING_PUBLIC_TAG = 'marketing-public'
 
 export const GTM_SETTINGS_KEY = 'gtm'
 export const META_PIXEL_SETTINGS_KEY = 'meta_pixel'
@@ -94,7 +98,7 @@ export async function getMetaPixelSettingsView(): Promise<MetaPixelSettingsView>
   }
 }
 
-export const getPublicMarketingConfig = cache(
+const getPublicMarketingConfigCached = unstable_cache(
   async (): Promise<PublicMarketingConfig> => {
     const [gtm, meta] = await Promise.all([
       getGtmSettingsView(),
@@ -116,6 +120,13 @@ export const getPublicMarketingConfig = cache(
       },
     }
   },
+  ['marketing-public-config'],
+  { tags: [MARKETING_PUBLIC_TAG], revalidate: false },
+)
+
+/** Storefront: cached until integrations admin saves purge the tag. */
+export const getPublicMarketingConfig = cache(
+  async (): Promise<PublicMarketingConfig> => getPublicMarketingConfigCached(),
 )
 
 export function buildGtmValueToStore(input: {

@@ -8,8 +8,11 @@ export function storeProductTag(slug: string): string {
   return `store-product-${slug}`
 }
 
-/** Safety-net TTL (seconds). Mutations purge tags immediately; this covers missed tags. */
-export const STORE_CACHE_REVALIDATE_SECONDS = 60
+/**
+ * No time-based TTL. Storefront Data Cache stays until admin mutations call
+ * `revalidateStorefront` / `revalidateTag`.
+ */
+export const STORE_CACHE_REVALIDATE = false as const
 
 /**
  * Bust storefront Data Cache + route caches after catalog writes.

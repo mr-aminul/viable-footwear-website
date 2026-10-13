@@ -3,6 +3,17 @@
 import { useEffect } from 'react'
 
 const STORAGE_KEY = 'viable_visitor_id'
+const SENT_DATE_KEY = 'viable_visitor_sent_dhaka'
+
+/** Asia/Dhaka calendar date as YYYY-MM-DD (matches server visitor uniqueness). */
+function dhakaDateString(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Dhaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
 
 function getOrCreateVisitorKey(): string {
   try {
@@ -27,14 +38,34 @@ function getOrCreateVisitorKey(): string {
   return key
 }
 
+function alreadySentToday(): boolean {
+  try {
+    return window.localStorage.getItem(SENT_DATE_KEY) === dhakaDateString()
+  } catch {
+    return false
+  }
+}
+
+function markSentToday(): void {
+  try {
+    window.localStorage.setItem(SENT_DATE_KEY, dhakaDateString())
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Fires once per storefront load so admin can show unique visitor counts.
+ * Fires at most once per visitor per Dhaka day for admin unique-visitor counts.
  * Failures are silent — never block shopping.
  */
 export function VisitorBeacon() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (window.navigator?.webdriver) return
+    if (alreadySentToday()) return
+
+    // Mark first so React Strict Mode remounts do not double-hit the API.
+    markSentToday()
 
     const visitorKey = getOrCreateVisitorKey()
     const body = JSON.stringify({ visitor_key: visitorKey })

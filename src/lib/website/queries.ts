@@ -34,22 +34,25 @@ async function fetchPageRaw(pageKey: SitePageKey): Promise<unknown> {
   }
 }
 
+/** Indefinite until admin website saves purge `SITE_PAGES_TAG` / page tags. */
+const STORE_PAGE_CACHE = { revalidate: false as const }
+
 const getHomeCached = unstable_cache(
   async () => mergeHomeContent(await fetchPageRaw('home')),
   ['site-page-home'],
-  { tags: [SITE_PAGES_TAG, pageTag('home')], revalidate: 60 },
+  { tags: [SITE_PAGES_TAG, pageTag('home')], ...STORE_PAGE_CACHE },
 )
 
 const getAboutCached = unstable_cache(
   async () => mergeAboutContent(await fetchPageRaw('about')),
   ['site-page-about'],
-  { tags: [SITE_PAGES_TAG, pageTag('about')], revalidate: 60 },
+  { tags: [SITE_PAGES_TAG, pageTag('about')], ...STORE_PAGE_CACHE },
 )
 
 const getSiteCached = unstable_cache(
   async () => mergeSiteContent(await fetchPageRaw('site')),
   ['site-page-site-v2'],
-  { tags: [SITE_PAGES_TAG, pageTag('site')], revalidate: 60 },
+  { tags: [SITE_PAGES_TAG, pageTag('site')], ...STORE_PAGE_CACHE },
 )
 
 /** Storefront: cached home page content with defaults. */

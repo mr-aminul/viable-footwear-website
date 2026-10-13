@@ -2,7 +2,7 @@ import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
 import type { Database } from '@/lib/supabase/database.types'
 import {
-  STORE_CACHE_REVALIDATE_SECONDS,
+  STORE_CACHE_REVALIDATE,
   STORE_CATALOG_TAG,
   storeProductTag,
 } from '@/lib/catalog/cache-tags'
@@ -124,7 +124,7 @@ function supabaseConfigured(): boolean {
 
 /**
  * Active categories with product counts for storefront filters.
- * Cached on Vercel Data Cache; purged on catalog writes via `store-catalog`.
+ * Cached indefinitely; purged on catalog writes via `store-catalog`.
  */
 export async function listStoreCategories(): Promise<CategoryView[]> {
   if (!supabaseConfigured()) return []
@@ -159,7 +159,7 @@ export async function listStoreCategories(): Promise<CategoryView[]> {
     },
     ['store-categories'],
     {
-      revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+      revalidate: STORE_CACHE_REVALIDATE,
       tags: [STORE_CATALOG_TAG],
     },
   )()
@@ -288,7 +288,7 @@ export async function listStoreProducts(options?: {
       limit != null ? String(limit) : '',
     ],
     {
-      revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+      revalidate: STORE_CACHE_REVALIDATE,
       tags: [STORE_CATALOG_TAG],
     },
   )()
@@ -318,7 +318,7 @@ export const getStoreProductBySlug = cache(
       },
       ['store-product', slug],
       {
-        revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+        revalidate: STORE_CACHE_REVALIDATE,
         tags: [STORE_CATALOG_TAG, storeProductTag(slug)],
       },
     )()
@@ -378,7 +378,7 @@ export async function getRelatedProducts(
     },
     ['store-related', product.id, idsKey, product.category],
     {
-      revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+      revalidate: STORE_CACHE_REVALIDATE,
       tags: [STORE_CATALOG_TAG, storeProductTag(product.slug)],
     },
   )()
@@ -403,7 +403,7 @@ export const getRelatedProductIds = cache(
       },
       ['store-related-ids', productId],
       {
-        revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+        revalidate: STORE_CACHE_REVALIDATE,
         tags: [STORE_CATALOG_TAG],
       },
     )()
@@ -432,7 +432,7 @@ export async function listActiveProductSlugs(): Promise<
     },
     ['store-product-slugs'],
     {
-      revalidate: STORE_CACHE_REVALIDATE_SECONDS,
+      revalidate: STORE_CACHE_REVALIDATE,
       tags: [STORE_CATALOG_TAG],
     },
   )()

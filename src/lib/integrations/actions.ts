@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
 import {
@@ -21,6 +21,7 @@ import {
 } from '@/lib/integrations/nagad-settings'
 import {
   GTM_SETTINGS_KEY,
+  MARKETING_PUBLIC_TAG,
   META_PIXEL_SETTINGS_KEY,
   buildGtmValueToStore,
   buildMetaPixelValueToStore,
@@ -280,6 +281,7 @@ export async function saveGtmSettings(formData: FormData): Promise<ActionResult>
     return { ok: false, error: 'Could not save GTM settings.' }
   }
   revalidatePath('/admin/integrations')
+  revalidateTag(MARKETING_PUBLIC_TAG)
   revalidatePath('/', 'layout')
   return { ok: true }
 }
@@ -310,6 +312,7 @@ export async function saveMetaPixelSettings(
     return { ok: false, error: 'Could not save Meta Pixel settings.' }
   }
   revalidatePath('/admin/integrations')
+  revalidateTag(MARKETING_PUBLIC_TAG)
   revalidatePath('/', 'layout')
   return { ok: true }
 }

@@ -44,7 +44,8 @@ const getAnnouncementCached = unstable_cache(
     return `${campaign.name.trim()} · WhatsApp ${site.brand.phone}`
   },
   ['campaigns-announcement'],
-  { tags: [CAMPAIGNS_ANNOUNCEMENT_TAG], revalidate: 60 },
+  // Indefinite until campaign/website admin saves purge the tag.
+  { tags: [CAMPAIGNS_ANNOUNCEMENT_TAG], revalidate: false },
 )
 
 /** Storefront top ribbon copy from the highest-priority live campaign. */
