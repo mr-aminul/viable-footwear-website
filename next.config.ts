@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 's3.storage.inventivelab.bd',
+        hostname: 'storage.onesigntv.com',
         pathname: '/**',
       },
     ],

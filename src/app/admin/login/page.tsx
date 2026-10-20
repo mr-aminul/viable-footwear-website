@@ -67,7 +67,7 @@ export default async function AdminLoginPage({
 
 function formatError(code?: string): string | null {
   if (!code) return null
-  if (code === 'missing_supabase_env') {
+  if (code === 'missing_supabase_env' || code === 'sign_in_unavailable') {
     return 'Sign-in is temporarily unavailable. Please try again later.'
   }
   if (code === 'unauthorized') {

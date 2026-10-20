@@ -58,9 +58,17 @@ export function createAuthApi() {
     ...service,
     async signInWithPassword(creds: { email: string; password: string }) {
       const email = creds.email.trim().toLowerCase()
-      const res = await apiFetch(
-        `/profiles?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash,active,role&limit=1`,
-      )
+      let res: Response
+      try {
+        res = await apiFetch(
+          `/profiles?email=eq.${encodeURIComponent(email)}&select=id,email,password_hash,active,role&limit=1`,
+        )
+      } catch {
+        return {
+          data: { user: null },
+          error: { message: 'Could not reach the database.' } satisfies DbError,
+        }
+      }
       if (!res.ok) {
         return {
           data: { user: null },
