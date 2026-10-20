@@ -63,7 +63,9 @@ export class PostgrestQuery<T = unknown> implements PromiseLike<DbResult<T>> {
   private limitN: number | null = null
   private rangeFrom: number | null = null
   private rangeTo: number | null = null
+  private isUpsert = false
   private upsertOnConflict: string | null = null
+  private upsertIgnoreDuplicates = false
   private matchObj: Record<string, unknown> | null = null
 
   constructor(table: string) {
@@ -83,6 +85,9 @@ export class PostgrestQuery<T = unknown> implements PromiseLike<DbResult<T>> {
   insert(values: unknown) {
     this.method = 'POST'
     this.body = values
+    this.isUpsert = false
+    this.upsertOnConflict = null
+    this.upsertIgnoreDuplicates = false
     return this
   }
 
@@ -92,7 +97,9 @@ export class PostgrestQuery<T = unknown> implements PromiseLike<DbResult<T>> {
   ) {
     this.method = 'POST'
     this.body = values
+    this.isUpsert = true
     this.upsertOnConflict = options?.onConflict ?? null
+    this.upsertIgnoreDuplicates = options?.ignoreDuplicates === true
     return this
   }
 
@@ -307,18 +314,16 @@ export class PostgrestQuery<T = unknown> implements PromiseLike<DbResult<T>> {
     if (this.method !== 'GET') {
       headers['Content-Type'] = 'application/json'
       headers.Prefer = [
-        this.upsertOnConflict
-          ? `resolution=merge-duplicates`
+        this.isUpsert
+          ? this.upsertIgnoreDuplicates
+            ? 'resolution=ignore-duplicates'
+            : 'resolution=merge-duplicates'
           : null,
         'return=representation',
         this.preferCount ? 'count=exact' : null,
       ]
         .filter(Boolean)
         .join(',')
-      if (this.upsertOnConflict) {
-        headers['Prefer'] += ``
-        // PostgREST upsert via on_conflict query param
-      }
     } else if (this.preferCount) {
       headers.Prefer = 'count=exact'
     }
@@ -328,8 +333,9 @@ export class PostgrestQuery<T = unknown> implements PromiseLike<DbResult<T>> {
     }
 
     let finalUrl = url
-    if (this.upsertOnConflict) {
-      finalUrl += (finalUrl.includes('?') ? '&' : '?') +
+    if (this.isUpsert && this.upsertOnConflict) {
+      finalUrl +=
+        (finalUrl.includes('?') ? '&' : '?') +
         `on_conflict=${encodeURIComponent(this.upsertOnConflict)}`
     }
 

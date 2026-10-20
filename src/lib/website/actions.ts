@@ -69,11 +69,14 @@ export async function saveHomePageContent(
   const supabase = await createClient()
   const merged = mergeHomeContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert({
-    page_key: 'home',
-    content: merged as unknown as Json,
-    updated_by: session.profile.id,
-  })
+  const { error } = await supabase.from('site_pages').upsert(
+    {
+      page_key: 'home',
+      content: merged as unknown as Json,
+      updated_by: session.profile.id,
+    },
+    { onConflict: 'page_key' },
+  )
 
   if (error) {
     return { ok: false, error: error.message || 'Could not save home page.' }
@@ -90,11 +93,14 @@ export async function saveAboutPageContent(
   const supabase = await createClient()
   const merged = mergeAboutContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert({
-    page_key: 'about',
-    content: merged as unknown as Json,
-    updated_by: session.profile.id,
-  })
+  const { error } = await supabase.from('site_pages').upsert(
+    {
+      page_key: 'about',
+      content: merged as unknown as Json,
+      updated_by: session.profile.id,
+    },
+    { onConflict: 'page_key' },
+  )
 
   if (error) {
     return { ok: false, error: error.message || 'Could not save about page.' }
@@ -111,11 +117,14 @@ export async function saveSiteContent(
   const supabase = await createClient()
   const merged = mergeSiteContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert({
-    page_key: 'site',
-    content: merged as unknown as Json,
-    updated_by: session.profile.id,
-  })
+  const { error } = await supabase.from('site_pages').upsert(
+    {
+      page_key: 'site',
+      content: merged as unknown as Json,
+      updated_by: session.profile.id,
+    },
+    { onConflict: 'page_key' },
+  )
 
   if (error) {
     return { ok: false, error: error.message || 'Could not save site settings.' }
