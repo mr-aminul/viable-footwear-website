@@ -5,7 +5,12 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'storage.onesigntv.com',
+        hostname: 's3.viable.fashion',
+        pathname: '/**',
+      },
+      {
+        protocol: 'http',
+        hostname: '194.164.91.252',
         pathname: '/**',
       },
     ],
