@@ -66,6 +66,7 @@ export function ProductImageZoom({
         <SafeImage
           src={src}
           alt={alt}
+          maxWidth={1200}
           draggable={false}
           className={[
             'pointer-events-none absolute inset-0 h-full w-full object-contain select-none',
@@ -102,6 +103,7 @@ export function ProductImageZoom({
               <SafeImage
                 src={src}
                 alt={alt}
+                maxWidth={1600}
                 className="max-h-full max-w-full object-contain"
                 draggable={false}
                 onClick={(event) => event.stopPropagation()}

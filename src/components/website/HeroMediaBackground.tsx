@@ -27,6 +27,9 @@ type HeroMediaBackgroundProps = {
  * Hero video that tries to autoplay with sound. Browsers usually block that
  * until a user gesture — we fall back to muted playback, then unmute on the
  * first tap/click/keypress (or via the sound toggle).
+ *
+ * The video `src` is attached only after the hero is on-screen so off-screen
+ * / below-fold previews and quick bounces do not pull the full file.
  */
 const VOLUME_FADE_MS = 2000
 
@@ -39,9 +42,33 @@ function HeroVideo({
   className: string
   showSoundToggle: boolean
 }) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const fadeFrameRef = useRef<number | null>(null)
   const [isMuted, setIsMuted] = useState(true)
+  const [shouldLoad, setShouldLoad] = useState(false)
+
+  useEffect(() => {
+    const node = containerRef.current
+    if (!node) return
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setShouldLoad(true)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoad(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '120px', threshold: 0.01 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   const cancelVolumeFade = useCallback(() => {
     if (fadeFrameRef.current !== null) {
@@ -100,6 +127,7 @@ function HeroVideo({
   }, [cancelVolumeFade, fadeVolumeIn])
 
   useEffect(() => {
+    if (!shouldLoad) return
     const el = videoRef.current
     if (!el) return
 
@@ -144,7 +172,7 @@ function HeroVideo({
       cancelVolumeFade()
       removeListeners?.()
     }
-  }, [cancelVolumeFade, src, showSoundToggle, tryPlayWithSound])
+  }, [cancelVolumeFade, src, showSoundToggle, shouldLoad, tryPlayWithSound])
 
   const toggleSound = (event: MouseEvent) => {
     event.preventDefault()
@@ -165,17 +193,17 @@ function HeroVideo({
 
   return (
     <>
-      <div className={className}>
+      <div ref={containerRef} className={className}>
         <video
           ref={videoRef}
           key={src}
           className="h-full w-full object-cover object-center"
-          src={src}
-          autoPlay
+          src={shouldLoad ? src : undefined}
+          autoPlay={shouldLoad}
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden
         />
       </div>
@@ -236,19 +264,31 @@ export function HeroMediaBackground({
   }
 
   if (mode === 'slideshow' && validSlides.length > 0) {
+    const current = validSlides[slideIndex] ?? validSlides[0]
+    const next = validSlides[(slideIndex + 1) % validSlides.length]
+    // Only mount current + next so idle slides do not download in the background.
+    const visible = next && next.id !== current.id ? [current, next] : [current]
+
     return (
       <div className={className}>
-        {validSlides.map((slide, i) => (
-          <SafeImage
-            key={slide.id}
-            src={resolveSiteMediaUrl(slide.src)}
-            alt={slide.alt || ''}
-            className={[
-              'absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700',
-              i === slideIndex ? 'opacity-100' : 'opacity-0',
-            ].join(' ')}
-          />
-        ))}
+        {visible.map((slide) => {
+          const isCurrent = slide.id === current.id
+          return (
+            <SafeImage
+              key={slide.id}
+              src={resolveSiteMediaUrl(slide.src)}
+              alt={slide.alt || ''}
+              maxWidth={1600}
+              // Next slide can warm the cache without blocking paint.
+              loading={isCurrent ? 'eager' : 'lazy'}
+              fetchPriority={isCurrent ? 'high' : 'low'}
+              className={[
+                'absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-700',
+                isCurrent ? 'opacity-100' : 'opacity-0',
+              ].join(' ')}
+            />
+          )
+        })}
       </div>
     )
   }
@@ -258,6 +298,8 @@ export function HeroMediaBackground({
       <SafeImage
         src={resolveSiteMediaUrl(image)}
         alt=""
+        maxWidth={1600}
+        fetchPriority="high"
         className="h-full w-full object-cover object-center"
       />
     </div>

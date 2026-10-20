@@ -3,6 +3,11 @@ import {
   isAllowedMediaBucket,
   publicStorageUrl,
 } from '@/lib/media/storage-proxy'
+import {
+  canResizeContentType,
+  parseMediaWidth,
+  resizeMediaImage,
+} from '@/lib/media/resize'
 
 /** Long-lived CDN + browser cache so repeat visitors rarely hit origin storage. */
 const CACHE_CONTROL =
@@ -12,9 +17,18 @@ type RouteContext = {
   params: Promise<{ bucket: string; path: string[] }>
 }
 
+function cacheHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra)
+  headers.set('Cache-Control', CACHE_CONTROL)
+  headers.set('CDN-Cache-Control', CACHE_CONTROL)
+  headers.set('Vercel-CDN-Cache-Control', CACHE_CONTROL)
+  return headers
+}
+
 /**
  * Same-origin media proxy. Browsers request `/api/media/…`; Vercel CDN caches
- * full responses for a year so Supabase Cached Egress is not burned per view.
+ * full responses for a year. Optional `?w=` serves a downscaled WebP variant
+ * (also CDN-cached) so thumbs/cards do not download full product photos.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { bucket, path: pathParts } = await context.params
@@ -36,7 +50,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return new NextResponse('Storage is not configured', { status: 500 })
   }
 
-  const range = request.headers.get('range')
+  const width = parseMediaWidth(request.nextUrl.searchParams.get('w'))
+  const range = width ? null : request.headers.get('range')
   const upstreamHeaders: HeadersInit = {}
   if (range) upstreamHeaders.Range = range
 
@@ -54,13 +69,33 @@ export async function GET(request: NextRequest, context: RouteContext) {
     })
   }
 
-  const headers = new Headers()
   const contentType =
     upstreamRes.headers.get('content-type') || 'application/octet-stream'
-  headers.set('Content-Type', contentType)
-  headers.set('Cache-Control', CACHE_CONTROL)
-  headers.set('CDN-Cache-Control', CACHE_CONTROL)
-  headers.set('Vercel-CDN-Cache-Control', CACHE_CONTROL)
+
+  if (width && canResizeContentType(contentType)) {
+    const bytes = Buffer.from(await upstreamRes.arrayBuffer())
+    try {
+      const resized = await resizeMediaImage(bytes, width)
+      return new NextResponse(new Uint8Array(resized.buffer), {
+        status: 200,
+        headers: cacheHeaders({
+          'Content-Type': resized.contentType,
+          'Content-Length': String(resized.buffer.byteLength),
+        }),
+      })
+    } catch {
+      // Serve the original bytes we already fetched.
+      return new NextResponse(new Uint8Array(bytes), {
+        status: 200,
+        headers: cacheHeaders({
+          'Content-Type': contentType,
+          'Content-Length': String(bytes.byteLength),
+        }),
+      })
+    }
+  }
+
+  const headers = cacheHeaders({ 'Content-Type': contentType })
 
   const acceptRanges = upstreamRes.headers.get('accept-ranges')
   if (acceptRanges) headers.set('Accept-Ranges', acceptRanges)

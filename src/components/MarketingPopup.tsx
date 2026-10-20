@@ -8,6 +8,7 @@ import { X } from 'lucide-react'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { EASE_OUT } from '@/lib/motion'
 import { DEFAULT_MARKETING_POPUP } from '@/lib/website/defaults'
+import { SafeImage } from '@/components/SafeImage'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import {
   isMarketingPopupLive,
@@ -78,10 +79,10 @@ export function MarketingPopup() {
     href.startsWith('http://') || href.startsWith('https://')
 
   const creative = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <SafeImage
       src={imageUrl}
       alt={popup.alt || 'Special offer'}
+      maxWidth={1200}
       className="max-h-[min(78vh,720px)] w-full object-contain"
       draggable={false}
     />

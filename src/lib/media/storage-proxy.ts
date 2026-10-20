@@ -59,6 +59,25 @@ export function mediaProxyPath(bucket: string, objectPath: string): string {
 }
 
 /**
+ * Append a CDN-resized width to a proxied media URL (`?w=`).
+ * Non-proxy URLs (local `/images/…`, absolute third-party) are unchanged.
+ */
+export function withMediaWidth(
+  url: string,
+  width: number | null | undefined,
+): string {
+  if (!width || width <= 0) return url
+  if (!url.startsWith('/api/media/')) return url
+  try {
+    const parsed = new URL(url, 'http://local.invalid')
+    parsed.searchParams.set('w', String(Math.round(width)))
+    return `${parsed.pathname}${parsed.search}`
+  } catch {
+    return url
+  }
+}
+
+/**
  * Turn a storage path, local public path, legacy `/api/media/…` path, or
  * absolute storage URL into a same-origin proxied URL.
  */

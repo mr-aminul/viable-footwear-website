@@ -5,6 +5,8 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Mail, MapPin, Phone } from 'lucide-react'
 import { SIZE_CHART_ROWS } from '@/lib/catalog/size-chart'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
+import { LazyMapsEmbed } from '@/components/LazyMapsEmbed'
+import { SafeImage } from '@/components/SafeImage'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 import type { AboutPageContent } from '@/lib/website/types'
 
@@ -13,9 +15,10 @@ export function AboutPage({ content }: { content: AboutPageContent }) {
   return (
     <>
       <section className="relative overflow-hidden bg-navy-deep">
-        <img
+        <SafeImage
           src={resolveSiteMediaUrl(content.hero.image, '/images/store.jpg')}
           alt=""
+          maxWidth={1600}
           className="absolute inset-0 h-full w-full object-cover opacity-40"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-navy-deep via-navy-deep/70 to-navy-deep/50" />
@@ -161,15 +164,8 @@ export function AboutPage({ content }: { content: AboutPageContent }) {
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-navy" strokeWidth={1.75} />
             <span>{brand.city}</span>
           </a>
-          <div className="mt-4 overflow-hidden rounded-2xl border border-cloud bg-mist/40">
-            <iframe
-              title="Viable store on Google Maps"
-              src={brand.mapsEmbedUrl}
-              className="h-[260px] w-full border-0 md:h-[360px]"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-            />
+          <div className="mt-4">
+            <LazyMapsEmbed src={brand.mapsEmbedUrl} />
           </div>
         </div>
 

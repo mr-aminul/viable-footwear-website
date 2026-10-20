@@ -1383,6 +1383,8 @@ export function CheckoutPage() {
                   <SafeImage
                     src={imageForCartLine(item.product, item.variantId)}
                     alt={item.product.name}
+                    maxWidth={128}
+                    loading="lazy"
                     className="h-full w-full object-contain"
                   />
                   {item.quantity > 1 ? (

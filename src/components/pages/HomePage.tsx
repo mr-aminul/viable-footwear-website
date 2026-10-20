@@ -166,6 +166,7 @@ export function HomePage({
                     <SafeImage
                       src={cat.image}
                       alt=""
+                      maxWidth={384}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       loading="lazy"
                     />
@@ -229,6 +230,8 @@ export function HomePage({
                   <SafeImage
                     src={resolveSiteMediaUrl(promo.image)}
                     alt=""
+                    maxWidth={828}
+                    loading="lazy"
                     className="h-full min-h-[180px] w-full object-cover object-center"
                   />
                 </motion.article>
@@ -303,9 +306,11 @@ export function HomePage({
             transition={{ duration: 0.5 }}
             className="relative overflow-hidden rounded-[1.75rem] bg-navy-deep md:rounded-[2rem]"
           >
-            <img
+            <SafeImage
               src={resolveSiteMediaUrl(content.saleBanner.image)}
               alt=""
+              maxWidth={1600}
+              loading="lazy"
               className="absolute inset-0 h-full w-full object-cover object-[72%_center]"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-navy-deep from-[0%] via-navy-deep/35 via-[42%] to-transparent to-[78%]" />
@@ -393,9 +398,11 @@ export function HomePage({
             transition={{ duration: 0.5 }}
             className="overflow-hidden rounded-[1.5rem] shadow-card"
           >
-            <img
+            <SafeImage
               src={resolveSiteMediaUrl(content.brandStrip.image)}
               alt="Viable footwear lifestyle"
+              maxWidth={1200}
+              loading="lazy"
               className="aspect-[4/3] w-full object-cover"
             />
           </motion.div>

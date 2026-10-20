@@ -145,6 +145,7 @@ function ProductCardView({
             ? `${product.name} — ${selectedColorway.name}`
             : product.name
         }
+        maxWidth={640}
         className={[
           'absolute inset-0 h-full w-full object-cover will-change-transform',
           reduceMotion
@@ -330,6 +331,8 @@ function ColorSwatchRow({
                 <SafeImage
                   src={colorway.imageUrl}
                   alt=""
+                  maxWidth={64}
+                  loading="lazy"
                   className="absolute inset-0 h-full w-full object-cover"
                   draggable={false}
                 />

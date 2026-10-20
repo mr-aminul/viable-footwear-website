@@ -317,6 +317,8 @@ export function ProductPage({
                     <SafeImage
                       src={src}
                       alt=""
+                      maxWidth={128}
+                      loading="lazy"
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   </button>
@@ -352,6 +354,8 @@ export function ProductPage({
           {product.videoUrl ? (
             <video
               controls
+              preload="none"
+              playsInline
               className="mt-3 w-full max-w-[calc(100svh-13rem)] rounded-[1.25rem] bg-ink/5"
               src={product.videoUrl}
             />
@@ -422,6 +426,8 @@ export function ProductPage({
                       <SafeImage
                         src={c.imageUrl}
                         alt=""
+                        maxWidth={96}
+                        loading="lazy"
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : c.colorHex ? (
