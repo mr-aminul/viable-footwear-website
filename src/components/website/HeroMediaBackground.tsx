@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
+import { SafeImage } from '@/components/SafeImage'
 import type { HeroMediaMode, HeroSlide } from '@/lib/website/types'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
 
@@ -238,7 +239,7 @@ export function HeroMediaBackground({
     return (
       <div className={className}>
         {validSlides.map((slide, i) => (
-          <img
+          <SafeImage
             key={slide.id}
             src={resolveSiteMediaUrl(slide.src)}
             alt={slide.alt || ''}
@@ -254,7 +255,7 @@ export function HeroMediaBackground({
 
   return (
     <div className={className}>
-      <img
+      <SafeImage
         src={resolveSiteMediaUrl(image)}
         alt=""
         className="h-full w-full object-cover object-center"

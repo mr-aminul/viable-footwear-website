@@ -11,6 +11,11 @@ import {
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult } from '@/lib/catalog/types'
+import {
+  deleteObject,
+  isObjectStoreConfigured,
+  uploadObject,
+} from '@/lib/media/object-store'
 import { createClient } from '@/lib/supabase/server'
 
 function readString(formData: FormData, key: string): string {
@@ -38,7 +43,11 @@ async function removeCategoryImageObject(
   path: string | null | undefined,
 ) {
   if (!isStorageObjectPath(path) || !path?.startsWith('categories/')) return
-  await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove([path])
+  if (isObjectStoreConfigured()) {
+    await deleteObject(PRODUCT_IMAGE_BUCKET, path!)
+    return
+  }
+  await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove([path!])
 }
 
 function revalidateCatalog() {
@@ -222,16 +231,27 @@ export async function uploadCategoryImage(
   const folder = categoryId ?? '_new'
   const storagePath = `categories/${folder}/${crypto.randomUUID()}.${ext}`
 
-  const { error: uploadError } = await supabase.storage
-    .from(PRODUCT_IMAGE_BUCKET)
-    .upload(storagePath, uploadBody, {
+  if (isObjectStoreConfigured()) {
+    const uploaded = await uploadObject({
+      bucket: PRODUCT_IMAGE_BUCKET,
+      path: storagePath,
+      body: uploadBody,
       contentType,
-      upsert: false,
-      cacheControl: '31536000',
     })
-
-  if (uploadError) {
-    return { ok: false, error: uploadError.message || 'Upload failed.' }
+    if (!uploaded.ok) {
+      return { ok: false, error: uploaded.error || 'Upload failed.' }
+    }
+  } else {
+    const { error: uploadError } = await supabase.storage
+      .from(PRODUCT_IMAGE_BUCKET)
+      .upload(storagePath, uploadBody, {
+        contentType,
+        upsert: false,
+        cacheControl: '31536000',
+      })
+    if (uploadError) {
+      return { ok: false, error: uploadError.message || 'Upload failed.' }
+    }
   }
 
   return { ok: true, data: { path: storagePath } }

@@ -17,6 +17,11 @@ import { colorwayKey } from '@/lib/catalog/colorway'
 import { extractDominantColor } from '@/lib/catalog/extract-dominant-color'
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import type { ActionResult } from '@/lib/catalog/types'
+import {
+  deleteObject,
+  isObjectStoreConfigured,
+  uploadObject,
+} from '@/lib/media/object-store'
 import { createClient } from '@/lib/supabase/server'
 
 function revalidateProduct(productId: string, slug?: string) {
@@ -139,16 +144,25 @@ export async function uploadProductMedia(
 
   const storagePath = `${productId}/${crypto.randomUUID()}.${ext}`
 
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(storagePath, uploadBody, {
+  if (isObjectStoreConfigured()) {
+    const uploaded = await uploadObject({
+      bucket,
+      path: storagePath,
+      body: uploadBody,
       contentType,
-      upsert: false,
-      cacheControl: '31536000',
     })
-
-  if (uploadError) {
-    return { ok: false, error: uploadError.message }
+    if (!uploaded.ok) return { ok: false, error: uploaded.error }
+  } else {
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, uploadBody, {
+        contentType,
+        upsert: false,
+        cacheControl: '31536000',
+      })
+    if (uploadError) {
+      return { ok: false, error: uploadError.message }
+    }
   }
 
   const nextSort =
@@ -171,7 +185,11 @@ export async function uploadProductMedia(
     .single()
 
   if (error) {
-    await supabase.storage.from(bucket).remove([storagePath])
+    if (isObjectStoreConfigured()) {
+      await deleteObject(bucket, storagePath)
+    } else {
+      await supabase.storage.from(bucket).remove([storagePath])
+    }
     return { ok: false, error: error.message }
   }
 
@@ -239,7 +257,11 @@ export async function deleteProductMedia(
       media.media_type === 'video'
         ? PRODUCT_VIDEO_BUCKET
         : PRODUCT_IMAGE_BUCKET
-    await supabase.storage.from(bucket).remove([media.storage_path])
+    if (isObjectStoreConfigured()) {
+      await deleteObject(bucket, media.storage_path)
+    } else {
+      await supabase.storage.from(bucket).remove([media.storage_path])
+    }
   }
 
   revalidateProduct(media.product_id, product?.slug)

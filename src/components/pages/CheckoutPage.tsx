@@ -20,6 +20,7 @@ import {
   trackBeginCheckout,
   trackPurchase,
 } from '@/lib/analytics/events'
+import { SafeImage } from '@/components/SafeImage'
 import { showToast } from '@/components/ToastHost'
 
 interface PathaoCity {
@@ -1379,7 +1380,7 @@ export function CheckoutPage() {
                   href={`/product/${item.product.slug}`}
                   className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-mist/60"
                 >
-                  <img
+                  <SafeImage
                     src={imageForCartLine(item.product, item.variantId)}
                     alt={item.product.name}
                     className="h-full w-full object-contain"

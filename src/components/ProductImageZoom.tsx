@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X, ZoomIn } from 'lucide-react'
+import { SafeImage } from '@/components/SafeImage'
 
 /**
  * Product image with a subtle hover pop and a click/tap lightbox
@@ -62,7 +63,7 @@ export function ProductImageZoom({
         ].join(' ')}
         onClick={() => setLightboxOpen(true)}
       >
-        <img
+        <SafeImage
           src={src}
           alt={alt}
           draggable={false}
@@ -98,7 +99,7 @@ export function ProductImageZoom({
               >
                 <X className="h-5 w-5" />
               </button>
-              <img
+              <SafeImage
                 src={src}
                 alt={alt}
                 className="max-h-full max-w-full object-contain"

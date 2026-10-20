@@ -28,6 +28,7 @@ import { useSiteSettings } from '@/context/SiteSettingsContext'
 import { ProductAccordion } from '@/components/ProductAccordion'
 import { ProductCard } from '@/components/ProductCard'
 import { ProductImageZoom } from '@/components/ProductImageZoom'
+import { SafeImage } from '@/components/SafeImage'
 import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
 import { SizeOptionButton } from '@/components/SizeOptionButton'
 import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
@@ -313,7 +314,7 @@ export function ProductPage({
                       imageIndex === i ? 'border-navy' : 'border-cloud'
                     }`}
                   >
-                    <img
+                    <SafeImage
                       src={src}
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover"
@@ -418,7 +419,7 @@ export function ProductPage({
                     aria-pressed={colorIndex === i}
                   >
                     {c.imageUrl ? (
-                      <img
+                      <SafeImage
                         src={c.imageUrl}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"

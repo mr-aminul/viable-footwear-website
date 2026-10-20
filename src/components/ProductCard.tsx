@@ -13,6 +13,7 @@ import {
 } from '@/lib/catalog/product-colorways'
 import { formatPrice } from '@/lib/brand'
 import { DiscountChip } from '@/components/DiscountChip'
+import { SafeImage } from '@/components/SafeImage'
 import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { trackAddToCart } from '@/lib/analytics/events'
@@ -136,8 +137,8 @@ function ProductCardView({
   const showSwatches = colorways.length > 1
 
   const media = (
-    <div className="relative block aspect-square overflow-hidden">
-      <img
+    <div className="relative block aspect-square overflow-hidden bg-mist/40">
+      <SafeImage
         src={imageSrc}
         alt={
           selectedColorway?.name
@@ -326,7 +327,7 @@ function ColorSwatchRow({
               ].join(' ')}
             >
               {colorway.imageUrl ? (
-                <img
+                <SafeImage
                   src={colorway.imageUrl}
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover"

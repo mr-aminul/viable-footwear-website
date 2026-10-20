@@ -3,8 +3,9 @@ import {
   PRODUCT_VIDEO_BUCKET,
 } from '@/lib/catalog/constants'
 import { SITE_MEDIA_BUCKET } from '@/lib/website/constants'
+import { mediaPublicBaseUrl } from '@/lib/media/object-store'
 
-/** Public storage buckets the storefront may reference. */
+/** Buckets the storefront may proxy (never open-ended). */
 export const MEDIA_PROXY_BUCKETS = [
   PRODUCT_IMAGE_BUCKET,
   PRODUCT_VIDEO_BUCKET,
@@ -16,6 +17,9 @@ export type MediaProxyBucket = (typeof MEDIA_PROXY_BUCKETS)[number]
 const ALLOWED = new Set<string>(MEDIA_PROXY_BUCKETS)
 
 const PUBLIC_STORAGE_RE =
+  /^https?:\/\/[^/]+\/(?:storage\/v1\/object\/public\/)?([^/?#]+)\/([^?#]+)(?:[?#].*)?$/i
+
+const SUPABASE_PUBLIC_RE =
   /^https?:\/\/[^/]+\.supabase\.co\/storage\/v1\/object\/public\/([^/?#]+)\/([^?#]+)(?:[?#].*)?$/i
 
 const LEGACY_PROXY_RE = /^\/api\/media\/([^/]+)\/(.+)$/
@@ -26,41 +30,42 @@ export function isAllowedMediaBucket(
   return ALLOWED.has(bucket)
 }
 
-function supabasePublicBase(): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
-  return base || null
-}
-
-/** Direct Supabase public object URL (no Vercel function hop). */
-export function publicStorageUrl(bucket: string, objectPath: string): string {
-  const base = supabasePublicBase()
-  const cleaned = objectPath
+function encodeObjectPath(objectPath: string): string {
+  return objectPath
     .replace(/^\/+/, '')
     .split('/')
     .filter(Boolean)
     .map(encodeURIComponent)
     .join('/')
-
-  if (!base) {
-    // Fallback keeps old same-origin shape if env is missing at build time.
-    return `/api/media/${encodeURIComponent(bucket)}/${cleaned}`
-  }
-
-  return `${base}/storage/v1/object/public/${encodeURIComponent(bucket)}/${cleaned}`
 }
 
 /**
- * @deprecated Prefer `publicStorageUrl`. Kept for any leftover call sites /
- * redirects that still speak in proxy paths.
+ * Upstream origin URL for a storage object (MinIO preferred, else Supabase).
+ * Never put this in HTML — browsers use `mediaProxyPath` instead.
  */
+export function publicStorageUrl(
+  bucket: string,
+  objectPath: string,
+): string | null {
+  const cleaned = encodeObjectPath(objectPath)
+  const mediaBase = mediaPublicBaseUrl()
+  if (mediaBase) {
+    return `${mediaBase}/${encodeURIComponent(bucket)}/${cleaned}`
+  }
+
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
+  if (!supabase) return null
+  return `${supabase}/storage/v1/object/public/${encodeURIComponent(bucket)}/${cleaned}`
+}
+
+/** Same-origin browser URL so Vercel CDN absorbs repeat traffic. */
 export function mediaProxyPath(bucket: string, objectPath: string): string {
-  return publicStorageUrl(bucket, objectPath)
+  return `/api/media/${encodeURIComponent(bucket)}/${encodeObjectPath(objectPath)}`
 }
 
 /**
  * Turn a storage path, local public path, legacy `/api/media/…` path, or
- * Supabase public URL into a browser URL. Storage objects go straight to
- * Supabase so Vercel does not burn Active CPU on image bytes.
+ * absolute storage URL into a same-origin proxied URL.
  */
 export function toProxiedMediaUrl(
   path: string | null | undefined,
@@ -68,6 +73,8 @@ export function toProxiedMediaUrl(
   fallback: string,
 ): string {
   if (!path) return fallback
+
+  if (path.startsWith('/api/media/')) return path
 
   // Local public assets (e.g. /images/hero.png) stay on the site origin.
   if (path.startsWith('/') && !path.startsWith('/api/media/')) return path
@@ -80,18 +87,41 @@ export function toProxiedMediaUrl(
       .map((part) => decodeURIComponent(part))
       .join('/')
     if (isAllowedMediaBucket(legacyBucket)) {
-      return publicStorageUrl(legacyBucket, legacyPath)
+      return mediaProxyPath(legacyBucket, legacyPath)
     }
     return fallback
   }
 
   if (path.startsWith('http://') || path.startsWith('https://')) {
-    const match = path.match(PUBLIC_STORAGE_RE)
-    if (match && isAllowedMediaBucket(match[1])) {
-      return publicStorageUrl(match[1], decodeURIComponent(match[2]))
+    const supabaseMatch = path.match(SUPABASE_PUBLIC_RE)
+    if (supabaseMatch && isAllowedMediaBucket(supabaseMatch[1])) {
+      return mediaProxyPath(supabaseMatch[1], decodeURIComponent(supabaseMatch[2]))
     }
+
+    const mediaBase = mediaPublicBaseUrl()
+    if (mediaBase && path.startsWith(`${mediaBase}/`)) {
+      const rest = path.slice(mediaBase.length + 1)
+      const slash = rest.indexOf('/')
+      if (slash > 0) {
+        const b = decodeURIComponent(rest.slice(0, slash))
+        const objectPath = rest
+          .slice(slash + 1)
+          .split('/')
+          .map((part) => decodeURIComponent(part))
+          .join('/')
+        if (isAllowedMediaBucket(b)) {
+          return mediaProxyPath(b, objectPath)
+        }
+      }
+    }
+
+    const generic = path.match(PUBLIC_STORAGE_RE)
+    if (generic && isAllowedMediaBucket(generic[1])) {
+      return mediaProxyPath(generic[1], decodeURIComponent(generic[2]))
+    }
+
     return path
   }
 
-  return publicStorageUrl(bucket, path)
+  return mediaProxyPath(bucket, path)
 }

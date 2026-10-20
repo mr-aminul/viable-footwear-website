@@ -13,6 +13,7 @@ import {
 import { whatsappHref } from '@/lib/brand'
 import type { CategoryView, Product } from '@/lib/catalog/types'
 import { ProductCard } from '@/components/ProductCard'
+import { SafeImage } from '@/components/SafeImage'
 import { WhatsAppOrderVisual } from '@/components/WhatsAppOrderVisual'
 import { HeroMediaBackground } from '@/components/website/HeroMediaBackground'
 import { useSiteSettings } from '@/context/SiteSettingsContext'
@@ -161,8 +162,8 @@ export function HomePage({
                   href={`/shop?category=${cat.slug}`}
                   className="group flex h-full flex-col overflow-hidden rounded-[1.15rem] bg-white text-center shadow-card transition duration-300 hover:-translate-y-1 hover:shadow-lift"
                 >
-                  <span className="flex aspect-square w-full items-center justify-center overflow-hidden">
-                    <img
+                  <span className="flex aspect-square w-full items-center justify-center overflow-hidden bg-mist/40">
+                    <SafeImage
                       src={cat.image}
                       alt=""
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
@@ -225,7 +226,7 @@ export function HomePage({
                       {promo.cta.label}
                     </Link>
                   </div>
-                  <img
+                  <SafeImage
                     src={resolveSiteMediaUrl(promo.image)}
                     alt=""
                     className="h-full min-h-[180px] w-full object-cover object-center"

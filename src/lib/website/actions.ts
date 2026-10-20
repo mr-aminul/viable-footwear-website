@@ -6,6 +6,10 @@ import { requireRole } from '@/lib/auth/session'
 import { CAMPAIGNS_ANNOUNCEMENT_TAG } from '@/lib/campaigns/queries'
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import type { ActionResult } from '@/lib/catalog/types'
+import {
+  isObjectStoreConfigured,
+  uploadObject,
+} from '@/lib/media/object-store'
 import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/supabase/database.types'
 import {
@@ -180,15 +184,27 @@ export async function uploadSiteMedia(
   }
 
   const objectPath = `${pageKey}/${randomUUID()}.${ext}`
-  const { error } = await supabase.storage
-    .from(SITE_MEDIA_BUCKET)
-    .upload(objectPath, bytes, {
-      contentType,
-      upsert: false,
-    })
 
-  if (error) {
-    return { ok: false, error: error.message || 'Upload failed.' }
+  if (isObjectStoreConfigured()) {
+    const uploaded = await uploadObject({
+      bucket: SITE_MEDIA_BUCKET,
+      path: objectPath,
+      body: bytes,
+      contentType,
+    })
+    if (!uploaded.ok) {
+      return { ok: false, error: uploaded.error || 'Upload failed.' }
+    }
+  } else {
+    const { error } = await supabase.storage
+      .from(SITE_MEDIA_BUCKET)
+      .upload(objectPath, bytes, {
+        contentType,
+        upsert: false,
+      })
+    if (error) {
+      return { ok: false, error: error.message || 'Upload failed.' }
+    }
   }
 
   return { ok: true, data: { path: objectPath, mediaType } }

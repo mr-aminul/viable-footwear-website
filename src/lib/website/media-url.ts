@@ -3,7 +3,7 @@ import { toProxiedMediaUrl } from '@/lib/media/storage-proxy'
 
 /**
  * Resolve a site media path (public `/…`, absolute URL, or storage object path).
- * Storage objects go directly to Supabase public URLs (no Vercel proxy).
+ * Storage objects are served via `/api/media/…` so Vercel CDN caches them.
  */
 export function resolveSiteMediaUrl(
   path: string | null | undefined,

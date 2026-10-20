@@ -14,6 +14,10 @@ import { normalizeColorHex } from '@/lib/catalog/gallery'
 import { ONE_SIZE_EU } from '@/lib/catalog/sizing'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult, RelatedProductOption } from '@/lib/catalog/types'
+import {
+  deleteObjects,
+  isObjectStoreConfigured,
+} from '@/lib/media/object-store'
 import { createClient } from '@/lib/supabase/server'
 
 const BULK_PRODUCT_ACTION_LIMIT = 50
@@ -804,11 +808,20 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
   const { error } = await supabase.from('products').delete().eq('id', productId)
   if (error) return { ok: false, error: error.message }
 
-  if (imagePaths.length > 0) {
-    await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(imagePaths)
-  }
-  if (videoPaths.length > 0) {
-    await supabase.storage.from(PRODUCT_VIDEO_BUCKET).remove(videoPaths)
+  if (isObjectStoreConfigured()) {
+    if (imagePaths.length > 0) {
+      await deleteObjects(PRODUCT_IMAGE_BUCKET, imagePaths)
+    }
+    if (videoPaths.length > 0) {
+      await deleteObjects(PRODUCT_VIDEO_BUCKET, videoPaths)
+    }
+  } else {
+    if (imagePaths.length > 0) {
+      await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(imagePaths)
+    }
+    if (videoPaths.length > 0) {
+      await supabase.storage.from(PRODUCT_VIDEO_BUCKET).remove(videoPaths)
+    }
   }
 
   revalidateProductSurfaces(product.slug)
