@@ -185,26 +185,17 @@ export async function uploadSiteMedia(
 
   const objectPath = `${pageKey}/${randomUUID()}.${ext}`
 
-  if (isObjectStoreConfigured()) {
-    const uploaded = await uploadObject({
-      bucket: SITE_MEDIA_BUCKET,
-      path: objectPath,
-      body: bytes,
-      contentType,
-    })
-    if (!uploaded.ok) {
-      return { ok: false, error: uploaded.error || 'Upload failed.' }
-    }
-  } else {
-    const { error } = await supabase.storage
-      .from(SITE_MEDIA_BUCKET)
-      .upload(objectPath, bytes, {
-        contentType,
-        upsert: false,
-      })
-    if (error) {
-      return { ok: false, error: error.message || 'Upload failed.' }
-    }
+  if (!isObjectStoreConfigured()) {
+    return { ok: false, error: 'Media storage is not configured.' }
+  }
+  const uploaded = await uploadObject({
+    bucket: SITE_MEDIA_BUCKET,
+    path: objectPath,
+    body: bytes,
+    contentType,
+  })
+  if (!uploaded.ok) {
+    return { ok: false, error: uploaded.error || 'Upload failed.' }
   }
 
   return { ok: true, data: { path: objectPath, mediaType } }

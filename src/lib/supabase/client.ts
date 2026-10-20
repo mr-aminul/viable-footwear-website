@@ -1,12 +1,9 @@
-import { createBrowserClient } from '@supabase/ssr'
-import type { Database } from '@/lib/supabase/database.types'
-
 /**
- * Browser Supabase client (anon key). Use in Client Components only.
+ * Browser Supabase client removed — storefront does not use client-side DB auth.
+ * Kept as a stub so accidental imports fail clearly.
  */
-export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+export function createClient(): never {
+  throw new Error(
+    'Browser database client is not available. Use server actions / route handlers.',
   )
 }

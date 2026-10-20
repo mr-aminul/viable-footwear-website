@@ -1,7 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import type { ViableDbClient } from '@/lib/db/postgrest'
 
-type DbClient = SupabaseClient<Database>
+type DbClient = ViableDbClient
 
 /**
  * Decrement variant stock for order lines. Fails if any line cannot be reserved.

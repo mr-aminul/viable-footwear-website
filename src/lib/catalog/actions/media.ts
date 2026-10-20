@@ -144,26 +144,16 @@ export async function uploadProductMedia(
 
   const storagePath = `${productId}/${crypto.randomUUID()}.${ext}`
 
-  if (isObjectStoreConfigured()) {
-    const uploaded = await uploadObject({
-      bucket,
-      path: storagePath,
-      body: uploadBody,
-      contentType,
-    })
-    if (!uploaded.ok) return { ok: false, error: uploaded.error }
-  } else {
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(storagePath, uploadBody, {
-        contentType,
-        upsert: false,
-        cacheControl: '31536000',
-      })
-    if (uploadError) {
-      return { ok: false, error: uploadError.message }
-    }
+  if (!isObjectStoreConfigured()) {
+    return { ok: false, error: 'Media storage is not configured.' }
   }
+  const uploaded = await uploadObject({
+    bucket,
+    path: storagePath,
+    body: uploadBody,
+    contentType,
+  })
+  if (!uploaded.ok) return { ok: false, error: uploaded.error }
 
   const nextSort =
     mediaType === 'image'
@@ -185,11 +175,7 @@ export async function uploadProductMedia(
     .single()
 
   if (error) {
-    if (isObjectStoreConfigured()) {
-      await deleteObject(bucket, storagePath)
-    } else {
-      await supabase.storage.from(bucket).remove([storagePath])
-    }
+    await deleteObject(bucket, storagePath)
     return { ok: false, error: error.message }
   }
 
@@ -257,11 +243,7 @@ export async function deleteProductMedia(
       media.media_type === 'video'
         ? PRODUCT_VIDEO_BUCKET
         : PRODUCT_IMAGE_BUCKET
-    if (isObjectStoreConfigured()) {
-      await deleteObject(bucket, media.storage_path)
-    } else {
-      await supabase.storage.from(bucket).remove([media.storage_path])
-    }
+    await deleteObject(bucket, media.storage_path)
   }
 
   revalidateProduct(media.product_id, product?.slug)

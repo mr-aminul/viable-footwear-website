@@ -1,6 +1,5 @@
 import { formatPrice } from '@/lib/brand'
-import type { Database } from '@/lib/supabase/database.types'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ViableDbClient } from '@/lib/db/postgrest'
 
 export type DiscordOrderItem = {
   name: string
@@ -128,7 +127,7 @@ export async function notifyDiscordNewOrder(
   }
 }
 
-type ServiceClient = SupabaseClient<Database>
+type ServiceClient = ViableDbClient
 
 /** Loads a saved order and posts the Discord alert. Never throws. */
 export async function notifyDiscordNewOrderById(

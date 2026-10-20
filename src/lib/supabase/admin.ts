@@ -1,16 +1,19 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import { createServiceAuthApi } from '@/lib/db/service-auth'
+import { createDbClient } from '@/lib/db/postgrest'
 
 /**
- * Service-role client for Admin-only server operations. Never import in client code.
+ * Service client for server reads/writes against VPS Postgres (PostgREST).
+ * Never import in client components — or only via server-only call sites.
+ * Does not touch next/headers so shared settings modules can import it.
  */
 export function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error('Missing Supabase service role configuration')
+  if (
+    !process.env.VIABLE_API_URL?.trim() ||
+    !process.env.VIABLE_SERVICE_KEY?.trim()
+  ) {
+    throw new Error(
+      'Missing Viable API configuration (VIABLE_API_URL / VIABLE_SERVICE_KEY)',
+    )
   }
-  return createSupabaseClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  return createDbClient(createServiceAuthApi())
 }

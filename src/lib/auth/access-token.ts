@@ -1,53 +1,15 @@
 /**
- * Edge-safe helpers to read the Supabase access token from request cookies
+ * Edge-safe helpers to read the Viable staff session cookie
  * without calling the Auth API.
  */
 
-const BASE64_PREFIX = 'base64-'
-
-function supabaseStorageKey(): string | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) return null
-  try {
-    const host = new URL(url).hostname
-    const ref = host.split('.')[0]
-    return ref ? `sb-${ref}-auth-token` : null
-  } catch {
-    return null
-  }
-}
+import { STAFF_SESSION_COOKIE } from '@/lib/db/session-token'
 
 function fromBase64Url(value: string): string {
   const padded =
     value.replace(/-/g, '+').replace(/_/g, '/') +
     '==='.slice((value.length + 3) % 4)
   return atob(padded)
-}
-
-function decodeCookiePayload(raw: string): string | null {
-  if (!raw.startsWith(BASE64_PREFIX)) return raw
-  try {
-    return fromBase64Url(raw.slice(BASE64_PREFIX.length))
-  } catch {
-    return null
-  }
-}
-
-function combineAuthCookie(
-  get: (name: string) => string | undefined,
-  storageKey: string,
-): string | null {
-  const single = get(storageKey)
-  if (single) return decodeCookiePayload(single)
-
-  const parts: string[] = []
-  for (let i = 0; ; i++) {
-    const chunk = get(`${storageKey}.${i}`)
-    if (!chunk) break
-    parts.push(chunk)
-  }
-  if (parts.length === 0) return null
-  return decodeCookiePayload(parts.join(''))
 }
 
 export type AccessTokenInfo = {
@@ -75,43 +37,24 @@ function readJwtPayload(accessToken: string): {
 }
 
 /**
- * Read the current access token from a NextRequest / cookie store getter.
+ * Read the current staff session JWT from a cookie store getter.
  * Returns null when signed out or cookies are unreadable.
  */
 export function readAccessTokenInfo(
   getCookie: (name: string) => string | undefined,
 ): AccessTokenInfo | null {
-  const storageKey = supabaseStorageKey()
-  if (!storageKey) return null
+  const token = getCookie(STAFF_SESSION_COOKIE)
+  if (!token) return null
 
-  const raw = combineAuthCookie(getCookie, storageKey)
-  if (!raw) return null
-
-  try {
-    const parsed = JSON.parse(raw) as {
-      access_token?: unknown
-      expires_at?: unknown
-    }
-    if (typeof parsed.access_token !== 'string' || !parsed.access_token) {
-      return null
-    }
-    const jwt = readJwtPayload(parsed.access_token)
-    const expiresAt =
-      typeof parsed.expires_at === 'number'
-        ? parsed.expires_at
-        : jwt.exp
-
-    return {
-      accessToken: parsed.access_token,
-      expiresAt,
-      subject: jwt.sub,
-    }
-  } catch {
-    return null
+  const jwt = readJwtPayload(token)
+  return {
+    accessToken: token,
+    expiresAt: jwt.exp,
+    subject: jwt.sub,
   }
 }
 
-/** True when the access token is present and not within `skewSeconds` of expiry. */
+/** True when the session token is present and not within `skewSeconds` of expiry. */
 export function isAccessTokenFresh(
   info: AccessTokenInfo | null,
   skewSeconds = 120,

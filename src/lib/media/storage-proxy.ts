@@ -40,7 +40,7 @@ function encodeObjectPath(objectPath: string): string {
 }
 
 /**
- * Upstream origin URL for a storage object (MinIO preferred, else Supabase).
+ * Upstream origin URL for a storage object on VPS MinIO.
  * Never put this in HTML — browsers use `mediaProxyPath` instead.
  */
 export function publicStorageUrl(
@@ -49,13 +49,8 @@ export function publicStorageUrl(
 ): string | null {
   const cleaned = encodeObjectPath(objectPath)
   const mediaBase = mediaPublicBaseUrl()
-  if (mediaBase) {
-    return `${mediaBase}/${encodeURIComponent(bucket)}/${cleaned}`
-  }
-
-  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
-  if (!supabase) return null
-  return `${supabase}/storage/v1/object/public/${encodeURIComponent(bucket)}/${cleaned}`
+  if (!mediaBase) return null
+  return `${mediaBase}/${encodeURIComponent(bucket)}/${cleaned}`
 }
 
 /** Same-origin browser URL so Vercel CDN absorbs repeat traffic. */

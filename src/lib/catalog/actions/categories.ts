@@ -45,9 +45,7 @@ async function removeCategoryImageObject(
   if (!isStorageObjectPath(path) || !path?.startsWith('categories/')) return
   if (isObjectStoreConfigured()) {
     await deleteObject(PRODUCT_IMAGE_BUCKET, path!)
-    return
   }
-  await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove([path!])
 }
 
 function revalidateCatalog() {
@@ -231,27 +229,17 @@ export async function uploadCategoryImage(
   const folder = categoryId ?? '_new'
   const storagePath = `categories/${folder}/${crypto.randomUUID()}.${ext}`
 
-  if (isObjectStoreConfigured()) {
-    const uploaded = await uploadObject({
-      bucket: PRODUCT_IMAGE_BUCKET,
-      path: storagePath,
-      body: uploadBody,
-      contentType,
-    })
-    if (!uploaded.ok) {
-      return { ok: false, error: uploaded.error || 'Upload failed.' }
-    }
-  } else {
-    const { error: uploadError } = await supabase.storage
-      .from(PRODUCT_IMAGE_BUCKET)
-      .upload(storagePath, uploadBody, {
-        contentType,
-        upsert: false,
-        cacheControl: '31536000',
-      })
-    if (uploadError) {
-      return { ok: false, error: uploadError.message || 'Upload failed.' }
-    }
+  if (!isObjectStoreConfigured()) {
+    return { ok: false, error: 'Media storage is not configured.' }
+  }
+  const uploaded = await uploadObject({
+    bucket: PRODUCT_IMAGE_BUCKET,
+    path: storagePath,
+    body: uploadBody,
+    contentType,
+  })
+  if (!uploaded.ok) {
+    return { ok: false, error: uploaded.error || 'Upload failed.' }
   }
 
   return { ok: true, data: { path: storagePath } }

@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import type { UserRole } from '@/lib/supabase/database.types'
 import { createClient } from '@/lib/supabase/server'
+import { isDbConfigured } from '@/lib/db/postgrest'
 
 export type StaffProfile = {
   id: string
@@ -16,63 +17,37 @@ export type StaffSession = {
   profile: StaffProfile
 }
 
-function readJwtSubject(accessToken: string): string | null {
-  try {
-    const segment = accessToken.split('.')[1]
-    if (!segment) return null
-    const json = Buffer.from(
-      segment.replace(/-/g, '+').replace(/_/g, '/'),
-      'base64',
-    ).toString('utf8')
-    const payload = JSON.parse(json) as { sub?: unknown }
-    return typeof payload.sub === 'string' ? payload.sub : null
-  } catch {
-    return null
-  }
-}
-
 /**
- * Per-request cached staff session.
- * Cookie JWT is read locally; PostgREST verifies the signature on the profiles read
- * (safe even when middleware skips getUser on a fresh token).
+ * Per-request cached staff session (JWT cookie + profiles row on VPS).
  */
 export const getStaffSession = cache(async (): Promise<StaffSession | null> => {
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
-    return null
-  }
+  if (!isDbConfigured()) return null
 
   try {
-    const supabase = await createClient()
+    const db = await createClient()
     const {
       data: { session },
-    } = await supabase.auth.getSession()
-    const accessToken = session?.access_token
-    if (!accessToken) return null
+    } = await db.auth.getSession()
+    if (!session?.user?.id) return null
 
-    const userId = readJwtSubject(accessToken)
-    if (!userId) return null
-
-    const { data: profile, error } = await supabase
+    const { data: profile, error } = await db
       .from('profiles')
       .select('id, email, full_name, role, active')
-      .eq('id', userId)
+      .eq('id', session.user.id)
       .maybeSingle()
 
     if (error || !profile || !profile.active) return null
     if (profile.role !== 'admin' && profile.role !== 'manager') return null
 
-    return { userId, profile }
+    return {
+      userId: session.user.id,
+      profile: profile as StaffProfile,
+    }
   } catch {
     return null
   }
 })
 
-/**
- * Ensures the current user has one of the allowed roles; otherwise redirects.
- */
 export async function requireRole(
   allowed: UserRole | UserRole[],
 ): Promise<StaffSession> {

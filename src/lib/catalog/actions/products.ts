@@ -795,8 +795,8 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
     .contains('related_product_ids', [productId])
 
   for (const owner of relatedOwners ?? []) {
-    const nextIds = (owner.related_product_ids ?? []).filter(
-      (id) => id !== productId,
+    const nextIds = ((owner.related_product_ids ?? []) as string[]).filter(
+      (id: string) => id !== productId,
     )
     await supabase
       .from('products')
@@ -808,20 +808,11 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
   const { error } = await supabase.from('products').delete().eq('id', productId)
   if (error) return { ok: false, error: error.message }
 
-  if (isObjectStoreConfigured()) {
-    if (imagePaths.length > 0) {
-      await deleteObjects(PRODUCT_IMAGE_BUCKET, imagePaths)
-    }
-    if (videoPaths.length > 0) {
-      await deleteObjects(PRODUCT_VIDEO_BUCKET, videoPaths)
-    }
-  } else {
-    if (imagePaths.length > 0) {
-      await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove(imagePaths)
-    }
-    if (videoPaths.length > 0) {
-      await supabase.storage.from(PRODUCT_VIDEO_BUCKET).remove(videoPaths)
-    }
+  if (imagePaths.length > 0) {
+    await deleteObjects(PRODUCT_IMAGE_BUCKET, imagePaths)
+  }
+  if (videoPaths.length > 0) {
+    await deleteObjects(PRODUCT_VIDEO_BUCKET, videoPaths)
   }
 
   revalidateProductSurfaces(product.slug)

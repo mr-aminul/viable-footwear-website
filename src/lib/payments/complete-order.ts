@@ -1,8 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/supabase/database.types'
+import type { ViableDbClient } from '@/lib/db/postgrest'
 import { decrementOrderStock } from '@/lib/orders/stock'
 
-type ServiceClient = SupabaseClient<Database>
+type ServiceClient = ViableDbClient
 
 /**
  * Mark a pending gateway order paid and decrement stock once.
