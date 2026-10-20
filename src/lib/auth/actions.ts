@@ -13,15 +13,17 @@ export async function signInWithPassword(formData: FormData) {
     redirect('/admin/login?error=missing_fields')
   }
 
+  let errorMessage: string | null = null
   try {
     const supabase = await createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) {
-      redirect(`/admin/login?error=${encodeURIComponent(error.message)}`)
-    }
+    if (error) errorMessage = error.message
   } catch {
-    redirect('/admin/login?error=sign_in_unavailable')
+    errorMessage = 'sign_in_unavailable'
+  }
+
+  if (errorMessage) {
+    redirect(`/admin/login?error=${encodeURIComponent(errorMessage)}`)
   }
 
   redirect(isAdminPath(next) ? next : '/admin')
