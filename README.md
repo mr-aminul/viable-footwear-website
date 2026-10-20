@@ -5,8 +5,8 @@ Next.js storefront + Admin/Manager ops for Viable (Dhaka casual footwear).
 ## Stack
 
 - **App:** Next.js 15 (App Router) + TypeScript + Tailwind v4 + Framer Motion  
-- **Host:** GitHub → Vercel → custom domain  
-- **DB / Auth / Storage:** Supabase free tier  
+- **Host:** VPS (Caddy + systemd Next.js) with optional Cloudflare in front  
+- **DB / API / Media:** VPS Postgres via PostgREST + MinIO (`s3.viable.fashion`)  
 
 Full requirements & task list: [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
 
@@ -46,15 +46,17 @@ npm run dev
 - Storefront: http://localhost:3000  
 - Staff login: http://localhost:3000/admin/login  
 
-## Deploy (Vercel)
+## Deploy (VPS)
 
-Production: **https://viable.inventivelab.bd** (also `www` + `viable-footwear.vercel.app`)
+Production: **https://viable.fashion** (also `www`, plus inventivelab aliases when DNS points at the VPS)
 
-GitHub `main` auto-deploys. Env vars are set in the Vercel project.
+On the server (`/var/www/viable`):
 
-In Supabase Auth → URL config, set:
-- **Site URL:** `https://viable.inventivelab.bd`
-- **Redirect URLs:** `https://viable.inventivelab.bd/auth/callback` (+ `http://localhost:3000/auth/callback` for local)
+```bash
+sudo bash scripts/deploy-vps.sh
+```
+
+That pulls `main`, builds, and restarts `viable-web.service`. Caddy terminates HTTPS and reverse-proxies to `127.0.0.1:3000`. Production secrets live in `/var/www/viable/.env.local` (not in git).
 
 ## Phase status
 
