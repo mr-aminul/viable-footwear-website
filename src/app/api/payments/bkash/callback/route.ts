@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { amountsMatch } from '@/lib/payments/amount-match'
-import { executeBkashPayment } from '@/lib/payments/bkash'
+import {
+  executeBkashPayment,
+  isBkashPaymentCompleted,
+  queryBkashPayment,
+  type BkashExecutePaymentResponse,
+} from '@/lib/payments/bkash'
 import { completeGatewayPaidOrder } from '@/lib/payments/complete-order'
 import { notifyDiscordNewOrderById } from '@/lib/integrations/discord-orders'
 import {
@@ -12,13 +17,15 @@ import type { Json } from '@/lib/db/database.types'
 
 /**
  * bKash redirects here after customer approves/cancels.
- * Query: paymentID, status=success|failure|cancel
+ * Query: paymentID (or paymentId), status=success|failure|cancel
  */
 export async function GET(request: NextRequest) {
   const site =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
     'http://localhost:3000'
-  const paymentID = request.nextUrl.searchParams.get('paymentID')?.trim()
+  const paymentID =
+    request.nextUrl.searchParams.get('paymentID')?.trim() ||
+    request.nextUrl.searchParams.get('paymentId')?.trim()
   const status = (
     request.nextUrl.searchParams.get('status') || ''
   ).toLowerCase()
@@ -77,24 +84,51 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const executed = await executeBkashPayment(paymentID)
-    const ok =
-      executed.statusCode === '0000' ||
-      (executed.transactionStatus || '').toLowerCase() === 'completed'
+    let executed: BkashExecutePaymentResponse
+    try {
+      executed = await executeBkashPayment(paymentID)
+    } catch (error) {
+      // Email: if Execute does not respond, Query Payment is mandatory.
+      console.error('[bkash callback] execute failed, querying', error)
+      executed = await queryBkashPayment(paymentID)
+    }
 
-    if (!ok) {
-      await db
-        .from('payment_attempts')
-        .update({
-          status: 'failed',
-          raw_json: executed as unknown as Json,
-        })
-        .eq('id', attempt.id)
-      return fail(
-        executed.statusMessage ||
-          executed.errorMessage ||
-          'bKash could not confirm the payment.',
-      )
+    if (!isBkashPaymentCompleted(executed)) {
+      // Ambiguous execute — confirm via Query before failing.
+      try {
+        const queried = await queryBkashPayment(paymentID)
+        if (isBkashPaymentCompleted(queried)) {
+          executed = queried
+        } else {
+          await db
+            .from('payment_attempts')
+            .update({
+              status: 'failed',
+              raw_json: queried as unknown as Json,
+            })
+            .eq('id', attempt.id)
+          return fail(
+            queried.statusMessage ||
+              queried.errorMessageEn ||
+              queried.errorMessage ||
+              'bKash could not confirm the payment.',
+          )
+        }
+      } catch {
+        await db
+          .from('payment_attempts')
+          .update({
+            status: 'failed',
+            raw_json: executed as unknown as Json,
+          })
+          .eq('id', attempt.id)
+        return fail(
+          executed.statusMessage ||
+            executed.errorMessageEn ||
+            executed.errorMessage ||
+            'bKash could not confirm the payment.',
+        )
+      }
     }
 
     if (!amountsMatch(attempt.amount, executed.amount)) {
@@ -112,11 +146,13 @@ export async function GET(request: NextRequest) {
       return fail('Payment amount did not match the order total.')
     }
 
+    const trxId = executed.trxID || executed.trxId || null
+
     await db
       .from('payment_attempts')
       .update({
         status: 'completed',
-        trx_id: executed.trxID ?? null,
+        trx_id: trxId,
         raw_json: executed as unknown as Json,
       })
       .eq('id', attempt.id)
@@ -125,7 +161,7 @@ export async function GET(request: NextRequest) {
     const completed = await completeGatewayPaidOrder(
       db,
       attempt.order_id,
-      executed.trxID ?? paymentID,
+      trxId ?? paymentID,
     )
     if (!completed) return fail('Order not found after payment.')
 

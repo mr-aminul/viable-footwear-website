@@ -3,10 +3,11 @@ import { createServiceClient } from '@/lib/db/admin'
 
 export const BKASH_SETTINGS_KEY = 'bkash'
 
+/** Tokenized Checkout Without Agreement (V2). */
 export const BKASH_SANDBOX_BASE =
-  'https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized'
+  'https://tokenized.sandbox.bka.sh/v2/tokenized-checkout'
 export const BKASH_PRODUCTION_BASE =
-  'https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized'
+  'https://tokenized.pay.bka.sh/v2/tokenized-checkout'
 
 export type BkashMode = 'sandbox' | 'production'
 
