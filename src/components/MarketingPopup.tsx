@@ -35,6 +35,12 @@ export function MarketingPopup() {
     setOpen(false)
   }, [popup.campaignKey, popup.frequency])
 
+  // Older builds set body.overflow = 'hidden' while the popup was open and
+  // could leave the storefront permanently non-scrollable. Clear on mount.
+  useEffect(() => {
+    document.body.style.removeProperty('overflow')
+  }, [])
+
   useEffect(() => {
     if (shouldSkipMarketingPopup(pathname)) {
       setOpen(false)
@@ -52,23 +58,27 @@ export function MarketingPopup() {
     const delayMs = Math.max(0, popup.delaySeconds) * 1000
     const timer = window.setTimeout(() => setOpen(true), delayMs)
     return () => window.clearTimeout(timer)
-  }, [pathname, popup])
+    // Depend on primitive fields — a new `popup` object identity must not
+    // retrigger the timer and re-open after dismiss.
+  }, [
+    pathname,
+    popup.enabled,
+    popup.image,
+    popup.startsAt,
+    popup.endsAt,
+    popup.delaySeconds,
+    popup.campaignKey,
+    popup.frequency,
+  ])
 
   useEffect(() => {
     if (!open) return
-
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') dismiss()
     }
     window.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', onKeyDown)
-    }
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, dismiss])
 
   const imageUrl = resolveSiteMediaUrl(popup.image, '')
@@ -93,7 +103,7 @@ export function MarketingPopup() {
       {open ? (
         <motion.div
           key="marketing-popup"
-          className="fixed inset-0 z-[90] flex items-center justify-center p-4 sm:p-6"
+          className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center p-4 sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -102,15 +112,11 @@ export function MarketingPopup() {
           exit={reduceMotion ? undefined : { opacity: 0 }}
           transition={{ duration: 0.22, ease: EASE_OUT }}
         >
-          <button
-            type="button"
-            className="absolute inset-0 bg-ink/70"
-            aria-label="Dismiss offer"
-            onClick={dismiss}
-          />
+          {/* Visual dim only — must not capture scroll/touch or the storefront freezes. */}
+          <div className="absolute inset-0 bg-ink/70" aria-hidden />
 
           <motion.div
-            className="relative z-10 w-full max-w-[min(92vw,420px)]"
+            className="pointer-events-auto relative z-10 w-full max-w-[min(92vw,420px)]"
             initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
