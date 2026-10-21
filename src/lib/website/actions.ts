@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { CAMPAIGNS_ANNOUNCEMENT_TAG } from '@/lib/campaigns/queries'
+import { purgePrerenderArtifacts } from '@/lib/catalog/cache-tags'
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import type { ActionResult } from '@/lib/catalog/types'
 import {
@@ -50,8 +51,14 @@ function revalidateSitePage(pageKey: SitePageKey) {
   revalidateTag(sitePageCacheTag(pageKey))
   revalidatePath('/admin/website')
   revalidatePath(`/admin/website/${pageKey === 'site' ? 'site' : pageKey}`)
-  if (pageKey === 'home') revalidatePath('/')
-  if (pageKey === 'about') revalidatePath('/about')
+  if (pageKey === 'home') {
+    revalidatePath('/', 'layout')
+    purgePrerenderArtifacts(['index'])
+  }
+  if (pageKey === 'about') {
+    revalidatePath('/about', 'page')
+    purgePrerenderArtifacts(['about'])
+  }
   if (pageKey === 'site') {
     revalidatePath('/', 'layout')
     revalidatePath('/about')
@@ -59,6 +66,7 @@ function revalidateSitePage(pageKey: SitePageKey) {
     revalidatePath('/privacy')
     revalidatePath('/admin/website/popup')
     revalidateTag(CAMPAIGNS_ANNOUNCEMENT_TAG)
+    purgePrerenderArtifacts(['index', 'about', 'terms', 'privacy'])
   }
 }
 

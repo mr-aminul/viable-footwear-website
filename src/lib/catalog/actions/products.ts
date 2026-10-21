@@ -865,6 +865,8 @@ async function runBulkProductAction(
   revalidatePath('/admin/catalog')
   revalidatePath('/admin/catalog/products')
   revalidateTag('admin-products')
+  // Individual actions already revalidate; one more pass covers early no-op returns.
+  revalidateStorefront()
 
   return {
     ok: true,
