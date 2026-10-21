@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Heart } from 'lucide-react'
 import type { Product } from '@/lib/catalog/types'
+import { expandProductsByColorway } from '@/lib/catalog/product-colorways'
 import { ProductCard } from '@/components/ProductCard'
 import { useCart } from '@/context/CartContext'
 
@@ -22,7 +23,8 @@ export function WishlistPage({ products }: { products: Product[] }) {
     )
   }
 
-  const wished = products.filter((p) => wishlist.includes(p.id))
+  const wishedProducts = products.filter((p) => wishlist.includes(p.id))
+  const wished = expandProductsByColorway(wishedProducts)
 
   if (wished.length === 0) {
     return (
@@ -52,8 +54,8 @@ export function WishlistPage({ products }: { products: Product[] }) {
             Wishlist
           </h1>
           <p className="mt-2 text-[15px] text-mute">
-            {wished.length} saved {wished.length === 1 ? 'style' : 'styles'} on
-            this device
+            {wishedProducts.length} saved{' '}
+            {wishedProducts.length === 1 ? 'style' : 'styles'} on this device
           </p>
         </div>
         <button
@@ -68,8 +70,13 @@ export function WishlistPage({ products }: { products: Product[] }) {
       </div>
 
       <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-6">
-        {wished.map((product, i) => (
-          <ProductCard key={product.id} product={product} index={i} />
+        {wished.map((listing, i) => (
+          <ProductCard
+            key={listing.listingKey}
+            product={listing.product}
+            colorwayKey={listing.colorwayKey}
+            index={i}
+          />
         ))}
       </div>
     </div>

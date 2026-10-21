@@ -11,6 +11,54 @@ export type ProductColorwayOption = {
   colorHex: string | null
 }
 
+/** One PLP tile — a product featured as a specific colorway. */
+export type ProductColorwayListing = {
+  product: Product
+  colorwayKey: string
+  listingKey: string
+}
+
+/**
+ * Storefront path for a product, optionally deep-linking a colorway.
+ * Admin still edits one product; each color can have its own listing URL.
+ */
+export function productPath(
+  slug: string,
+  colorKey?: string | null,
+): string {
+  const base = `/product/${slug}`
+  if (!colorKey) return base
+  return `${base}?color=${encodeURIComponent(colorKey)}`
+}
+
+/**
+ * Expand catalog products into one listing per colorway (Birkenstock-style PLP).
+ * Products with no colorways still emit a single default tile.
+ */
+export function expandProductsByColorway(
+  products: readonly Product[],
+  limit?: number,
+): ProductColorwayListing[] {
+  const listings: ProductColorwayListing[] = []
+
+  for (const product of products) {
+    const colorways = productColorways(product)
+    const keys =
+      colorways.length > 0 ? colorways.map((c) => c.key) : ['default']
+
+    for (const key of keys) {
+      listings.push({
+        product,
+        colorwayKey: key,
+        listingKey: `${product.id}:${key}`,
+      })
+      if (limit != null && listings.length >= limit) return listings
+    }
+  }
+
+  return listings
+}
+
 type ColorwayAccum = {
   name: string | null
   imageUrl: string | null

@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import type { CategoryView, Product } from '@/lib/catalog/types'
+import {
+  expandProductsByColorway,
+  productColorways,
+} from '@/lib/catalog/product-colorways'
 import { ProductCard } from '@/components/ProductCard'
 
 export function ShopPage({
@@ -38,23 +42,40 @@ export function ShopPage({
         ? products
         : products.filter((p) => p.category === category)
     if (saleOnly) list = list.filter((p) => p.badge === 'Sale' || p.compareAt)
+
+    let listings = expandProductsByColorway(list)
+
     const needle = query.trim().toLowerCase()
     if (needle) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(needle) ||
-          p.categoryLabel.toLowerCase().includes(needle) ||
-          (p.subtitle?.toLowerCase().includes(needle) ?? false),
+      listings = listings.filter(({ product, colorwayKey }) => {
+        const colorName =
+          productColorways(product).find((c) => c.key === colorwayKey)?.name ??
+          ''
+        return (
+          product.name.toLowerCase().includes(needle) ||
+          product.categoryLabel.toLowerCase().includes(needle) ||
+          (product.subtitle?.toLowerCase().includes(needle) ?? false) ||
+          colorName.toLowerCase().includes(needle)
+        )
+      })
+    }
+
+    if (sort === 'price-asc') {
+      listings = [...listings].sort(
+        (a, b) => a.product.price - b.product.price,
       )
     }
-    if (sort === 'price-asc') list = [...list].sort((a, b) => a.price - b.price)
-    if (sort === 'price-desc') list = [...list].sort((a, b) => b.price - a.price)
+    if (sort === 'price-desc') {
+      listings = [...listings].sort(
+        (a, b) => b.product.price - a.product.price,
+      )
+    }
     if (sort === 'featured') {
-      list = [...list].sort(
-        (a, b) => Number(b.featured) - Number(a.featured),
+      listings = [...listings].sort(
+        (a, b) => Number(b.product.featured) - Number(a.product.featured),
       )
     }
-    return list
+    return listings
   }, [category, saleOnly, sort, products, query])
 
   const setParams = (next: URLSearchParams | Record<string, string>) => {
@@ -151,13 +172,19 @@ export function ShopPage({
       </div>
 
       <p className="mt-6 text-[13px] text-mute">
-        {filtered.length} of {products.length} styles
+        {filtered.length}{' '}
+        {filtered.length === 1 ? 'style' : 'styles'}
         {query.trim() ? ` matching “${query.trim()}”` : ''}
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-6">
-        {filtered.map((product, i) => (
-          <ProductCard key={product.id} product={product} index={i} />
+        {filtered.map((listing, i) => (
+          <ProductCard
+            key={listing.listingKey}
+            product={listing.product}
+            colorwayKey={listing.colorwayKey}
+            index={i}
+          />
         ))}
       </div>
 

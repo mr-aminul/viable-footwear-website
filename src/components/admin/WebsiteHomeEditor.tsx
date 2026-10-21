@@ -989,8 +989,14 @@ export function WebsiteHomeEditor({
               />
             </div>
             <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
-              {featured.map((product, i) => (
-                <ProductCard key={product.id} product={product} index={i} preview />
+              {featured.map((listing, i) => (
+                <ProductCard
+                  key={listing.listingKey}
+                  product={listing.product}
+                  colorwayKey={listing.colorwayKey}
+                  index={i}
+                  preview
+                />
               ))}
             </div>
             <div className="mt-8 flex justify-center">
@@ -1044,8 +1050,14 @@ export function WebsiteHomeEditor({
                 />
               </div>
               <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
-                {foamPicks.map((product, i) => (
-                  <ProductCard key={product.id} product={product} index={i} preview />
+                {foamPicks.map((listing, i) => (
+                  <ProductCard
+                    key={listing.listingKey}
+                    product={listing.product}
+                    colorwayKey={listing.colorwayKey}
+                    index={i}
+                    preview
+                  />
                 ))}
               </div>
               <div className="mt-8 flex justify-center">
@@ -1469,7 +1481,7 @@ export function WebsiteHomeEditor({
             : 'Most popular products'
         }
         titleId={productPickerTitleId}
-        hint={`Pick up to ${HOME_SECTION_PRODUCT_CAP} products (order = display order). Leave empty to hide this grid.`}
+                  hint={`Pick up to ${HOME_SECTION_PRODUCT_CAP} products (order = display order). Each color shows as its own tile (capped at ${HOME_SECTION_PRODUCT_CAP}). Leave empty to hide this grid.`}
         catalog={catalog}
         selectedIds={
           productPicker === 'foamCrocs'

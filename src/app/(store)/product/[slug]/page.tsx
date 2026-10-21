@@ -8,7 +8,10 @@ import {
 } from '@/lib/catalog/queries'
 import { getSiteContent } from '@/lib/website/queries'
 
-type Props = { params: Promise<{ slug: string }> }
+type Props = {
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ color?: string }>
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -46,8 +49,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function ProductRoute({ params }: Props) {
+export default async function ProductRoute({ params, searchParams }: Props) {
   const { slug } = await params
+  const { color: initialColor } = await searchParams
   const [product, site] = await Promise.all([
     getStoreProductBySlug(slug),
     getSiteContent(),
@@ -89,7 +93,11 @@ export default async function ProductRoute({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ProductPage product={product} related={related} />
+      <ProductPage
+        product={product}
+        related={related}
+        initialColor={initialColor}
+      />
     </>
   )
 }

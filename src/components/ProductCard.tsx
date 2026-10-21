@@ -8,6 +8,7 @@ import type { Product } from '@/lib/catalog/types'
 import { productBadgeClassName } from '@/lib/catalog/badge'
 import {
   productColorways,
+  productPath,
   variantForColorway,
   type ProductColorwayOption,
 } from '@/lib/catalog/product-colorways'
@@ -21,6 +22,8 @@ import { trackAddToCart } from '@/lib/analytics/events'
 interface ProductCardProps {
   product: Product
   index?: number
+  /** Featured colorway for this tile (PLP shows one card per color). */
+  colorwayKey?: string
   /** Visual-only tile (no cart/wishlist). For admin WYSIWYG previews. */
   preview?: boolean
 }
@@ -31,37 +34,65 @@ interface ProductCardProps {
 export function ProductCard({
   product,
   index = 0,
+  colorwayKey,
   preview = false,
 }: ProductCardProps) {
   if (preview) {
-    return <ProductCardView product={product} index={index} />
+    const colorways = productColorways(product)
+    const selected =
+      colorways.find((c) => c.key === colorwayKey) ?? colorways[0]
+    return (
+      <ProductCardView
+        product={product}
+        index={index}
+        colorways={colorways}
+        selectedColorKey={selected?.key ?? null}
+        displayImage={selected?.imageUrl ?? undefined}
+      />
+    )
   }
-  return <ProductCardInteractive product={product} index={index} />
+  return (
+    <ProductCardInteractive
+      product={product}
+      index={index}
+      colorwayKey={colorwayKey}
+    />
+  )
 }
 
 function ProductCardInteractive({
   product,
   index,
+  colorwayKey,
 }: {
   product: Product
   index: number
+  colorwayKey?: string
 }) {
   const { toggleWishlist, isWishlisted, addToCart } = useCart()
   const wished = isWishlisted(product.id)
   const colorways = useMemo(() => productColorways(product), [product])
-  const [selectedKey, setSelectedKey] = useState<string | null>(
-    () => colorways[0]?.key ?? null,
-  )
+  const [selectedKey, setSelectedKey] = useState<string | null>(() => {
+    if (colorwayKey && colorways.some((c) => c.key === colorwayKey)) {
+      return colorwayKey
+    }
+    return colorways[0]?.key ?? null
+  })
 
   useEffect(() => {
     if (colorways.length === 0) {
       setSelectedKey(null)
       return
     }
-    if (!selectedKey || !colorways.some((c) => c.key === selectedKey)) {
-      setSelectedKey(colorways[0]!.key)
+    // Listing identity changed — feature this tile’s colorway again.
+    if (colorwayKey && colorways.some((c) => c.key === colorwayKey)) {
+      setSelectedKey(colorwayKey)
+      return
     }
-  }, [colorways, selectedKey])
+    setSelectedKey((prev) =>
+      prev && colorways.some((c) => c.key === prev) ? prev : colorways[0]!.key,
+    )
+  }, [colorways, colorwayKey])
 
   const selectedColorway =
     colorways.find((c) => c.key === selectedKey) ?? colorways[0]
@@ -78,10 +109,13 @@ function ProductCardInteractive({
   const displayImage =
     selectedColorway?.imageUrl ?? product.image
 
+  const href = productPath(product.slug, selectedColorway?.key)
+
   return (
     <ProductCardView
       product={product}
       index={index}
+      href={href}
       displayImage={displayImage}
       colorways={colorways}
       selectedColorKey={selectedColorway?.key ?? null}
@@ -110,6 +144,7 @@ function ProductCardInteractive({
 function ProductCardView({
   product,
   index,
+  href,
   displayImage,
   colorways = [],
   selectedColorKey = null,
@@ -121,6 +156,7 @@ function ProductCardView({
 }: {
   product: Product
   index: number
+  href?: string
   displayImage?: string
   colorways?: ProductColorwayOption[]
   selectedColorKey?: string | null
@@ -135,6 +171,8 @@ function ProductCardView({
   const imageSrc = displayImage ?? product.image
   const selectedColorway = colorways.find((c) => c.key === selectedColorKey)
   const showSwatches = colorways.length > 1
+  const productHref =
+    href ?? productPath(product.slug, selectedColorway?.key)
 
   const media = (
     <div className="relative block aspect-square overflow-hidden bg-mist/40">
@@ -198,14 +236,14 @@ function ProductCardView({
       </button>
 
       {interactive ? (
-        <Link href={`/product/${product.slug}`}>{media}</Link>
+        <Link href={productHref}>{media}</Link>
       ) : (
         media
       )}
 
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
         {interactive ? (
-          <Link href={`/product/${product.slug}`}>{title}</Link>
+          <Link href={productHref}>{title}</Link>
         ) : (
           title
         )}

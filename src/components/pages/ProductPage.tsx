@@ -19,7 +19,12 @@ import { productBadgeClassName } from '@/lib/catalog/badge'
 import { DiscountChip } from '@/components/DiscountChip'
 import { galleryForColorway } from '@/lib/catalog/gallery'
 import { colorwayKey } from '@/lib/catalog/colorway'
-import { productColorways } from '@/lib/catalog/product-colorways'
+import {
+  expandProductsByColorway,
+  productColorways,
+  productPath,
+} from '@/lib/catalog/product-colorways'
+import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
 import { formatSizeLabel } from '@/lib/catalog/sizing'
 import type { Product } from '@/lib/catalog/types'
 import { enterTransition } from '@/lib/motion'
@@ -38,9 +43,12 @@ type SizeUnit = 'EU' | 'UK'
 export function ProductPage({
   product,
   related,
+  initialColor,
 }: {
   product: Product
   related: Product[]
+  /** Colorway key from `?color=` (PLP deep-link). */
+  initialColor?: string | null
 }) {
   const { addToCart, startBuyNow, toggleWishlist, isWishlisted } = useCart()
   const { productPromises } = useSiteSettings()
@@ -48,7 +56,6 @@ export function ProductPage({
   const reduceMotion = useReducedMotion()
   const [size, setSize] = useState<number | null>(null)
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('EU')
-  const [colorIndex, setColorIndex] = useState<number | null>(0)
   const [imageIndex, setImageIndex] = useState(0)
   const [added, setAdded] = useState(false)
   const [error, setError] = useState('')
@@ -56,8 +63,23 @@ export function ProductPage({
 
   const colorOptions = useMemo(() => productColorways(product), [product])
 
+  const [colorIndex, setColorIndex] = useState<number | null>(() => {
+    if (initialColor) {
+      const idx = colorOptions.findIndex(
+        (c) => c.key === colorwayKey(initialColor),
+      )
+      if (idx >= 0) return idx
+    }
+    return colorOptions.length > 0 ? 0 : null
+  })
+
   const selectedColor =
     colorIndex != null ? colorOptions[colorIndex] : undefined
+
+  const relatedListings = useMemo(
+    () => expandProductsByColorway(related, RELATED_PRODUCTS_DISPLAY_CAP),
+    [related],
+  )
   const hasSingleColor = colorOptions.length <= 1
   const sizesForColor = useMemo(() => {
     if (!selectedColor) return product.sizes
@@ -128,6 +150,25 @@ export function ProductPage({
   useEffect(() => {
     if (colorOptions.length === 1) setColorIndex(0)
   }, [colorOptions.length])
+
+  // Keep color in sync when landing from a different PLP colorway tile.
+  useEffect(() => {
+    if (!initialColor || colorOptions.length === 0) return
+    const idx = colorOptions.findIndex(
+      (c) => c.key === colorwayKey(initialColor),
+    )
+    if (idx >= 0) setColorIndex(idx)
+  }, [initialColor, colorOptions])
+
+  const selectColor = (index: number) => {
+    const next = colorOptions[index]
+    setColorIndex(index)
+    setSize(null)
+    setImageIndex(0)
+    setError('')
+    if (!next) return
+    router.replace(productPath(product.slug, next.key), { scroll: false })
+  }
 
   useEffect(() => {
     if (product.requiresSize === false) return
@@ -409,12 +450,7 @@ export function ProductPage({
                     type="button"
                     aria-label={c.name ? `Color ${c.name}` : `Color ${i + 1}`}
                     title={c.name ?? undefined}
-                    onClick={() => {
-                      setColorIndex(i)
-                      setSize(null)
-                      setImageIndex(0)
-                      setError('')
-                    }}
+                    onClick={() => selectColor(i)}
                     className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-white transition ${
                       colorIndex === i
                         ? 'border-navy'
@@ -649,8 +685,13 @@ export function ProductPage({
             You may also like
           </h2>
           <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-4">
-            {related.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
+            {relatedListings.map((listing, i) => (
+              <ProductCard
+                key={listing.listingKey}
+                product={listing.product}
+                colorwayKey={listing.colorwayKey}
+                index={i}
+              />
             ))}
           </div>
         </section>

@@ -11,7 +11,8 @@ import {
   Truck,
 } from 'lucide-react'
 import { whatsappHref } from '@/lib/brand'
-import type { CategoryView, Product } from '@/lib/catalog/types'
+import type { CategoryView } from '@/lib/catalog/types'
+import type { ProductColorwayListing } from '@/lib/catalog/product-colorways'
 import { ProductCard } from '@/components/ProductCard'
 import { SafeImage } from '@/components/SafeImage'
 import { WhatsAppOrderVisual } from '@/components/WhatsAppOrderVisual'
@@ -45,8 +46,8 @@ export function HomePage({
 }: {
   content: HomePageContent
   categories: CategoryView[]
-  featured: Product[]
-  foamPicks: Product[]
+  featured: ProductColorwayListing[]
+  foamPicks: ProductColorwayListing[]
 }) {
   const { brand } = useSiteSettings()
   const { hero, sections } = content
@@ -252,8 +253,13 @@ export function HomePage({
             </p>
           </div>
           <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-5 lg:grid-cols-4">
-            {featured.map((product, i) => (
-              <ProductCard key={product.id} product={product} index={i} />
+            {featured.map((listing, i) => (
+              <ProductCard
+                key={listing.listingKey}
+                product={listing.product}
+                colorwayKey={listing.colorwayKey}
+                index={i}
+              />
             ))}
           </div>
           <div className="mt-8 flex justify-center">
@@ -280,8 +286,13 @@ export function HomePage({
               </p>
             </div>
             <div className="mt-9 grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
-              {foamPicks.map((product, i) => (
-                <ProductCard key={product.id} product={product} index={i} />
+              {foamPicks.map((listing, i) => (
+                <ProductCard
+                  key={listing.listingKey}
+                  product={listing.product}
+                  colorwayKey={listing.colorwayKey}
+                  index={i}
+                />
               ))}
             </div>
             <div className="mt-8 flex justify-center">
