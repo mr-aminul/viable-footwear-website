@@ -1,13 +1,14 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import type { ReactNode } from 'react'
-import { pageTransition, pageVariants } from '@/lib/motion'
+import { pageTransition } from '@/lib/motion'
 
 /**
- * Soft enter/exit for storefront route changes. Short-circuits when the OS
- * requests reduced motion.
+ * Soft fade on storefront route changes.
+ * Avoid AnimatePresence mode="wait" — it can desync App Router children
+ * from the URL when soft navigations are slow or fail (URL updates, old page stays).
  */
 export function PageTransition({ children }: { children: ReactNode }) {
   const pathname = usePathname()
@@ -18,17 +19,13 @@ export function PageTransition({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        variants={pageVariants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        transition={pageTransition}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={pathname}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={pageTransition}
+    >
+      {children}
+    </motion.div>
   )
 }

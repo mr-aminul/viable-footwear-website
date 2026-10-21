@@ -21,6 +21,7 @@ export type ProductColorwayListing = {
 /**
  * Storefront path for a product, optionally deep-linking a colorway.
  * Admin still edits one product; each color can have its own listing URL.
+ * Uses + for spaces so soft-nav query strings stay stable across browsers.
  */
 export function productPath(
   slug: string,
@@ -28,7 +29,8 @@ export function productPath(
 ): string {
   const base = `/product/${slug}`
   if (!colorKey) return base
-  return `${base}?color=${encodeURIComponent(colorKey)}`
+  const color = encodeURIComponent(colorKey).replace(/%20/g, '+')
+  return `${base}?color=${color}`
 }
 
 /**

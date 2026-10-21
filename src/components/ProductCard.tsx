@@ -236,14 +236,20 @@ function ProductCardView({
       </button>
 
       {interactive ? (
-        <Link href={productHref}>{media}</Link>
+        // Prefetch off: colorway PLP can render 100+ product links; prefetch
+        // storms overload the server and soft-nav can leave URL≠page (Shop stuck).
+        <Link href={productHref} prefetch={false}>
+          {media}
+        </Link>
       ) : (
         media
       )}
 
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
         {interactive ? (
-          <Link href={productHref}>{title}</Link>
+          <Link href={productHref} prefetch={false}>
+            {title}
+          </Link>
         ) : (
           title
         )}
