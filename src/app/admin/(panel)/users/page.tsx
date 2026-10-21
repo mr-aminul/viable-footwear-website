@@ -1,5 +1,5 @@
 import { requireRole } from '@/lib/auth/session'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 import { StaffUsersPanel } from '@/components/admin/StaffUsersPanel'
 
 export const metadata = {
@@ -9,8 +9,8 @@ export const metadata = {
 
 export default async function UsersPage() {
   const session = await requireRole('admin')
-  const supabase = await createClient()
-  const { data: profiles } = await supabase
+  const db = await createClient()
+  const { data: profiles } = await db
     .from('profiles')
     .select('id, email, full_name, role, active, created_at')
     .order('created_at', { ascending: true })

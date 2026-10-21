@@ -8,7 +8,7 @@ import {
   normalizePromoCode,
   type PromoDiscountType,
 } from '@/lib/promotions/rules'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 function readString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? '').trim()
@@ -132,8 +132,8 @@ export async function createPromotion(
   const payload = parsePayload(formData)
   if ('error' in payload) return { ok: false, error: payload.error }
 
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('promo_codes')
     .insert(payload)
     .select('id')
@@ -158,8 +158,8 @@ export async function updatePromotion(
   const payload = parsePayload(formData)
   if ('error' in payload) return { ok: false, error: payload.error }
 
-  const supabase = await createClient()
-  const { error } = await supabase
+  const db = await createClient()
+  const { error } = await db
     .from('promo_codes')
     .update(payload)
     .eq('id', id)
@@ -180,8 +180,8 @@ export async function setPromotionActive(
   active: boolean,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
-  const { error } = await supabase
+  const db = await createClient()
+  const { error } = await db
     .from('promo_codes')
     .update({ active })
     .eq('id', id)
@@ -192,8 +192,8 @@ export async function setPromotionActive(
 
 export async function deletePromotion(id: string): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
-  const { error } = await supabase.from('promo_codes').delete().eq('id', id)
+  const db = await createClient()
+  const { error } = await db.from('promo_codes').delete().eq('id', id)
   if (error) return { ok: false, error: error.message }
   revalidatePromotions()
   return { ok: true }

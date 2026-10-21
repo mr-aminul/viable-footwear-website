@@ -131,11 +131,11 @@ type ServiceClient = ViableDbClient
 
 /** Loads a saved order and posts the Discord alert. Never throws. */
 export async function notifyDiscordNewOrderById(
-  supabase: ServiceClient,
+  db: ServiceClient,
   orderId: string,
 ): Promise<void> {
   try {
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await db
       .from('orders')
       .select(
         'order_number, full_name, email, phone, secondary_phone, address, city_name, zone_name, area_name, payment_method, subtotal, discount_amount, shipping, total',
@@ -148,7 +148,7 @@ export async function notifyDiscordNewOrderById(
       return
     }
 
-    const { data: items, error: itemsError } = await supabase
+    const { data: items, error: itemsError } = await db
       .from('order_items')
       .select('product_name, size_eu, color, unit_price, quantity')
       .eq('order_id', orderId)

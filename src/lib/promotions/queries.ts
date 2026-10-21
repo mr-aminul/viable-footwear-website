@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import {
   computePromoDiscount,
   isPromoInDateWindow,
@@ -41,9 +41,9 @@ const PROMO_SELECT =
 export async function listPromotionsAdmin(): Promise<
   Array<PromoCodeRow & { created_at: string; updated_at: string }>
 > {
-  const { createClient } = await import('@/lib/supabase/server')
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const { createClient } = await import('@/lib/db/server')
+  const db = await createClient()
+  const { data, error } = await db
     .from('promo_codes')
     .select(`${PROMO_SELECT}, created_at, updated_at`)
     .order('created_at', { ascending: false })
@@ -62,9 +62,9 @@ export async function listPromotionsAdmin(): Promise<
 export async function getPromotionById(
   id: string,
 ): Promise<(PromoCodeRow & { created_at: string; updated_at: string }) | null> {
-  const { createClient } = await import('@/lib/supabase/server')
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const { createClient } = await import('@/lib/db/server')
+  const db = await createClient()
+  const { data, error } = await db
     .from('promo_codes')
     .select(`${PROMO_SELECT}, created_at, updated_at`)
     .eq('id', id)
@@ -85,8 +85,8 @@ export async function getActivePromoByCode(
   const code = normalizePromoCode(rawCode)
   if (!code) return null
 
-  const supabase = createServiceClient()
-  const { data, error } = await supabase
+  const db = createServiceClient()
+  const { data, error } = await db
     .from('promo_codes')
     .select(PROMO_SELECT)
     .eq('code', code)

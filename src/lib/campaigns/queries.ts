@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import {
   pickAnnouncementCampaign,
   type CampaignRow,
@@ -10,8 +10,8 @@ import { getSiteContent } from '@/lib/website/queries'
 export const CAMPAIGNS_ANNOUNCEMENT_TAG = 'campaigns-announcement'
 
 export async function listActiveCampaignsForCheckout(): Promise<CampaignRow[]> {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase
+  const db = createServiceClient()
+  const { data, error } = await db
     .from('campaigns')
     .select('id, name, priority, active, starts_at, ends_at, rules')
     .eq('active', true)
@@ -56,9 +56,9 @@ export const getStorefrontAnnouncement = cache(
 export async function listCampaignsAdmin(): Promise<
   Array<CampaignRow & { created_at: string; updated_at: string }>
 > {
-  const { createClient } = await import('@/lib/supabase/server')
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const { createClient } = await import('@/lib/db/server')
+  const db = await createClient()
+  const { data, error } = await db
     .from('campaigns')
     .select(
       'id, name, priority, active, starts_at, ends_at, rules, created_at, updated_at',
@@ -76,9 +76,9 @@ export async function listCampaignsAdmin(): Promise<
 export async function getCampaignById(
   id: string,
 ): Promise<(CampaignRow & { created_at: string; updated_at: string }) | null> {
-  const { createClient } = await import('@/lib/supabase/server')
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const { createClient } = await import('@/lib/db/server')
+  const db = await createClient()
+  const { data, error } = await db
     .from('campaigns')
     .select(
       'id, name, priority, active, starts_at, ends_at, rules, created_at, updated_at',

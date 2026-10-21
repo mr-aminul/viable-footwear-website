@@ -8,11 +8,11 @@ type ServiceClient = ViableDbClient
  * Stock is reserved before the paid status change; safe to retry.
  */
 export async function completeGatewayPaidOrder(
-  supabase: ServiceClient,
+  db: ServiceClient,
   orderId: string,
   trxId: string,
 ): Promise<{ orderNumber: string } | null> {
-  const { data: order } = await supabase
+  const { data: order } = await db
     .from('orders')
     .select('id, order_number, status, payment_trx_id')
     .eq('id', orderId)
@@ -21,7 +21,7 @@ export async function completeGatewayPaidOrder(
   if (!order) return null
 
   if (order.status === 'pending_payment' && !order.payment_trx_id) {
-    const { data: items } = await supabase
+    const { data: items } = await db
       .from('order_items')
       .select('variant_id, quantity')
       .eq('order_id', order.id)
@@ -33,13 +33,13 @@ export async function completeGatewayPaidOrder(
         quantity: Number(item.quantity),
       }))
 
-    const reserved = await decrementOrderStock(supabase, lines)
+    const reserved = await decrementOrderStock(db, lines)
     if (!reserved.ok) {
       console.error('[completeGatewayPaidOrder] stock', reserved.error)
       return null
     }
 
-    const { error: payError } = await supabase
+    const { error: payError } = await db
       .from('orders')
       .update({
         status: 'awaiting_fulfillment',

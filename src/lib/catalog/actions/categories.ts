@@ -16,7 +16,7 @@ import {
   isObjectStoreConfigured,
   uploadObject,
 } from '@/lib/media/object-store'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 function readString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? '').trim()
@@ -39,7 +39,7 @@ function isStorageObjectPath(path: string | null | undefined): boolean {
 }
 
 async function removeCategoryImageObject(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  db: Awaited<ReturnType<typeof createClient>>,
   path: string | null | undefined,
 ) {
   if (!isStorageObjectPath(path) || !path?.startsWith('categories/')) return
@@ -62,7 +62,7 @@ export async function createCategory(
   formData: FormData,
 ): Promise<ActionResult<{ id: string }>> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const name = readString(formData, 'name')
   const slugInput = readString(formData, 'slug')
@@ -77,7 +77,7 @@ export async function createCategory(
     return { ok: false, error: 'Slug must be lowercase letters, numbers, and hyphens.' }
   }
 
-  const { data: last } = await supabase
+  const { data: last } = await db
     .from('categories')
     .select('sort_order')
     .order('sort_order', { ascending: false })
@@ -86,7 +86,7 @@ export async function createCategory(
 
   const nextSort = (last?.sort_order ?? -1) + 1
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('categories')
     .insert({
       name,
@@ -119,7 +119,7 @@ export async function updateCategory(
   formData: FormData,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const name = readString(formData, 'name')
   const slug = readString(formData, 'slug')
@@ -133,13 +133,13 @@ export async function updateCategory(
     return { ok: false, error: 'Slug must be lowercase letters, numbers, and hyphens.' }
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('categories')
     .select('image_path')
     .eq('id', categoryId)
     .maybeSingle()
 
-  const { error } = await supabase
+  const { error } = await db
     .from('categories')
     .update({
       name,
@@ -159,7 +159,7 @@ export async function updateCategory(
   }
 
   if (existing?.image_path && existing.image_path !== imagePath) {
-    await removeCategoryImageObject(supabase, existing.image_path)
+    await removeCategoryImageObject(db, existing.image_path)
   }
 
   revalidateCatalog()
@@ -176,7 +176,7 @@ export async function uploadCategoryImage(
   formData: FormData,
 ): Promise<ActionResult<{ path: string }>> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
@@ -191,7 +191,7 @@ export async function uploadCategoryImage(
   }
 
   if (categoryId) {
-    const { data: category } = await supabase
+    const { data: category } = await db
       .from('categories')
       .select('id')
       .eq('id', categoryId)
@@ -252,10 +252,10 @@ export async function reorderCategories(
   orderedIds: string[],
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   for (let index = 0; index < orderedIds.length; index += 1) {
-    const { error } = await supabase
+    const { error } = await db
       .from('categories')
       .update({ sort_order: index })
       .eq('id', orderedIds[index])
@@ -273,9 +273,9 @@ export async function deactivateCategory(
   categoryId: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { error } = await supabase
+  const { error } = await db
     .from('categories')
     .update({ active: false })
     .eq('id', categoryId)
@@ -293,9 +293,9 @@ export async function activateCategory(
   categoryId: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { error } = await supabase
+  const { error } = await db
     .from('categories')
     .update({ active: true })
     .eq('id', categoryId)

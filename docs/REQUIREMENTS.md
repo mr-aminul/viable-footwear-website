@@ -19,12 +19,12 @@ Ship a Bangladesh-ready ecommerce site for Viable Footwear where customers can b
 | Layer | Choice |
 |--------|--------|
 | Repo | GitHub |
-| Host | Vercel (Hobby) ← deploy from GitHub |
-| Domain | Existing purchased domain → Vercel DNS |
+| Host | VPS (Caddy + systemd) ← optional Cloudflare |
+| Domain | viable.fashion → VPS |
 | App | Next.js (App Router) + TypeScript + Tailwind (reuse current design tokens) |
-| DB | Supabase Postgres (free) |
-| Auth | Supabase Auth + role claims / `profiles` |
-| Media | Supabase Storage (free) — product images + video |
+| DB | VPS Postgres via PostgREST |
+| Auth | Staff JWT cookie + `profiles` roles |
+| Media | VPS MinIO (`s3.viable.fashion`) — product images + video |
 | Motion | Framer Motion (extend existing) |
 | Charts | Recharts (or similar OSS) |
 | Marketing tags | GTM + GA4 + Meta Pixel (free; Admin-configured) |
@@ -50,7 +50,7 @@ Ship a Bangladesh-ready ecommerce site for Viable Footwear where customers can b
 | Invite/disable Manager users | No | Yes |
 | Site-wide shipping defaults & COD fee policy | Limited | Full |
 
-All mutating APIs enforce role server-side (RLS + service checks). UI hiding is not security.
+All mutating APIs enforce role server-side (session + service checks). UI hiding is not security.
 
 ---
 
@@ -59,7 +59,7 @@ All mutating APIs enforce role server-side (RLS + service checks). UI hiding is 
 ### 4.1 Catalog & media
 - CRUD products and categories.
 - Fields: name, slug, description (rich text or markdown), price, compare-at, category, sizes/colors/stock, active flag.
-- Multi-image gallery + optional product video (upload to Supabase Storage).
+- Multi-image gallery + optional product video (upload to MinIO).
 - SEO fields per product/category/page: title, meta description, OG image.
 
 ### 4.2 Related products
@@ -120,11 +120,11 @@ All mutating APIs enforce role server-side (RLS + service checks). UI hiding is 
 
 ## 5. Non-functional
 
-- Free-tier only for infra (Vercel + Supabase + OSS).
+- Free-tier only for infra (VPS + OSS).
 - Mobile-first storefront; usable admin on desktop.
 - Server-side validation on all money, stock, and role boundaries.
 - Audit-friendly: who changed product price / integration settings (Admin actions logged if cheap to add).
-- Compress/limit video length to stay within Supabase Storage free quota.
+- Compress/limit video length to stay within MinIO free quota.
 
 ---
 
@@ -168,7 +168,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 
 ### Phase 0 — Platform foundation
 
-**Goal:** Next.js + Supabase + Auth + deploy path + empty Admin shell.
+**Goal:** Next.js + Postgres + Auth + deploy path + empty Admin shell.
 
 #### 0.1 Project migration
 - [x] Scaffold Next.js App Router (TS) in repo (replace or wrap Vite app).
@@ -179,16 +179,16 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [x] Connect GitHub repo → Vercel project; preview deploys on PR.
 - [x] Attach custom domain on Vercel; HTTPS verify.
 
-#### 0.2 Supabase project
-- [x] Create Supabase project (free).
-- [x] Add env to local `.env` / `.env.local` (Vercel still pending): URL, anon, service role, DATABASE_URL.
+#### 0.2 Database project
+- [x] Provision VPS Postgres + PostgREST.
+- [x] Add env to local `.env` / `.env.local`: `VIABLE_API_URL`, `VIABLE_SERVICE_KEY`, optional VPS `DATABASE_URL`.
 - [x] SQL migrations for core tables (profiles, categories, products, media, variants).
-- [x] Enable RLS; policies for public read of active catalog; write = authenticated staff.
-- [x] Create Storage buckets: `product-images`, `product-videos` (public read for published assets; write = staff).
+- [x] Access control in Next.js + PostgREST service key (no DB RLS dependency).
+- [x] MinIO buckets: `product-images`, `product-videos`, `site-media`.
 - [x] Seed Admin user; document how to promote Manager.
 
 #### 0.3 Auth & roles
-- [x] Supabase Auth email/password (or magic link) for staff only.
+- [x] staff auth email/password (or magic link) for staff only.
 - [x] `profiles.role` = `admin` | `manager`; sync on signup/invite.
 - [x] Middleware protect `/admin/**`.
 - [x] Helper `requireRole('admin' | 'manager')` for server actions/API.
@@ -220,7 +220,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 - [x] Soft-deactivate instead of hard delete if orders reference product.
 
 #### 1.3 Media
-- [x] Upload multiple images → Supabase Storage; reorder; set primary; alt text.
+- [x] Upload multiple images → MinIO; reorder; set primary; alt text.
 - [x] Upload one optional video; size/type limits documented.
 - [x] PDP gallery uses ordered media; video player if present.
 - [x] Delete removes DB row + storage object.
@@ -379,7 +379,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 ## 9. Cross-cutting tasks (all phases)
 
 - [ ] `.env.example` documented for every secret.
-- [ ] README: local setup (Node, Supabase CLI optional, Vercel link).
+- [ ] README: local setup (Node, Vercel link).
 - [ ] Error monitoring light-touch (Vercel logs enough for v1).
 - [ ] Rate-limit payment create + Pathao quote endpoints (basic).
 - [ ] BD phone + address validation helpers.
@@ -410,7 +410,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 
 | Item | Owner | Needed by |
 |------|--------|-----------|
-| Supabase project + Vercel team access | Eng | Phase 0 |
+| VPS Postgres + deploy access | Eng | Phase 0 |
 | Domain DNS access | Ops | Phase 0 |
 | Pathao merchant + API access | Ops | Phase 2 |
 | bKash merchant + sandbox/prod apps | Ops | Phase 2 |
@@ -425,7 +425,7 @@ Legend: `[ ]` todo · Owner hints: Eng / Design / Ops / Content
 
 | Must-have | Phase |
 |-----------|-------|
-| Stack: GitHub → Vercel → domain + Supabase DB/Storage | 0 |
+| Stack: GitHub → Vercel → domain + VPS Postgres/MinIO | 0 |
 | Admin vs Manager accounts | 0–1 |
 | Product/category/price/image/video/description CRUD | 1 |
 | Customizable You May Also Like | 1 |

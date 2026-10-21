@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import type { Database } from '@/lib/supabase/database.types'
+import type { Database } from '@/lib/db/database.types'
 import {
   STORE_CACHE_REVALIDATE,
   STORE_CATALOG_TAG,
@@ -8,7 +8,7 @@ import {
 } from '@/lib/catalog/cache-tags'
 import type { ProductBadge } from '@/lib/catalog/constants'
 import { RELATED_PRODUCTS_DISPLAY_CAP } from '@/lib/catalog/constants'
-import { resolveMediaUrl } from '@/lib/catalog/media-url'
+import { MEDIA_FALLBACK, resolveMediaUrl } from '@/lib/catalog/media-url'
 import { normalizeColorHex } from '@/lib/catalog/gallery'
 import type {
   AdminInventoryRow,
@@ -17,8 +17,9 @@ import type {
   ProductVariantView,
   RelatedProductOption,
 } from '@/lib/catalog/types'
-import { createServiceClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/db/admin'
+import { isDbConfigured } from '@/lib/db/postgrest'
+import { createClient } from '@/lib/db/server'
 
 type ProductRow = Database['public']['Tables']['products']['Row']
 type CategoryRow = Database['public']['Tables']['categories']['Row']
@@ -93,7 +94,7 @@ function mapProduct(
     categoryLabel: category?.name ?? 'Footwear',
     price: Number(row.price),
     compareAt: row.compare_at != null ? Number(row.compare_at) : undefined,
-    image: images[0]?.url ?? '/images/products/product-foam-cream.png',
+    image: images[0]?.url ?? MEDIA_FALLBACK,
     images,
     videoUrl: video
       ? resolveMediaUrl(video.storage_path, 'video')
@@ -115,30 +116,24 @@ function mapProduct(
   }
 }
 
-function supabaseConfigured(): boolean {
-  return Boolean(
-    process.env.VIABLE_API_URL?.trim() &&
-      process.env.VIABLE_SERVICE_KEY?.trim(),
-  )
-}
 
 /**
  * Active categories with product counts for storefront filters.
  * Cached indefinitely; purged on catalog writes via `store-catalog`.
  */
 export async function listStoreCategories(): Promise<CategoryView[]> {
-  if (!supabaseConfigured()) return []
+  if (!isDbConfigured()) return []
 
   return unstable_cache(
     async (): Promise<CategoryView[]> => {
-      const supabase = createServiceClient()
+      const db = createServiceClient()
       const [{ data: categories }, { data: products }] = await Promise.all([
-        supabase
+        db
           .from('categories')
           .select('*')
           .eq('active', true)
           .order('sort_order', { ascending: true }),
-        supabase.from('products').select('id, category_id').eq('active', true),
+        db.from('products').select('id, category_id').eq('active', true),
       ])
 
       const counts = new Map<string, number>()
@@ -178,7 +173,7 @@ async function loadProductBundles(
 ): Promise<Product[]> {
   if (productRows.length === 0) return []
 
-  const supabase = options?.client ?? (await createClient())
+  const db = options?.client ?? (await createClient())
   const ids = productRows.map((p) => p.id)
   const categoryIds = [
     ...new Set(
@@ -190,14 +185,14 @@ async function loadProductBundles(
 
   const [{ data: media }, { data: variants }, { data: categories }] =
     await Promise.all([
-      supabase
+      db
         .from('product_media')
         .select('*')
         .in('product_id', ids)
         .order('sort_order', { ascending: true }),
-      supabase.from('product_variants').select('*').in('product_id', ids),
+      db.from('product_variants').select('*').in('product_id', ids),
       categoryIds.length
-        ? supabase.from('categories').select('*').in('id', categoryIds)
+        ? db.from('categories').select('*').in('id', categoryIds)
         : Promise.resolve({ data: [] as CategoryRow[] }),
     ])
 
@@ -244,7 +239,7 @@ export async function listStoreProducts(options?: {
   featuredOnly?: boolean
   limit?: number
 }): Promise<Product[]> {
-  if (!supabaseConfigured()) return []
+  if (!isDbConfigured()) return []
 
   const categorySlug = options?.categorySlug ?? ''
   const featuredOnly = Boolean(options?.featuredOnly)
@@ -252,11 +247,11 @@ export async function listStoreProducts(options?: {
 
   return unstable_cache(
     async (): Promise<Product[]> => {
-      const supabase = createServiceClient()
+      const db = createServiceClient()
       let categoryId: string | undefined
 
       if (categorySlug) {
-        const { data: category } = await supabase
+        const { data: category } = await db
           .from('categories')
           .select('id')
           .eq('slug', categorySlug)
@@ -266,7 +261,7 @@ export async function listStoreProducts(options?: {
         categoryId = category.id
       }
 
-      let query = supabase
+      let query = db
         .from('products')
         .select('*')
         .eq('active', true)
@@ -279,7 +274,7 @@ export async function listStoreProducts(options?: {
 
       const { data, error } = await query
       if (error || !data) return []
-      return loadProductBundles(data, { client: supabase })
+      return loadProductBundles(data, { client: db })
     },
     [
       'store-products',
@@ -300,12 +295,12 @@ export async function listStoreProducts(options?: {
  */
 export const getStoreProductBySlug = cache(
   async (slug: string): Promise<Product | null> => {
-    if (!supabaseConfigured()) return null
+    if (!isDbConfigured()) return null
 
     return unstable_cache(
       async (): Promise<Product | null> => {
-        const supabase = createServiceClient()
-        const { data, error } = await supabase
+        const db = createServiceClient()
+        const { data, error } = await db
           .from('products')
           .select('*')
           .eq('slug', slug)
@@ -313,7 +308,7 @@ export const getStoreProductBySlug = cache(
           .maybeSingle()
 
         if (error || !data) return null
-        const [product] = await loadProductBundles([data], { client: supabase })
+        const [product] = await loadProductBundles([data], { client: db })
         return product ?? null
       },
       ['store-product', slug],
@@ -332,17 +327,17 @@ export async function getRelatedProducts(
   product: Product,
   relatedIds: string[],
 ): Promise<Product[]> {
-  if (!supabaseConfigured()) return []
+  if (!isDbConfigured()) return []
 
   const orderedIds = relatedIds.filter((id) => id !== product.id)
   const idsKey = orderedIds.join(',')
 
   return unstable_cache(
     async (): Promise<Product[]> => {
-      const supabase = createServiceClient()
+      const db = createServiceClient()
 
       if (orderedIds.length > 0) {
-        const { data } = await supabase
+        const { data } = await db
           .from('products')
           .select('*')
           .in('id', orderedIds)
@@ -354,10 +349,10 @@ export async function getRelatedProducts(
           .filter((row): row is ProductRow => Boolean(row))
           .slice(0, RELATED_PRODUCTS_DISPLAY_CAP)
 
-        return loadProductBundles(ordered, { client: supabase })
+        return loadProductBundles(ordered, { client: db })
       }
 
-      const { data: category } = await supabase
+      const { data: category } = await db
         .from('categories')
         .select('id')
         .eq('slug', product.category)
@@ -365,7 +360,7 @@ export async function getRelatedProducts(
 
       if (!category) return []
 
-      const { data } = await supabase
+      const { data } = await db
         .from('products')
         .select('*')
         .eq('active', true)
@@ -374,7 +369,7 @@ export async function getRelatedProducts(
         .order('featured', { ascending: false })
         .limit(RELATED_PRODUCTS_DISPLAY_CAP)
 
-      return loadProductBundles(data ?? [], { client: supabase })
+      return loadProductBundles(data ?? [], { client: db })
     },
     ['store-related', product.id, idsKey, product.category],
     {
@@ -389,12 +384,12 @@ export async function getRelatedProducts(
  */
 export const getRelatedProductIds = cache(
   async (productId: string): Promise<string[]> => {
-    if (!supabaseConfigured()) return []
+    if (!isDbConfigured()) return []
 
     return unstable_cache(
       async (): Promise<string[]> => {
-        const supabase = createServiceClient()
-        const { data } = await supabase
+        const db = createServiceClient()
+        const { data } = await db
           .from('products')
           .select('related_product_ids')
           .eq('id', productId)
@@ -416,12 +411,12 @@ export const getRelatedProductIds = cache(
 export async function listActiveProductSlugs(): Promise<
   { slug: string; updatedAt: string }[]
 > {
-  if (!supabaseConfigured()) return []
+  if (!isDbConfigured()) return []
 
   return unstable_cache(
     async () => {
-      const supabase = createServiceClient()
-      const { data } = await supabase
+      const db = createServiceClient()
+      const { data } = await db
         .from('products')
         .select('slug, updated_at')
         .eq('active', true)
@@ -552,9 +547,7 @@ export function listRelatedPickerProducts(excludeProductId: string) {
           price: Number(row.price),
           compareAt:
             row.compare_at != null ? Number(row.compare_at) : undefined,
-          image:
-            primaryImageByProduct.get(row.id) ??
-            '/images/products/product-foam-cream.png',
+          image: primaryImageByProduct.get(row.id) ?? MEDIA_FALLBACK,
           badge: parseBadge(row.badge),
           active: row.active,
           categoryId: row.category_id,
@@ -618,9 +611,7 @@ export function listPromoPickerProducts() {
           price: Number(row.price),
           compareAt:
             row.compare_at != null ? Number(row.compare_at) : undefined,
-          image:
-            primaryImageByProduct.get(row.id) ??
-            '/images/products/product-foam-cream.png',
+          image: primaryImageByProduct.get(row.id) ?? MEDIA_FALLBACK,
           badge: parseBadge(row.badge),
           active: row.active,
           categoryId: row.category_id,

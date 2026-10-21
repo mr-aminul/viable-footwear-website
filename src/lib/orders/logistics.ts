@@ -1,8 +1,8 @@
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import { pathaoStatusLabel } from '@/lib/orders/status-labels'
 import { pathaoTrackingUrl } from '@/lib/orders/pathao-tracking'
-import type { OrderStatus, PaymentMethod } from '@/lib/supabase/database.types'
+import type { OrderStatus, PaymentMethod } from '@/lib/db/database.types'
 
 export type LogisticsBucketKey =
   | 'needs_shipping'
@@ -201,8 +201,8 @@ function mapRpcPayload(payload: LogisticsRpcPayload): LogisticsAnalytics {
 }
 
 async function fetchLogisticsViaRpc(): Promise<LogisticsAnalytics | null> {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase.rpc('admin_logistics_analytics')
+  const db = createServiceClient()
+  const { data, error } = await db.rpc('admin_logistics_analytics')
 
   if (error) {
     if (isMissingRpcError(error)) return null
@@ -215,8 +215,8 @@ async function fetchLogisticsViaRpc(): Promise<LogisticsAnalytics | null> {
 }
 
 async function fetchLogisticsLegacy(): Promise<LogisticsAnalytics> {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase
+  const db = createServiceClient()
+  const { data, error } = await db
     .from('orders')
     .select(
       'id, order_number, status, payment_method, full_name, phone, city_name, total, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at',

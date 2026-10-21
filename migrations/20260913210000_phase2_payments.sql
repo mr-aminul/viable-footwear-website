@@ -27,13 +27,4 @@ alter table public.orders
   add column if not exists paid_at timestamptz,
   add column if not exists payment_trx_id text;
 
-alter table public.payment_attempts enable row level security;
-
-create policy "Staff read payment attempts"
-  on public.payment_attempts for select
-  using (public.is_staff());
-
-create policy "Staff write payment attempts"
-  on public.payment_attempts for all
-  using (public.is_staff())
-  with check (public.is_staff());
+-- Payment attempts are accessed via the Next.js app + PostgREST service key.

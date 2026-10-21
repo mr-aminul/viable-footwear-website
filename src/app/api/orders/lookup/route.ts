@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { NO_STORE_HEADERS } from '@/lib/cache-headers'
 import { normalizePathaoPhone } from '@/lib/pathao'
 import { enforceRateLimit } from '@/lib/rate-limit'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 /**
  * Guest lookup: order number + phone → current status / Pathao consignment.
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createServiceClient()
-    const { data: order, error } = await supabase
+    const db = createServiceClient()
+    const { data: order, error } = await db
       .from('orders')
       .select(
         'order_number, phone, status, pathao_consignment_id, total',

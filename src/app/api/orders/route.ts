@@ -29,8 +29,8 @@ import {
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
 import { decrementOrderStock } from '@/lib/orders/stock'
 import { enforceRateLimit } from '@/lib/rate-limit'
-import { createServiceClient } from '@/lib/supabase/admin'
-import type { Json } from '@/lib/supabase/database.types'
+import { createServiceClient } from '@/lib/db/admin'
+import type { Json } from '@/lib/db/database.types'
 
 type LineInput = {
   productId?: string
@@ -175,10 +175,10 @@ export async function POST(request: NextRequest) {
       lines.push({ productId, variantId, quantity })
     }
 
-    const supabase = createServiceClient()
+    const db = createServiceClient()
     const variantIds = lines.map((l) => l.variantId)
 
-    const { data: variants, error: variantsError } = await supabase
+    const { data: variants, error: variantsError } = await db
       .from('product_variants')
       .select(
         'id, product_id, size_eu, color, sku, stock, price_override, active, products!inner(id, name, price, weight_kg, active)',
@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
 
     const orderNumber = generateOrderNumber()
 
-    const { data: insertedOrder, error: orderInsertError } = await supabase
+    const { data: insertedOrder, error: orderInsertError } = await db
       .from('orders')
       .insert({
         order_number: orderNumber,
@@ -412,7 +412,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { error: itemsInsertError } = await supabase.from('order_items').insert(
+    const { error: itemsInsertError } = await db.from('order_items').insert(
       orderItemsPayload.map((item) => ({
         ...item,
         order_id: insertedOrder.id,
@@ -421,7 +421,7 @@ export async function POST(request: NextRequest) {
 
     if (itemsInsertError) {
       console.error('[orders] items insert', itemsInsertError)
-      await supabase.from('orders').delete().eq('id', insertedOrder.id)
+      await db.from('orders').delete().eq('id', insertedOrder.id)
       return NextResponse.json(
         { success: false, error: 'Failed to save order items.' },
         { status: 502, headers: NO_STORE_HEADERS },
@@ -431,7 +431,7 @@ export async function POST(request: NextRequest) {
     // COD: decrement on place. Gateways: decrement on successful payment.
     if (paymentMethod === 'cod') {
       const reserved = await decrementOrderStock(
-        supabase,
+        db,
         lines.map((line) => ({
           variantId: line.variantId,
           quantity: line.quantity,
@@ -439,8 +439,8 @@ export async function POST(request: NextRequest) {
       )
 
       if (!reserved.ok) {
-        await supabase.from('order_items').delete().eq('order_id', insertedOrder.id)
-        await supabase.from('orders').delete().eq('id', insertedOrder.id)
+        await db.from('order_items').delete().eq('order_id', insertedOrder.id)
+        await db.from('orders').delete().eq('id', insertedOrder.id)
         return NextResponse.json(
           { success: false, error: reserved.error },
           { status: 409, headers: NO_STORE_HEADERS },
@@ -521,7 +521,7 @@ export async function POST(request: NextRequest) {
           productDetails: { order: insertedOrder.order_number },
         })
 
-        await supabase.from('payment_attempts').insert({
+        await db.from('payment_attempts').insert({
           order_id: insertedOrder.id,
           gateway: 'nagad',
           external_id: created.paymentRefId,
@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         console.error('[orders] nagad create', message)
-        await supabase.from('orders').delete().eq('id', insertedOrder.id)
+        await db.from('orders').delete().eq('id', insertedOrder.id)
         return NextResponse.json(
           {
             success: false,
@@ -583,7 +583,7 @@ export async function POST(request: NextRequest) {
         payerReference: phone,
       })
 
-      await supabase.from('payment_attempts').insert({
+      await db.from('payment_attempts').insert({
         order_id: insertedOrder.id,
         gateway: 'bkash',
         external_id: created.paymentID ?? null,
@@ -626,7 +626,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error('[orders] bkash create', message)
-      await supabase.from('orders').delete().eq('id', insertedOrder.id)
+      await db.from('orders').delete().eq('id', insertedOrder.id)
       return NextResponse.json(
         {
           success: false,

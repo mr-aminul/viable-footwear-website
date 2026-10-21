@@ -4,7 +4,7 @@ import {
   EmptyState,
 } from '@/components/admin/ui'
 import { CategoriesTable } from '@/components/admin/CategoriesTable'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 export const metadata = {
   title: 'Categories',
@@ -12,8 +12,8 @@ export const metadata = {
 }
 
 export default async function CategoriesListPage() {
-  const supabase = await createClient()
-  const { data: categories } = await supabase
+  const db = await createClient()
+  const { data: categories } = await db
     .from('categories')
     .select('id, name, slug, sort_order, active, updated_at')
     .order('sort_order', { ascending: true })

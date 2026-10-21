@@ -1,6 +1,6 @@
 /**
- * Lightweight PostgREST client (not Supabase). Speaks to VPS Postgres via
- * https://…/viable-rest with a shared service key.
+ * Lightweight PostgREST client for VPS Postgres
+ * (https://…/viable-rest with a shared service key).
  */
 
 export type DbError = { message: string; code?: string; details?: string }

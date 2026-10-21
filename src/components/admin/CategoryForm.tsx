@@ -10,7 +10,7 @@ import {
   uploadCategoryImage,
 } from '@/lib/catalog/actions/categories'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
-import { resolveMediaUrl } from '@/lib/catalog/media-url'
+import { MEDIA_FALLBACK, resolveMediaUrl } from '@/lib/catalog/media-url'
 import { slugify } from '@/lib/catalog/slug'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
@@ -53,9 +53,7 @@ export function CategoryForm({
   )
 
   const isEdit = Boolean(initial?.id)
-  const imageUrl = imagePath
-    ? resolveMediaUrl(imagePath)
-    : '/images/products/product-foam-cream.png'
+  const imageUrl = imagePath ? resolveMediaUrl(imagePath) : MEDIA_FALLBACK
 
   const draft = useMemo(
     () => ({ name, slug, active, imagePath, seoTitle, seoDescription }),

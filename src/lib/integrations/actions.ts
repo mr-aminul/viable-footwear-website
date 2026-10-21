@@ -44,7 +44,7 @@ import {
 import { grantBkashToken } from '@/lib/payments/bkash'
 import { assertNagadKeysUsable } from '@/lib/payments/nagad'
 import { getPathaoCities } from '@/lib/pathao'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 function readInput(formData: FormData): PathaoSettingsInput {
   return {
@@ -83,11 +83,11 @@ export async function savePathaoSettings(
     }
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: PATHAO_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -150,11 +150,11 @@ export async function saveBkashSettings(
     }
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: BKASH_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -225,11 +225,11 @@ export async function saveNagadSettings(
     return { ok: false, error: `Invalid RSA keys: ${message}` }
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: NAGAD_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -267,11 +267,11 @@ export async function saveGtmSettings(formData: FormData): Promise<ActionResult>
   }
 
   const value = buildGtmValueToStore({ enabled, containerId })
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: GTM_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -298,11 +298,11 @@ export async function saveMetaPixelSettings(
   }
 
   const value = buildMetaPixelValueToStore({ enabled, pixelId, preferGtm })
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: META_PIXEL_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -346,11 +346,11 @@ export async function saveOmsWebhookSettings(
   }
 
   const value = await buildOmsWebhookValueToStore(input)
-  const supabase = await createClient()
-  const { error } = await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  const { error } = await db.from('integration_settings').upsert(
     {
       key: OMS_WEBHOOK_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },
@@ -372,11 +372,11 @@ export async function testOmsWebhook(
     ...input,
     enabled: true,
   })
-  const supabase = await createClient()
-  await supabase.from('integration_settings').upsert(
+  const db = await createClient()
+  await db.from('integration_settings').upsert(
     {
       key: OMS_WEBHOOK_SETTINGS_KEY,
-      value: value as unknown as import('@/lib/supabase/database.types').Json,
+      value: value as unknown as import('@/lib/db/database.types').Json,
       updated_by: session.userId,
     },
     { onConflict: 'key' },

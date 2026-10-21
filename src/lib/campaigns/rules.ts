@@ -1,4 +1,4 @@
-import type { Json } from '@/lib/supabase/database.types'
+import type { Json } from '@/lib/db/database.types'
 
 export type CampaignRuleType =
   | 'free_shipping_min_subtotal'

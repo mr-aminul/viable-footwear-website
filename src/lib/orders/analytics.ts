@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
-import type { OrderStatus, PaymentMethod } from '@/lib/supabase/database.types'
+import { createServiceClient } from '@/lib/db/admin'
+import { createClient } from '@/lib/db/server'
+import type { OrderStatus, PaymentMethod } from '@/lib/db/database.types'
 import {
   rangePresetLabel,
   type DateRangePreset,
@@ -236,8 +236,8 @@ async function fetchSalesAnalyticsViaRpc(
   days: DateRangePreset,
   range: ReturnType<typeof resolveAnalyticsRange>,
 ): Promise<SalesAnalytics | null> {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase.rpc('admin_sales_analytics', {
+  const db = createServiceClient()
+  const { data, error } = await db.rpc('admin_sales_analytics', {
     p_from: range.fromIso,
     p_to: range.toIso,
   })
@@ -257,9 +257,9 @@ async function fetchSalesAnalyticsLegacy(
   days: DateRangePreset,
   range: ReturnType<typeof resolveAnalyticsRange>,
 ): Promise<SalesAnalytics> {
-  const supabase = createServiceClient()
+  const db = createServiceClient()
 
-  const { data: orders, error } = await supabase
+  const { data: orders, error } = await db
     .from('orders')
     .select('id, status, payment_method, total, created_at')
     .gte('created_at', range.fromIso)
@@ -348,7 +348,7 @@ async function fetchSalesAnalyticsLegacy(
   const topProducts: TopProductRow[] = []
 
   if (gmvIds.length > 0) {
-    const { data: items, error: itemsError } = await supabase
+    const { data: items, error: itemsError } = await db
       .from('order_items')
       .select('product_name, quantity, unit_price, order_id')
       .in('order_id', gmvIds)
@@ -422,8 +422,8 @@ export async function listOrdersForCsvExport(
   fromIso: string,
   toIso: string,
 ): Promise<OrdersCsvRow[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('orders')
     .select(
       'order_number, status, payment_method, full_name, phone, city_name, subtotal, shipping, total, pathao_consignment_id, created_at',

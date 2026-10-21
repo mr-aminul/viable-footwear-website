@@ -20,7 +20,7 @@ import {
   type CampaignRuleType,
 } from '@/lib/campaigns/rules'
 import { offerDeliveryPath } from '@/lib/offers/paths'
-import type { Json } from '@/lib/supabase/database.types'
+import type { Json } from '@/lib/db/database.types'
 
 type CampaignFormValues = {
   id?: string

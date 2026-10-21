@@ -4,7 +4,7 @@ import { storeStatusLabel } from '@/lib/orders/status-labels'
 import type {
   OrderStatus,
   PaymentMethod,
-} from '@/lib/supabase/database.types'
+} from '@/lib/db/database.types'
 
 const STATUS_OPTIONS: OrderStatus[] = [
   'pending_payment',

@@ -18,7 +18,7 @@ import {
   deleteObjects,
   isObjectStoreConfigured,
 } from '@/lib/media/object-store'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 const BULK_PRODUCT_ACTION_LIMIT = 50
 
@@ -150,8 +150,8 @@ function parseVariantsJson(raw: string): VariantInput[] | { error: string } {
 async function getPublishBlockReason(
   productId: string,
 ): Promise<string | null> {
-  const supabase = await createClient()
-  const { data: variants, error } = await supabase
+  const db = await createClient()
+  const { data: variants, error } = await db
     .from('product_variants')
     .select('id, color, active')
     .eq('product_id', productId)
@@ -343,7 +343,7 @@ export async function bulkCreateProducts(
   rows: BulkProductRowInput[],
 ): Promise<ActionResult<{ created: number; results: BulkProductRowResult[] }>> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   if (!Array.isArray(rows) || rows.length === 0) {
     return { ok: false, error: 'Add at least one product row.' }
@@ -422,7 +422,7 @@ export async function bulkCreateProducts(
 
     seenSlugs.add(slug)
 
-    const { data: product, error: productError } = await supabase
+    const { data: product, error: productError } = await db
       .from('products')
       .insert({
         name,
@@ -452,7 +452,7 @@ export async function bulkCreateProducts(
       continue
     }
 
-    const { error: variantError } = await supabase
+    const { error: variantError } = await db
       .from('product_variants')
       .insert(
         expanded.variants.map((variant) => ({
@@ -467,7 +467,7 @@ export async function bulkCreateProducts(
       )
 
     if (variantError) {
-      await supabase.from('products').delete().eq('id', product.id)
+      await db.from('products').delete().eq('id', product.id)
       seenSlugs.delete(slug)
       results.push({
         key: row.key,
@@ -514,12 +514,12 @@ export async function createDraftProduct(): Promise<
   await requireRole(['admin', 'manager'])
 
   try {
-    const supabase = await createClient()
+    const db = await createClient()
     let lastError = 'Could not create a draft product. Try again.'
 
     for (let attempt = 0; attempt < 5; attempt++) {
       const slug = uniqueDraftSlug()
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('products')
         .insert({
           name: 'Untitled product',
@@ -587,7 +587,7 @@ export async function updateProduct(
   formData: FormData,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const name = readString(formData, 'name')
   const slug = readString(formData, 'slug')
@@ -634,13 +634,13 @@ export async function updateProduct(
     if (blockReason) return { ok: false, error: blockReason }
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('products')
     .select('slug')
     .eq('id', productId)
     .maybeSingle()
 
-  const { error } = await supabase
+  const { error } = await db
     .from('products')
     .update({
       name,
@@ -691,9 +691,9 @@ export async function setProductActive(
   active: boolean,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: existing, error: loadError } = await supabase
+  const { data: existing, error: loadError } = await db
     .from('products')
     .select('id, slug, active')
     .eq('id', productId)
@@ -710,7 +710,7 @@ export async function setProductActive(
     if (blockReason) return { ok: false, error: blockReason }
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('products')
     .update({ active })
     .eq('id', productId)
@@ -727,9 +727,9 @@ export async function setProductFeatured(
   featured: boolean,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: existing, error: loadError } = await supabase
+  const { data: existing, error: loadError } = await db
     .from('products')
     .select('id, slug, featured')
     .eq('id', productId)
@@ -741,7 +741,7 @@ export async function setProductFeatured(
 
   if (Boolean(existing.featured) === featured) return { ok: true }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('products')
     .update({ featured })
     .eq('id', productId)
@@ -758,9 +758,9 @@ export async function setProductFeatured(
  */
 export async function deleteProduct(productId: string): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: product, error: loadError } = await supabase
+  const { data: product, error: loadError } = await db
     .from('products')
     .select('id, slug, name')
     .eq('id', productId)
@@ -770,7 +770,7 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
     return { ok: false, error: loadError?.message ?? 'Product not found.' }
   }
 
-  const { data: mediaRows } = await supabase
+  const { data: mediaRows } = await db
     .from('product_media')
     .select('media_type, storage_path')
     .eq('product_id', productId)
@@ -789,7 +789,7 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
   }
 
   // Strip this product from other products' related lists before delete.
-  const { data: relatedOwners } = await supabase
+  const { data: relatedOwners } = await db
     .from('products')
     .select('id, related_product_ids, slug')
     .contains('related_product_ids', [productId])
@@ -798,14 +798,14 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
     const nextIds = ((owner.related_product_ids ?? []) as string[]).filter(
       (id: string) => id !== productId,
     )
-    await supabase
+    await db
       .from('products')
       .update({ related_product_ids: nextIds })
       .eq('id', owner.id)
     revalidateProductSurfaces(owner.slug)
   }
 
-  const { error } = await supabase.from('products').delete().eq('id', productId)
+  const { error } = await db.from('products').delete().eq('id', productId)
   if (error) return { ok: false, error: error.message }
 
   if (imagePaths.length > 0) {
@@ -839,8 +839,8 @@ async function runBulkProductAction(
     }
   }
 
-  const supabase = await createClient()
-  const { data: productRows } = await supabase
+  const db = await createClient()
+  const { data: productRows } = await db
     .from('products')
     .select('id, name')
     .in('id', uniqueIds)
@@ -908,7 +908,7 @@ export async function saveProductVariants(
   formData: FormData,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const parsed = parseVariantsJson(readString(formData, 'variants_json'))
   if ('error' in parsed) return { ok: false, error: parsed.error }
@@ -950,7 +950,7 @@ export async function saveProductVariants(
     }
   }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug, active')
     .eq('id', productId)
@@ -959,7 +959,7 @@ export async function saveProductVariants(
   if (!product) return { ok: false, error: 'Product not found.' }
 
   // Prefer colorway-tagged gallery images as the swatch for each color.
-  const { data: mediaRows } = await supabase
+  const { data: mediaRows } = await db
     .from('product_media')
     .select('id, color, sort_order')
     .eq('product_id', productId)
@@ -979,7 +979,7 @@ export async function saveProductVariants(
     if (fromGallery) variant.media_id = fromGallery
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('product_variants')
     .select('id')
     .eq('product_id', productId)
@@ -994,7 +994,7 @@ export async function saveProductVariants(
   if (toDelete.length > 0) {
     // Hard-delete removed rows. order_items already snapshots name/size/color/sku
     // and variant_id is ON DELETE SET NULL, so past orders stay readable.
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await db
       .from('product_variants')
       .delete()
       .in('id', toDelete)
@@ -1007,7 +1007,7 @@ export async function saveProductVariants(
   const toInsert = parsed.filter((v) => !v.id)
 
   async function writeVariantUpdate(variant: VariantInput & { id: string }) {
-    const { error } = await supabase
+    const { error } = await db
       .from('product_variants')
       .update({
         size_eu: variant.size_eu,
@@ -1041,7 +1041,7 @@ export async function saveProductVariants(
   if (toInsert.length > 0) {
     // Reclaim any leftover inactive rows (from older soft-delete behavior) that
     // match size+color so unique(product, size, color) does not block re-adds.
-    const { data: inactiveRows } = await supabase
+    const { data: inactiveRows } = await db
       .from('product_variants')
       .select('id, size_eu, color')
       .eq('product_id', productId)
@@ -1081,7 +1081,7 @@ export async function saveProductVariants(
     }
 
     if (fresh.length > 0) {
-      const { error } = await supabase.from('product_variants').insert(
+      const { error } = await db.from('product_variants').insert(
         fresh.map((variant) => ({
           product_id: productId,
           size_eu: variant.size_eu,
@@ -1108,7 +1108,7 @@ export async function saveProductVariants(
       (v) => v.active && Boolean(v.color?.trim()),
     )
     if (!stillReady) {
-      await supabase
+      await db
         .from('products')
         .update({ active: false })
         .eq('id', productId)
@@ -1135,9 +1135,9 @@ export async function updateVariantStock(
     return { ok: false, error: 'Stock must be a whole number zero or greater.' }
   }
 
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: variant, error: lookupError } = await supabase
+  const { data: variant, error: lookupError } = await db
     .from('product_variants')
     .select('id, product_id')
     .eq('id', variantId)
@@ -1146,7 +1146,7 @@ export async function updateVariantStock(
   if (lookupError) return { ok: false, error: lookupError.message }
   if (!variant) return { ok: false, error: 'Variant not found.' }
 
-  const { data: product, error: productError } = await supabase
+  const { data: product, error: productError } = await db
     .from('products')
     .select('slug')
     .eq('id', variant.product_id)
@@ -1155,7 +1155,7 @@ export async function updateVariantStock(
   if (productError) return { ok: false, error: productError.message }
   if (!product?.slug) return { ok: false, error: 'Product not found.' }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('product_variants')
     .update({ stock: nextStock })
     .eq('id', variantId)
@@ -1179,9 +1179,9 @@ export async function searchRelatedProductOptions(
   if (!safe) return []
 
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data } = await supabase
+  const { data } = await db
     .from('products')
     .select('id, name, slug, active')
     .neq('id', productId)
@@ -1200,7 +1200,7 @@ export async function saveRelatedProducts(
   formData: FormData,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   let ids: string[] = []
   try {
@@ -1216,7 +1216,7 @@ export async function saveRelatedProducts(
     return { ok: false, error: 'Could not parse related products.' }
   }
 
-  const { data: product, error } = await supabase
+  const { data: product, error } = await db
     .from('products')
     .update({ related_product_ids: ids })
     .eq('id', productId)

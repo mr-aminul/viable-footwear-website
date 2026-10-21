@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
-import type { UserRole } from '@/lib/supabase/database.types'
-import { createClient } from '@/lib/supabase/server'
+import type { UserRole } from '@/lib/db/database.types'
+import { createClient } from '@/lib/db/server'
 import { isDbConfigured } from '@/lib/db/postgrest'
 
 export type StaffProfile = {

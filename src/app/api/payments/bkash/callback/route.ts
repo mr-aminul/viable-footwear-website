@@ -7,8 +7,8 @@ import {
   emitOmsWebhook,
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
-import { createServiceClient } from '@/lib/supabase/admin'
-import type { Json } from '@/lib/supabase/database.types'
+import { createServiceClient } from '@/lib/db/admin'
+import type { Json } from '@/lib/db/database.types'
 
 /**
  * bKash redirects here after customer approves/cancels.
@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
 
   if (status === 'cancel' || status === 'failure' || status === 'failed') {
     try {
-      const supabase = createServiceClient()
-      await supabase
+      const db = createServiceClient()
+      await db
         .from('payment_attempts')
         .update({
           status: status === 'cancel' ? 'cancelled' : 'failed',
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = createServiceClient()
-    const { data: attempt } = await supabase
+    const db = createServiceClient()
+    const { data: attempt } = await db
       .from('payment_attempts')
       .select('id, order_id, status, amount')
       .eq('external_id', paymentID)
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     // Idempotent: already completed
     if (attempt.status === 'completed') {
-      const { data: order } = await supabase
+      const { data: order } = await db
         .from('orders')
         .select('order_number')
         .eq('id', attempt.order_id)
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
       (executed.transactionStatus || '').toLowerCase() === 'completed'
 
     if (!ok) {
-      await supabase
+      await db
         .from('payment_attempts')
         .update({
           status: 'failed',
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!amountsMatch(attempt.amount, executed.amount)) {
-      await supabase
+      await db
         .from('payment_attempts')
         .update({
           status: 'failed',
@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
       return fail('Payment amount did not match the order total.')
     }
 
-    await supabase
+    await db
       .from('payment_attempts')
       .update({
         status: 'completed',
@@ -123,13 +123,13 @@ export async function GET(request: NextRequest) {
       .eq('status', 'created')
 
     const completed = await completeGatewayPaidOrder(
-      supabase,
+      db,
       attempt.order_id,
       executed.trxID ?? paymentID,
     )
     if (!completed) return fail('Order not found after payment.')
 
-    const { data: paidOrder } = await supabase
+    const { data: paidOrder } = await db
       .from('orders')
       .select(
         'id, order_number, status, payment_method, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
     if (paidOrder) {
       void emitOmsWebhook('order.paid', orderPayloadFromRow(paidOrder))
-      void notifyDiscordNewOrderById(supabase, attempt.order_id)
+      void notifyDiscordNewOrderById(db, attempt.order_id)
     }
 
     return NextResponse.redirect(

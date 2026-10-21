@@ -14,7 +14,7 @@ import {
   resolvePromoForCheckout,
 } from '@/lib/promotions/queries'
 import { enforceRateLimit } from '@/lib/rate-limit'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 type CartItemInput = {
   product_id?: string
@@ -71,9 +71,9 @@ export async function POST(request: NextRequest) {
     let promoError: string | null = null
 
     if (lines.length > 0) {
-      const supabase = createServiceClient()
+      const db = createServiceClient()
       const productIds = [...new Set(lines.map((l) => l.productId))]
-      const { data: products } = await supabase
+      const { data: products } = await db
         .from('products')
         .select('id, price, active')
         .in('id', productIds)

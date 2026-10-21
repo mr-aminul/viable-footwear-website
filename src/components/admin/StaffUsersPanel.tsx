@@ -20,7 +20,7 @@ import {
 } from '@/components/admin/ui'
 import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { useUnsavedChanges } from '@/components/admin/unsaved-changes'
-import type { UserRole } from '@/lib/supabase/database.types'
+import type { UserRole } from '@/lib/db/database.types'
 
 export type StaffUserRow = {
   id: string

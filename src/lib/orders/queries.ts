@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/db/admin'
+import { createClient } from '@/lib/db/server'
 import { ADMIN_ORDERS_BADGE_TAG } from '@/lib/orders/cache-tags'
 import type {
   AdminOrderListRow,
@@ -11,8 +11,8 @@ import type {
 import type {
   OrderStatus,
   PaymentMethod,
-} from '@/lib/supabase/database.types'
-import type { Database } from '@/lib/supabase/database.types'
+} from '@/lib/db/database.types'
+import type { Database } from '@/lib/db/database.types'
 
 type PaymentAttemptRow =
   Database['public']['Tables']['payment_attempts']['Row']
@@ -32,8 +32,8 @@ const ORDER_LIST_SELECT =
   'id, order_number, status, payment_method, full_name, phone, city_name, total, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
 
 async function fetchUndispatchedOrderCount(): Promise<number> {
-  const supabase = createServiceClient()
-  const { count, error } = await supabase
+  const db = createServiceClient()
+  const { count, error } = await db
     .from('orders')
     .select('id', { count: 'exact', head: true })
     .is('pathao_consignment_id', null)
@@ -64,8 +64,8 @@ export const countUndispatchedOrders = cache(async (): Promise<number> => {
 export async function listOrderCityNames(): Promise<string[]> {
   return unstable_cache(
     async () => {
-      const supabase = createServiceClient()
-      const { data, error } = await supabase
+      const db = createServiceClient()
+      const { data, error } = await db
         .from('orders')
         .select('city_name')
         .order('city_name', { ascending: true })
@@ -95,10 +95,10 @@ export async function listOrderCityNames(): Promise<string[]> {
 export async function listOrders(
   filters: ListOrdersFilters = {},
 ): Promise<AdminOrderListRow[]> {
-  const supabase = await createClient()
+  const db = await createClient()
   const limit = filters.limit ?? 100
 
-  let query = supabase
+  let query = db
     .from('orders')
     .select(ORDER_LIST_SELECT)
     .order('created_at', { ascending: false })
@@ -141,8 +141,8 @@ export async function listOrders(
 export async function getOrderById(
   id: string,
 ): Promise<OrderWithItems | null> {
-  const supabase = await createClient()
-  const { data: order, error } = await supabase
+  const db = await createClient()
+  const { data: order, error } = await db
     .from('orders')
     .select('*')
     .eq('id', id)
@@ -150,7 +150,7 @@ export async function getOrderById(
 
   if (error || !order) return null
 
-  const { data: items } = await supabase
+  const { data: items } = await db
     .from('order_items')
     .select('*')
     .eq('order_id', order.id)
@@ -161,8 +161,8 @@ export async function getOrderById(
 export async function getPaymentAttemptsForOrder(
   orderId: string,
 ): Promise<PaymentAttemptRow[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('payment_attempts')
     .select('*')
     .eq('order_id', orderId)
@@ -179,8 +179,8 @@ export async function getCampaignNameById(
   campaignId: string | null,
 ): Promise<string | null> {
   if (!campaignId) return null
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('campaigns')
     .select('name')
     .eq('id', campaignId)

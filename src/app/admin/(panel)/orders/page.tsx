@@ -8,7 +8,7 @@ import { expireAbandonedPendingOrders } from '@/lib/orders/expire-pending'
 import type {
   OrderStatus,
   PaymentMethod,
-} from '@/lib/supabase/database.types'
+} from '@/lib/db/database.types'
 import { OrdersFilters } from '@/components/admin/OrdersFilters'
 import { OrdersTable } from '@/components/admin/OrdersTable'
 import { AdminPageHeader } from '@/components/admin/ui'

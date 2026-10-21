@@ -10,8 +10,8 @@ import {
   emitOmsWebhook,
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
-import { createServiceClient } from '@/lib/supabase/admin'
-import type { Json } from '@/lib/supabase/database.types'
+import { createServiceClient } from '@/lib/db/admin'
+import type { Json } from '@/lib/db/database.types'
 
 /**
  * Nagad redirects here after customer pays/cancels.
@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
     status === 'failed'
   ) {
     try {
-      const supabase = createServiceClient()
-      await supabase
+      const db = createServiceClient()
+      await db
         .from('payment_attempts')
         .update({
           status: status.includes('cancel') || status === 'aborted'
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = createServiceClient()
-    const { data: attempt } = await supabase
+    const db = createServiceClient()
+    const { data: attempt } = await db
       .from('payment_attempts')
       .select('id, order_id, status, amount')
       .eq('external_id', paymentRefId)
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (attempt.status === 'completed') {
-      const { data: order } = await supabase
+      const { data: order } = await db
         .from('orders')
         .select('order_number')
         .eq('id', attempt.order_id)
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     const ok = isNagadPaymentSuccessful(verified)
 
     if (!ok) {
-      await supabase
+      await db
         .from('payment_attempts')
         .update({
           status: 'failed',
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!amountsMatch(attempt.amount, verified.amount)) {
-      await supabase
+      await db
         .from('payment_attempts')
         .update({
           status: 'failed',
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
     const trxId =
       verified.issuerPaymentRefNo || verified.paymentRefId || paymentRefId
 
-    await supabase
+    await db
       .from('payment_attempts')
       .update({
         status: 'completed',
@@ -139,13 +139,13 @@ export async function GET(request: NextRequest) {
       .eq('status', 'created')
 
     const completed = await completeGatewayPaidOrder(
-      supabase,
+      db,
       attempt.order_id,
       trxId,
     )
     if (!completed) return fail('Order not found after payment.')
 
-    const { data: paidOrder } = await supabase
+    const { data: paidOrder } = await db
       .from('orders')
       .select(
         'id, order_number, status, payment_method, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
     if (paidOrder) {
       void emitOmsWebhook('order.paid', orderPayloadFromRow(paidOrder))
-      void notifyDiscordNewOrderById(supabase, attempt.order_id)
+      void notifyDiscordNewOrderById(db, attempt.order_id)
     }
 
     return NextResponse.redirect(

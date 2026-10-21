@@ -6,8 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "oxlint",
-    "media:migrate": "node --env-file=.env.local scripts/migrate-media-to-minio.mjs --from-csv scripts/media-manifest.csv"
+    "lint": "oxlint"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1153.0",

@@ -14,7 +14,7 @@ import {
   isPathaoOrderNotFoundError,
   normalizePathaoPhone,
 } from '@/lib/pathao'
-import type { OrderStatus } from '@/lib/supabase/database.types'
+import type { OrderStatus } from '@/lib/db/database.types'
 import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
 import { isPathaoShipmentStranded } from '@/lib/orders/status-labels'
 import { parsePathaoHistory } from '@/lib/orders/pathao-history'
@@ -22,7 +22,7 @@ import {
   orderHeldStock,
   restoreOrderStock,
 } from '@/lib/orders/stock'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 async function assertPathaoConfigured(): Promise<ActionResult | null> {
   try {
@@ -75,8 +75,8 @@ export async function dispatchOrderToPathao(
     return { ok: false, error: message }
   }
 
-  const supabase = await createClient()
-  const { data: order, error: orderError } = await supabase
+  const db = await createClient()
+  const { data: order, error: orderError } = await db
     .from('orders')
     .select(
       'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id',
@@ -124,7 +124,7 @@ export async function dispatchOrderToPathao(
     }
   }
 
-  const { data: orderItems, error: orderItemsError } = await supabase
+  const { data: orderItems, error: orderItemsError } = await db
     .from('order_items')
     .select('product_name, quantity, weight_kg')
     .eq('order_id', order.id)
@@ -197,7 +197,7 @@ export async function dispatchOrderToPathao(
 
     const pathaoStatus = pathaoRes.data?.order_status?.trim() || null
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('orders')
       .update({
         pathao_consignment_id: consignmentId,
@@ -236,7 +236,7 @@ export async function dispatchOrderToPathao(
     return { ok: true, data: { consignmentId } }
   } catch (error) {
     const pathaoError = error instanceof Error ? error.message : String(error)
-    await supabase
+    await db
       .from('orders')
       .update({ pathao_error: pathaoError })
       .eq('id', order.id)
@@ -278,8 +278,8 @@ async function runBulkOrderAction(
     }
   }
 
-  const supabase = await createClient()
-  const { data: orderRows } = await supabase
+  const db = await createClient()
+  const { data: orderRows } = await db
     .from('orders')
     .select('id, order_number')
     .in('id', uniqueIds)
@@ -342,8 +342,8 @@ export async function syncPathaoOrderStatus(
 > {
   await requireRole(['admin', 'manager'])
 
-  const supabase = await createClient()
-  const { data: order, error } = await supabase
+  const db = await createClient()
+  const { data: order, error } = await db
     .from('orders')
     .select(
       'id, order_number, status, payment_method, payment_trx_id, total, full_name, phone, email, city_name, zone_name, area_name, address, pathao_consignment_id',
@@ -366,7 +366,7 @@ export async function syncPathaoOrderStatus(
     const becameCancelled =
       nextStatus === 'cancelled' && order.status !== 'cancelled'
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('orders')
       .update({
         status: nextStatus,
@@ -383,7 +383,7 @@ export async function syncPathaoOrderStatus(
     }
 
     if (becameCancelled && orderHeldStock(order)) {
-      const restored = await restoreOrderStock(supabase, order.id)
+      const restored = await restoreOrderStock(db, order.id)
       if (!restored.ok) {
         return {
           ok: false,
@@ -417,7 +417,7 @@ export async function syncPathaoOrderStatus(
       !TERMINAL_ORDER_STATUSES.has(order.status)
     ) {
       const becameCancelled = order.status !== 'cancelled'
-      const { error: updateError } = await supabase
+      const { error: updateError } = await db
         .from('orders')
         .update({
           status: 'cancelled',
@@ -432,7 +432,7 @@ export async function syncPathaoOrderStatus(
       }
 
       if (becameCancelled && orderHeldStock(order)) {
-        const restored = await restoreOrderStock(supabase, order.id)
+        const restored = await restoreOrderStock(db, order.id)
         if (!restored.ok) {
           return {
             ok: false,
@@ -448,7 +448,7 @@ export async function syncPathaoOrderStatus(
       }
     }
 
-    await supabase
+    await db
       .from('orders')
       .update({ pathao_error: message })
       .eq('id', orderId)
@@ -474,8 +474,8 @@ export async function syncActivePathaoShipments(): Promise<
 > {
   await requireRole(['admin', 'manager'])
 
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('orders')
     .select('id')
     .not('pathao_consignment_id', 'is', null)
@@ -509,8 +509,8 @@ export async function cancelOrder(
 ): Promise<ActionResult<{ pathaoCancelled: boolean; message: string }>> {
   await requireRole(['admin', 'manager'])
 
-  const supabase = await createClient()
-  const { data: existing, error } = await supabase
+  const db = await createClient()
+  const { data: existing, error } = await db
     .from('orders')
     .select(
       'id, status, pathao_consignment_id, pathao_cancelled_at, payment_method, payment_trx_id',
@@ -550,7 +550,7 @@ export async function cancelOrder(
       pathaoAlreadyCancelled = result.alreadyCancelled
     } catch (err) {
       const pathaoError = err instanceof Error ? err.message : String(err)
-      await supabase
+      await db
         .from('orders')
         .update({ pathao_error: pathaoError })
         .eq('id', orderId)
@@ -559,7 +559,7 @@ export async function cancelOrder(
     }
   }
 
-  const { data: cancelledRow, error: updateError } = await supabase
+  const { data: cancelledRow, error: updateError } = await db
     .from('orders')
     .update({
       status: 'cancelled',
@@ -584,7 +584,7 @@ export async function cancelOrder(
 
   // Only restore when we actually flipped this row to cancelled (avoids double restore).
   if (shouldRestoreStock && cancelledRow) {
-    const restored = await restoreOrderStock(supabase, orderId)
+    const restored = await restoreOrderStock(db, orderId)
     if (!restored.ok) {
       return {
         ok: false,
@@ -613,8 +613,8 @@ export async function deleteOrder(
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
 
-  const supabase = await createClient()
-  const { data: existing, error } = await supabase
+  const db = await createClient()
+  const { data: existing, error } = await db
     .from('orders')
     .select('id, pathao_consignment_id')
     .eq('id', orderId)
@@ -632,7 +632,7 @@ export async function deleteOrder(
       await cancelPathaoOrder(consignmentId)
     } catch (err) {
       const pathaoError = err instanceof Error ? err.message : String(err)
-      await supabase
+      await db
         .from('orders')
         .update({ pathao_error: pathaoError })
         .eq('id', orderId)
@@ -642,7 +642,7 @@ export async function deleteOrder(
   }
 
   // order_items cascade via FK, but delete explicitly for clarity
-  const { error: itemsError } = await supabase
+  const { error: itemsError } = await db
     .from('order_items')
     .delete()
     .eq('order_id', orderId)
@@ -651,7 +651,7 @@ export async function deleteOrder(
     return { ok: false, error: 'Failed to delete order items.' }
   }
 
-  const { error: deleteError } = await supabase
+  const { error: deleteError } = await db
     .from('orders')
     .delete()
     .eq('id', orderId)
@@ -691,8 +691,8 @@ export async function reactivateOrderForResend(
 ): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
   await requireRole(['admin', 'manager'])
 
-  const supabase = await createClient()
-  const { data: order, error } = await supabase
+  const db = await createClient()
+  const { data: order, error } = await db
     .from('orders')
     .select(
       'id, order_number, status, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, pathao_history',
@@ -735,7 +735,7 @@ export async function reactivateOrderForResend(
     })
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await db
     .from('orders')
     .update({
       status: 'awaiting_fulfillment',

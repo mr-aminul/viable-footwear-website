@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 export const NAGAD_SETTINGS_KEY = 'nagad'
 
@@ -77,8 +77,8 @@ async function readStoredValue(): Promise<{
   updatedAt: string | null
 }> {
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
+    const db = createServiceClient()
+    const { data, error } = await db
       .from('integration_settings')
       .select('value, updated_at')
       .eq('key', NAGAD_SETTINGS_KEY)

@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 /** Purged when GTM / Meta Pixel settings are saved in admin. */
 export const MARKETING_PUBLIC_TAG = 'marketing-public'
@@ -58,8 +58,8 @@ async function readJson(
   key: string,
 ): Promise<{ value: Record<string, unknown> | null; updatedAt: string | null }> {
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
+    const db = createServiceClient()
+    const { data, error } = await db
       .from('integration_settings')
       .select('value, updated_at')
       .eq('key', key)

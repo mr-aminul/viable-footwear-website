@@ -7,8 +7,8 @@ import type { CampaignRuleType, CampaignRules } from '@/lib/campaigns/rules'
 import { purgePrerenderArtifacts } from '@/lib/catalog/cache-tags'
 import { offerDeliveryPath, OFFERS_PATH } from '@/lib/offers/paths'
 import type { ActionResult } from '@/lib/catalog/types'
-import type { Json } from '@/lib/supabase/database.types'
-import { createClient } from '@/lib/supabase/server'
+import type { Json } from '@/lib/db/database.types'
+import { createClient } from '@/lib/db/server'
 
 function readString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? '').trim()
@@ -95,8 +95,8 @@ export async function createCampaign(
   const rules = buildRules(formData)
   if ('error' in rules) return { ok: false, error: rules.error }
 
-  const supabase = await createClient()
-  const { data, error } = await supabase
+  const db = await createClient()
+  const { data, error } = await db
     .from('campaigns')
     .insert({
       name,
@@ -130,8 +130,8 @@ export async function updateCampaign(
   const rules = buildRules(formData)
   if ('error' in rules) return { ok: false, error: rules.error }
 
-  const supabase = await createClient()
-  const { error } = await supabase
+  const db = await createClient()
+  const { error } = await db
     .from('campaigns')
     .update({
       name,
@@ -153,8 +153,8 @@ export async function setCampaignActive(
   active: boolean,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
-  const { error } = await supabase
+  const db = await createClient()
+  const { error } = await db
     .from('campaigns')
     .update({ active })
     .eq('id', id)

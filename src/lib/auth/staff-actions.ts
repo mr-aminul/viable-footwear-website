@@ -3,9 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import type { ActionResult } from '@/lib/catalog/types'
-import type { UserRole } from '@/lib/supabase/database.types'
-import { createServiceClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import type { UserRole } from '@/lib/db/database.types'
+import { createServiceClient } from '@/lib/db/admin'
+import { createClient } from '@/lib/db/server'
 
 const ROLES: UserRole[] = ['admin', 'manager']
 const MIN_PASSWORD_LENGTH = 8
@@ -26,10 +26,10 @@ function validatePassword(password: string): string | null {
 }
 
 async function countActiveAdmins(
-  supabase: ReturnType<typeof createServiceClient>,
+  db: ReturnType<typeof createServiceClient>,
   exceptUserId?: string,
 ) {
-  let query = supabase
+  let query = db
     .from('profiles')
     .select('id', { count: 'exact', head: true })
     .eq('role', 'admin')
@@ -125,8 +125,8 @@ export async function updateStaffRole(input: {
   if (!isUserRole(role)) return { ok: false, error: 'Choose a valid role.' }
 
   try {
-    const supabase = await createClient()
-    const { data: target, error: loadError } = await supabase
+    const db = await createClient()
+    const { data: target, error: loadError } = await db
       .from('profiles')
       .select('id, role, active')
       .eq('id', userId)
@@ -159,7 +159,7 @@ export async function updateStaffRole(input: {
       }
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('profiles')
       .update({ role })
       .eq('id', userId)
@@ -189,8 +189,8 @@ export async function updateStaffActive(input: {
   }
 
   try {
-    const supabase = await createClient()
-    const { data: target, error: loadError } = await supabase
+    const db = await createClient()
+    const { data: target, error: loadError } = await db
       .from('profiles')
       .select('id, role, active')
       .eq('id', userId)
@@ -213,7 +213,7 @@ export async function updateStaffActive(input: {
       }
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from('profiles')
       .update({ active })
       .eq('id', userId)

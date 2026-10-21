@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
 
 const ABANDONED_PENDING_HOURS = 24
@@ -8,12 +8,12 @@ const ABANDONED_PENDING_HOURS = 24
  * Best-effort; safe to call from admin order views.
  */
 export async function expireAbandonedPendingOrders(): Promise<number> {
-  const supabase = createServiceClient()
+  const db = createServiceClient()
   const cutoff = new Date(
     Date.now() - ABANDONED_PENDING_HOURS * 60 * 60 * 1000,
   ).toISOString()
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('orders')
     .update({ status: 'cancelled' })
     .eq('status', 'pending_payment')

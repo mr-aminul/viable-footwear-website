@@ -24,18 +24,9 @@ create index promo_codes_schedule_idx on public.promo_codes (starts_at, ends_at)
 create trigger promo_codes_updated_at before update on public.promo_codes
   for each row execute function public.set_updated_at();
 
-alter table public.promo_codes enable row level security;
+-- Promo codes are accessed via the Next.js app + PostgREST service key.
 
-create policy "Staff read promo codes"
-  on public.promo_codes for select
-  using (public.is_staff());
-
-create policy "Staff write promo codes"
-  on public.promo_codes for all
-  using (public.is_staff())
-  with check (public.is_staff());
-
--- Snapshot promo usage on orders (service role writes at checkout)
+-- Snapshot promo usage on orders (written at checkout)
 alter table public.orders
   add column if not exists promo_code_id uuid references public.promo_codes (id) on delete set null,
   add column if not exists promo_code text,

@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 export const OMS_WEBHOOK_SETTINGS_KEY = 'oms_webhook'
 
@@ -43,8 +43,8 @@ async function readStored(): Promise<{
   updatedAt: string | null
 }> {
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
+    const db = createServiceClient()
+    const { data, error } = await db
       .from('integration_settings')
       .select('value, updated_at')
       .eq('key', OMS_WEBHOOK_SETTINGS_KEY)

@@ -13,10 +13,7 @@ as $$
 declare
   result jsonb;
 begin
-  if auth.role() is distinct from 'service_role' and not public.is_staff() then
-    raise exception 'not authorized';
-  end if;
-
+  -- Authorization: PostgREST service key + Next.js requireRole (not DB RLS).
   with bounded as (
     select
       id,
@@ -173,10 +170,7 @@ as $$
 declare
   result jsonb;
 begin
-  if auth.role() is distinct from 'service_role' and not public.is_staff() then
-    raise exception 'not authorized';
-  end if;
-
+  -- Authorization: PostgREST service key + Next.js requireRole (not DB RLS).
   with recent as (
     select
       id,
@@ -352,7 +346,14 @@ comment on function public.admin_logistics_analytics() is
 
 revoke all on function public.admin_sales_analytics(timestamptz, timestamptz) from public;
 revoke all on function public.admin_logistics_analytics() from public;
-grant execute on function public.admin_sales_analytics(timestamptz, timestamptz) to authenticated;
-grant execute on function public.admin_logistics_analytics() to authenticated;
-grant execute on function public.admin_sales_analytics(timestamptz, timestamptz) to service_role;
-grant execute on function public.admin_logistics_analytics() to service_role;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.admin_sales_analytics(timestamptz, timestamptz) to service_role;
+    grant execute on function public.admin_logistics_analytics() to service_role;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'viable_app') then
+    grant execute on function public.admin_sales_analytics(timestamptz, timestamptz) to viable_app;
+    grant execute on function public.admin_logistics_analytics() to viable_app;
+  end if;
+end $$;

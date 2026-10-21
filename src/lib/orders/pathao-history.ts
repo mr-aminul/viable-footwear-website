@@ -1,4 +1,4 @@
-import type { PathaoHistoryEntry } from '@/lib/supabase/database.types'
+import type { PathaoHistoryEntry } from '@/lib/db/database.types'
 
 /** Normalize jsonb pathao_history from the database. */
 export function parsePathaoHistory(value: unknown): PathaoHistoryEntry[] {

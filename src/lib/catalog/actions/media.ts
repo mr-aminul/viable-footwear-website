@@ -22,7 +22,7 @@ import {
   isObjectStoreConfigured,
   uploadObject,
 } from '@/lib/media/object-store'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 function revalidateProduct(productId: string, slug?: string) {
   if (slug) revalidatePath(adminProductPath(slug))
@@ -50,7 +50,7 @@ export async function uploadProductMedia(
   formData: FormData,
 ): Promise<ActionResult<{ id: string }>> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
@@ -91,14 +91,14 @@ export async function uploadProductMedia(
     }
   }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', productId)
     .maybeSingle()
   if (!product) return { ok: false, error: 'Product not found.' }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from('product_media')
     .select('id, media_type, sort_order')
     .eq('product_id', productId)
@@ -160,7 +160,7 @@ export async function uploadProductMedia(
       ? images.reduce((max, m) => Math.max(max, m.sort_order), -1) + 1
       : 0
 
-  const { data: row, error } = await supabase
+  const { data: row, error } = await db
     .from('product_media')
     .insert({
       product_id: productId,
@@ -181,7 +181,7 @@ export async function uploadProductMedia(
 
   // Keep variant swatches in sync when this upload is tagged to a colorway.
   if (mediaType === 'image' && color && colorHex) {
-    const { data: variants } = await supabase
+    const { data: variants } = await db
       .from('product_variants')
       .select('id, color')
       .eq('product_id', productId)
@@ -191,7 +191,7 @@ export async function uploadProductMedia(
       .map((variant) => variant.id)
 
     if (matchingIds.length > 0) {
-      await supabase
+      await db
         .from('product_variants')
         .update({ color_hex: colorHex })
         .in('id', matchingIds)
@@ -209,9 +209,9 @@ export async function deleteProductMedia(
   mediaId: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: media, error: loadError } = await supabase
+  const { data: media, error: loadError } = await db
     .from('product_media')
     .select('id, product_id, media_type, storage_path')
     .eq('id', mediaId)
@@ -221,13 +221,13 @@ export async function deleteProductMedia(
     return { ok: false, error: loadError?.message ?? 'Media not found.' }
   }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', media.product_id)
     .maybeSingle()
 
-  const { error } = await supabase
+  const { error } = await db
     .from('product_media')
     .delete()
     .eq('id', mediaId)
@@ -258,16 +258,16 @@ export async function reorderProductMedia(
   orderedIds: string[],
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', productId)
     .maybeSingle()
 
   for (let index = 0; index < orderedIds.length; index += 1) {
-    const { error } = await supabase
+    const { error } = await db
       .from('product_media')
       .update({ sort_order: index })
       .eq('id', orderedIds[index])
@@ -288,9 +288,9 @@ export async function updateMediaAlt(
   alt: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: media, error: loadError } = await supabase
+  const { data: media, error: loadError } = await db
     .from('product_media')
     .select('product_id')
     .eq('id', mediaId)
@@ -300,14 +300,14 @@ export async function updateMediaAlt(
     return { ok: false, error: loadError?.message ?? 'Media not found.' }
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('product_media')
     .update({ alt: alt.trim() || null })
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', media.product_id)
@@ -325,9 +325,9 @@ export async function updateMediaColorway(
   color: string | null,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: media, error: loadError } = await supabase
+  const { data: media, error: loadError } = await db
     .from('product_media')
     .select('id, media_type, product_id')
     .eq('id', mediaId)
@@ -342,14 +342,14 @@ export async function updateMediaColorway(
 
   const nextColor = color?.trim().replace(/\s+/g, ' ') || null
 
-  const { error } = await supabase
+  const { error } = await db
     .from('product_media')
     .update({ color: nextColor })
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', media.product_id)
@@ -365,9 +365,9 @@ export async function updateMediaColor(
   colorHex: string | null,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
-  const { data: media, error: loadError } = await supabase
+  const { data: media, error: loadError } = await db
     .from('product_media')
     .select('product_id, media_type')
     .eq('id', mediaId)
@@ -389,14 +389,14 @@ export async function updateMediaColor(
     nextHex = trimmed.toUpperCase()
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from('product_media')
     .update({ color_hex: nextHex })
     .eq('id', mediaId)
 
   if (error) return { ok: false, error: error.message }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', media.product_id)
@@ -414,21 +414,21 @@ export async function clearColorwayMedia(
   color: string,
 ): Promise<ActionResult> {
   await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
 
   const trimmed = color.trim().replace(/\s+/g, ' ')
   if (!trimmed) {
     return { ok: false, error: 'Color name is required.' }
   }
 
-  const { data: product } = await supabase
+  const { data: product } = await db
     .from('products')
     .select('slug')
     .eq('id', productId)
     .maybeSingle()
   if (!product) return { ok: false, error: 'Product not found.' }
 
-  const { data: rows } = await supabase
+  const { data: rows } = await db
     .from('product_media')
     .select('id, color')
     .eq('product_id', productId)
@@ -442,7 +442,7 @@ export async function clearColorwayMedia(
     .map((row) => row.id)
 
   if (ids.length > 0) {
-    const { error } = await supabase
+    const { error } = await db
       .from('product_media')
       .update({ color: null })
       .in('id', ids)

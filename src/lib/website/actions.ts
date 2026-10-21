@@ -11,8 +11,8 @@ import {
   isObjectStoreConfigured,
   uploadObject,
 } from '@/lib/media/object-store'
-import { createClient } from '@/lib/supabase/server'
-import type { Json } from '@/lib/supabase/database.types'
+import { createClient } from '@/lib/db/server'
+import type { Json } from '@/lib/db/database.types'
 import {
   SITE_ALLOWED_IMAGE_TYPES,
   SITE_ALLOWED_VIDEO_TYPES,
@@ -74,10 +74,10 @@ export async function saveHomePageContent(
   content: HomePageContent,
 ): Promise<ActionResult> {
   const session = await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
   const merged = mergeHomeContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert(
+  const { error } = await db.from('site_pages').upsert(
     {
       page_key: 'home',
       content: merged as unknown as Json,
@@ -98,10 +98,10 @@ export async function saveAboutPageContent(
   content: AboutPageContent,
 ): Promise<ActionResult> {
   const session = await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
   const merged = mergeAboutContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert(
+  const { error } = await db.from('site_pages').upsert(
     {
       page_key: 'about',
       content: merged as unknown as Json,
@@ -122,10 +122,10 @@ export async function saveSiteContent(
   content: SiteContent,
 ): Promise<ActionResult> {
   const session = await requireRole(['admin', 'manager'])
-  const supabase = await createClient()
+  const db = await createClient()
   const merged = mergeSiteContent(content)
 
-  const { error } = await supabase.from('site_pages').upsert(
+  const { error } = await db.from('site_pages').upsert(
     {
       page_key: 'site',
       content: merged as unknown as Json,
@@ -155,7 +155,7 @@ export async function uploadSiteMedia(
     return { ok: false, error: 'Unknown page.' }
   }
 
-  const supabase = await createClient()
+  const db = await createClient()
   const file = formData.get('file')
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: 'Choose a file to upload.' }

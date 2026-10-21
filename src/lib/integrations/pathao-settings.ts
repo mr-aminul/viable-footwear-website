@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 
 export const PATHAO_SETTINGS_KEY = 'pathao'
 export const PATHAO_PRODUCTION_URL = 'https://api-hermes.pathao.com'
@@ -62,8 +62,8 @@ async function readStoredValue(): Promise<{
   updatedAt: string | null
 }> {
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
+    const db = createServiceClient()
+    const { data, error } = await db
       .from('integration_settings')
       .select('value, updated_at')
       .eq('key', PATHAO_SETTINGS_KEY)

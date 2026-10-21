@@ -64,24 +64,4 @@ create index order_items_order_id_idx on public.order_items (order_id);
 create trigger orders_updated_at before update on public.orders
   for each row execute function public.set_updated_at();
 
-alter table public.orders enable row level security;
-alter table public.order_items enable row level security;
-
--- Staff manage orders; storefront creates via service role (bypasses RLS)
-create policy "Staff read orders"
-  on public.orders for select
-  using (public.is_staff());
-
-create policy "Staff write orders"
-  on public.orders for all
-  using (public.is_staff())
-  with check (public.is_staff());
-
-create policy "Staff read order items"
-  on public.order_items for select
-  using (public.is_staff());
-
-create policy "Staff write order items"
-  on public.order_items for all
-  using (public.is_staff())
-  with check (public.is_staff());
+-- Orders are read/written via the Next.js app + PostgREST service key.

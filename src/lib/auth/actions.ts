@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { isAdminPath } from '@/lib/admin/paths'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 export async function signInWithPassword(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
@@ -15,8 +15,8 @@ export async function signInWithPassword(formData: FormData) {
 
   let errorMessage: string | null = null
   try {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const db = await createClient()
+    const { error } = await db.auth.signInWithPassword({ email, password })
     if (error) errorMessage = error.message
   } catch {
     errorMessage = 'sign_in_unavailable'
@@ -30,7 +30,7 @@ export async function signInWithPassword(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  const db = await createClient()
+  await db.auth.signOut()
   redirect('/admin/login')
 }

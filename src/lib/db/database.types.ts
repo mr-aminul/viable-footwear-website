@@ -38,15 +38,17 @@ export interface Database {
           full_name: string | null
           role: UserRole
           active: boolean
+          password_hash: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
-          id: string
+          id?: string
           email: string
           full_name?: string | null
           role?: UserRole
           active?: boolean
+          password_hash?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -56,6 +58,7 @@ export interface Database {
           full_name?: string | null
           role?: UserRole
           active?: boolean
+          password_hash?: string | null
           updated_at?: string
         }
         Relationships: []

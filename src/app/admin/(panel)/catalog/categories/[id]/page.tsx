@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { CategoryForm } from '@/components/admin/CategoryForm'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
 export const metadata = {
   title: 'Edit category',
@@ -11,8 +11,8 @@ type Props = { params: Promise<{ id: string }> }
 
 export default async function EditCategoryPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: category } = await supabase
+  const db = await createClient()
+  const { data: category } = await db
     .from('categories')
     .select('*')
     .eq('id', id)

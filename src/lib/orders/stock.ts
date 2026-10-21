@@ -6,11 +6,11 @@ type DbClient = ViableDbClient
  * Decrement variant stock for order lines. Fails if any line cannot be reserved.
  */
 export async function decrementOrderStock(
-  supabase: DbClient,
+  db: DbClient,
   lines: { variantId: string; quantity: number }[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   for (const line of lines) {
-    const { data: variant, error: loadError } = await supabase
+    const { data: variant, error: loadError } = await db
       .from('product_variants')
       .select('stock')
       .eq('id', line.variantId)
@@ -25,7 +25,7 @@ export async function decrementOrderStock(
       return { ok: false, error: 'An item just went out of stock.' }
     }
 
-    const { data: updated, error: stockError } = await supabase
+    const { data: updated, error: stockError } = await db
       .from('product_variants')
       .update({ stock: nextStock })
       .eq('id', line.variantId)
@@ -44,10 +44,10 @@ export async function decrementOrderStock(
  * Restore stock for order line items (COD cancel / paid gateway cancel).
  */
 export async function restoreOrderStock(
-  supabase: DbClient,
+  db: DbClient,
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: items, error } = await supabase
+  const { data: items, error } = await db
     .from('order_items')
     .select('variant_id, quantity')
     .eq('order_id', orderId)
@@ -61,7 +61,7 @@ export async function restoreOrderStock(
     const qty = Number(item.quantity)
     if (!Number.isFinite(qty) || qty <= 0) continue
 
-    const { data: variant, error: loadError } = await supabase
+    const { data: variant, error: loadError } = await db
       .from('product_variants')
       .select('stock')
       .eq('id', item.variant_id)
@@ -71,7 +71,7 @@ export async function restoreOrderStock(
       return { ok: false, error: 'Could not restore stock for an item.' }
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('product_variants')
       .update({ stock: Number(variant.stock) + qty })
       .eq('id', item.variant_id)

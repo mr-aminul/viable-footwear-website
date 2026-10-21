@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import type { DateRangePreset } from '@/lib/orders/analytics-range'
 
 const VISITOR_STATS_TAG = 'admin-visitor-stats'
@@ -27,11 +27,11 @@ export type VisitorStats = {
 }
 
 async function fetchVisitorStats(days: DateRangePreset): Promise<VisitorStats> {
-  const supabase = createServiceClient()
+  const db = createServiceClient()
   const today = dhakaDateString()
   const from = addDaysIso(today, -(days - 1))
 
-  const { count: visitorsInRange, error: rangeError } = await supabase
+  const { count: visitorsInRange, error: rangeError } = await db
     .from('site_daily_visitors')
     .select('*', { count: 'exact', head: true })
     .gte('visit_date', from)
@@ -41,7 +41,7 @@ async function fetchVisitorStats(days: DateRangePreset): Promise<VisitorStats> {
     console.error('[visitors] range count', rangeError)
   }
 
-  const { count: visitorsToday, error: todayError } = await supabase
+  const { count: visitorsToday, error: todayError } = await db
     .from('site_daily_visitors')
     .select('*', { count: 'exact', head: true })
     .eq('visit_date', today)
@@ -78,8 +78,8 @@ export async function recordSiteVisit(visitorKey: string): Promise<boolean> {
   const key = visitorKey.trim()
   if (!VISITOR_KEY_RE.test(key)) return false
 
-  const supabase = createServiceClient()
-  const { error } = await supabase.rpc('record_site_visit', {
+  const db = createServiceClient()
+  const { error } = await db.rpc('record_site_visit', {
     p_visitor_key: key,
   })
 

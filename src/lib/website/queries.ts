@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { createServiceClient } from '@/lib/supabase/admin'
+import { createServiceClient } from '@/lib/db/admin'
 import type { SitePageKey } from '@/lib/website/constants'
 import {
   mergeAboutContent,
@@ -21,8 +21,8 @@ function pageTag(pageKey: SitePageKey) {
 
 async function fetchPageRaw(pageKey: SitePageKey): Promise<unknown> {
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
+    const db = createServiceClient()
+    const { data, error } = await db
       .from('site_pages')
       .select('content')
       .eq('page_key', pageKey)

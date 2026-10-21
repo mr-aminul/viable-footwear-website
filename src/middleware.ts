@@ -5,9 +5,7 @@ import {
   verifySessionToken,
 } from '@/lib/db/session-token'
 
-/**
- * Gate admin surfaces with the Viable staff JWT cookie (no Supabase Auth).
- */
+/** Gate admin surfaces with the Viable staff JWT cookie. */
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isLogin = path.startsWith('/admin/login')

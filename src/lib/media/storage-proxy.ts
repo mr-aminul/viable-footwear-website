@@ -19,9 +19,6 @@ const ALLOWED = new Set<string>(MEDIA_PROXY_BUCKETS)
 const PUBLIC_STORAGE_RE =
   /^https?:\/\/[^/]+\/(?:storage\/v1\/object\/public\/)?([^/?#]+)\/([^?#]+)(?:[?#].*)?$/i
 
-const SUPABASE_PUBLIC_RE =
-  /^https?:\/\/[^/]+\.supabase\.co\/storage\/v1\/object\/public\/([^/?#]+)\/([^?#]+)(?:[?#].*)?$/i
-
 const LEGACY_PROXY_RE = /^\/api\/media\/([^/]+)\/(.+)$/
 
 export function isAllowedMediaBucket(
@@ -107,11 +104,6 @@ export function toProxiedMediaUrl(
   }
 
   if (path.startsWith('http://') || path.startsWith('https://')) {
-    const supabaseMatch = path.match(SUPABASE_PUBLIC_RE)
-    if (supabaseMatch && isAllowedMediaBucket(supabaseMatch[1])) {
-      return mediaProxyPath(supabaseMatch[1], decodeURIComponent(supabaseMatch[2]))
-    }
-
     const mediaBase = mediaPublicBaseUrl()
     if (mediaBase && path.startsWith(`${mediaBase}/`)) {
       const rest = path.slice(mediaBase.length + 1)

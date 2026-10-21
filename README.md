@@ -18,18 +18,18 @@ Full requirements & task list: [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md)
 npm install
 ```
 
-2. Copy env and fill Supabase keys:
+2. Copy env and fill VPS API / media keys:
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. In Supabase → SQL Editor, run in order:
+3. Apply SQL migrations against **VPS Postgres** (SSH tunnel / `DATABASE_URL`), in order under `migrations/`.  
+   If this database was originally dumped from Supabase, also run:
 
-`supabase/migrations/20260910000000_phase0_foundation.sql`  
-`supabase/migrations/20260913000000_phase1_seed_catalog.sql`
+`migrations/20261021120000_drop_supabase_leftovers.sql`
 
-4. Create your first Auth user (Authentication → Users), then promote to admin:
+4. Create a staff user in `profiles` (password hash via your auth bootstrap), then promote to admin if needed:
 
 ```sql
 update public.profiles
@@ -61,15 +61,11 @@ That pulls `main`, builds, and restarts `viable-web.service`. Caddy terminates H
 ## Phase status
 
 - [x] Next.js migration (storefront routes preserved)  
-- [x] Supabase schema + RLS + storage buckets (SQL migration)  
+- [x] Postgres schema + storage buckets (SQL migrations)  
 - [x] Staff auth + Admin/Manager gate  
-- [x] Admin shell, Integrations (Admin-only placeholder), Users list  
+- [x] Admin shell, Integrations (Admin-only), Users list  
 - [x] Catalog CMS: categories, products, variants, media, related, SEO  
-- [x] Storefront reads live catalog from Supabase  
+- [x] Storefront reads live catalog from VPS Postgres  
 - [ ] Checkout, Pathao, payments — Phase 2  
-
-After Phase 0 SQL, also run:
-
-`supabase/migrations/20260913000000_phase1_seed_catalog.sql`
 
 Storefront catalog is DB-backed. Seed SQL loads the starter styles; manage them under `/admin/catalog`.

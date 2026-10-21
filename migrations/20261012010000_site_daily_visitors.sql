@@ -12,11 +12,7 @@ create index site_daily_visitors_visit_date_idx
   on public.site_daily_visitors (visit_date desc);
 
 comment on table public.site_daily_visitors is
-  'Storefront unique visitors by day (Asia/Dhaka). Written via service role only.';
-
-alter table public.site_daily_visitors enable row level security;
-
--- No anon/authenticated policies: service role bypasses RLS for API + admin reads.
+  'Storefront unique visitors by day (Asia/Dhaka). Written via PostgREST service key only.';
 
 create or replace function public.record_site_visit(p_visitor_key text)
 returns void
@@ -43,4 +39,12 @@ end;
 $$;
 
 revoke all on function public.record_site_visit(text) from public;
-grant execute on function public.record_site_visit(text) to service_role;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.record_site_visit(text) to service_role;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'viable_app') then
+    grant execute on function public.record_site_visit(text) to viable_app;
+  end if;
+end $$;
