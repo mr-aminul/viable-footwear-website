@@ -21,14 +21,15 @@ function cacheHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra)
   headers.set('Cache-Control', CACHE_CONTROL)
   headers.set('CDN-Cache-Control', CACHE_CONTROL)
-  headers.set('Vercel-CDN-Cache-Control', CACHE_CONTROL)
+  // Cloudflare Free respects this even when path is /api/… (no file extension).
+  headers.set('Cloudflare-CDN-Cache-Control', CACHE_CONTROL)
   return headers
 }
 
 /**
- * Same-origin media proxy. Browsers request `/api/media/…`; Vercel CDN caches
- * full responses for a year. Optional `?w=` serves a downscaled WebP variant
- * (also CDN-cached) so thumbs/cards do not download full product photos.
+ * Same-origin media proxy. Browsers request `/api/media/…`; CDN (Cloudflare)
+ * caches full responses for a year. Optional `?w=` serves a downscaled WebP
+ * variant (also CDN-cached) so thumbs/cards do not download full product photos.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { bucket, path: pathParts } = await context.params
