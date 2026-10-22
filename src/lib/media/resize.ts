@@ -2,7 +2,7 @@ import sharp from 'sharp'
 
 /**
  * Whitelisted longest-edge widths for `/api/media/…?w=`.
- * Keeps CDN variants few and predictable.
+ * Variants are encoded at upload time (see `uploadImageWidthVariants`).
  */
 export const MEDIA_WIDTHS = [
   64, 96, 128, 256, 384, 640, 828, 1200, 1600,
@@ -39,7 +39,8 @@ export function canResizeContentType(contentType: string): boolean {
 }
 
 /**
- * Downscale for thumbs/cards. Never enlarges. WebP for smaller transfer.
+ * Downscale for thumbs/cards at upload time. Never enlarges. WebP for transfer.
+ * Do not call this from the public media route — that path must stay light.
  */
 export async function resizeMediaImage(
   bytes: Buffer,

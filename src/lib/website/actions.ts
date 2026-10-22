@@ -11,6 +11,7 @@ import {
   isObjectStoreConfigured,
   uploadObject,
 } from '@/lib/media/object-store'
+import { uploadImageWidthVariants } from '@/lib/media/variants'
 import { createClient } from '@/lib/db/server'
 import type { Json } from '@/lib/db/database.types'
 import {
@@ -213,6 +214,14 @@ export async function uploadSiteMedia(
   })
   if (!uploaded.ok) {
     return { ok: false, error: uploaded.error || 'Upload failed.' }
+  }
+
+  if (!isVideo && contentType !== 'image/gif') {
+    await uploadImageWidthVariants({
+      bucket: SITE_MEDIA_BUCKET,
+      objectPath,
+      bytes,
+    })
   }
 
   return { ok: true, data: { path: objectPath, mediaType } }

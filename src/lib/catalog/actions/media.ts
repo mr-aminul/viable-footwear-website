@@ -22,6 +22,10 @@ import {
   isObjectStoreConfigured,
   uploadObject,
 } from '@/lib/media/object-store'
+import {
+  deleteImageWithVariants,
+  uploadImageWidthVariants,
+} from '@/lib/media/variants'
 import { createClient } from '@/lib/db/server'
 
 function revalidateProduct(productId: string, slug?: string) {
@@ -155,6 +159,14 @@ export async function uploadProductMedia(
   })
   if (!uploaded.ok) return { ok: false, error: uploaded.error }
 
+  if (!isVideo && contentType !== 'image/gif') {
+    await uploadImageWidthVariants({
+      bucket,
+      objectPath: storagePath,
+      bytes: uploadBody,
+    })
+  }
+
   const nextSort =
     mediaType === 'image'
       ? images.reduce((max, m) => Math.max(max, m.sort_order), -1) + 1
@@ -175,7 +187,11 @@ export async function uploadProductMedia(
     .single()
 
   if (error) {
-    await deleteObject(bucket, storagePath)
+    if (isVideo) {
+      await deleteObject(bucket, storagePath)
+    } else {
+      await deleteImageWithVariants(bucket, storagePath)
+    }
     return { ok: false, error: error.message }
   }
 
@@ -239,11 +255,11 @@ export async function deleteProductMedia(
     !media.storage_path.startsWith('/') &&
     !media.storage_path.startsWith('http')
   ) {
-    const bucket =
-      media.media_type === 'video'
-        ? PRODUCT_VIDEO_BUCKET
-        : PRODUCT_IMAGE_BUCKET
-    await deleteObject(bucket, media.storage_path)
+    if (media.media_type === 'video') {
+      await deleteObject(PRODUCT_VIDEO_BUCKET, media.storage_path)
+    } else {
+      await deleteImageWithVariants(PRODUCT_IMAGE_BUCKET, media.storage_path)
+    }
   }
 
   revalidateProduct(media.product_id, product?.slug)

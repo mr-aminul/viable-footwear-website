@@ -16,7 +16,7 @@ export const MEDIA_PLACEHOLDER = '/images/media-placeholder.svg'
 type SafeImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string | null | undefined
   /**
-   * Longest edge for CDN-resized `/api/media/…?w=` delivery.
+   * Longest edge for `/api/media/…?w=` (pre-built storage variant).
    * Use small values for thumbs/swatches, mid for cards, omit for hero/PDP.
    */
   maxWidth?: MediaWidth

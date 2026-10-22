@@ -18,6 +18,7 @@ import {
   deleteObjects,
   isObjectStoreConfigured,
 } from '@/lib/media/object-store'
+import { mediaObjectPathsIncludingVariants } from '@/lib/media/variants'
 import { createClient } from '@/lib/db/server'
 
 const BULK_PRODUCT_ACTION_LIMIT = 50
@@ -809,7 +810,10 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message }
 
   if (imagePaths.length > 0) {
-    await deleteObjects(PRODUCT_IMAGE_BUCKET, imagePaths)
+    await deleteObjects(
+      PRODUCT_IMAGE_BUCKET,
+      imagePaths.flatMap((path) => mediaObjectPathsIncludingVariants(path)),
+    )
   }
   if (videoPaths.length > 0) {
     await deleteObjects(PRODUCT_VIDEO_BUCKET, videoPaths)

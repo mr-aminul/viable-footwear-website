@@ -56,7 +56,9 @@ On the server (`/var/www/viable`):
 sudo bash scripts/deploy-vps.sh
 ```
 
-That pulls `main`, builds, and restarts `viable-web.service`. Caddy terminates HTTPS and reverse-proxies to `127.0.0.1:3000`. Production secrets live in `/var/www/viable/.env.local` (not in git).
+That pulls `main`, builds, and restarts `viable-web.service`. It also applies a **~400 MB memory cap**, a **nightly restart** (03:15), and a **weekly** `.next/cache` wipe. Caddy terminates HTTPS and reverse-proxies to `127.0.0.1:3000`. Production secrets live in `/var/www/viable/.env.local` (not in git).
+
+Product photos are resized once on upload (not on every customer view). Old photos without size variants still load; re-upload in admin if you want smaller thumbs.
 
 ## Phase status
 

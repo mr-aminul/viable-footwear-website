@@ -56,7 +56,8 @@ export function mediaProxyPath(bucket: string, objectPath: string): string {
 }
 
 /**
- * Append a CDN-resized width to a proxied media URL (`?w=`).
+ * Append a width hint to a proxied media URL (`?w=`).
+ * The media route serves a pre-built storage variant when available.
  * Non-proxy URLs (local `/images/…`, absolute third-party) are unchanged.
  */
 export function withMediaWidth(

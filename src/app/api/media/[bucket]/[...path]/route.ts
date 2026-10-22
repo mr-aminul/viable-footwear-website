@@ -3,11 +3,8 @@ import {
   isAllowedMediaBucket,
   publicStorageUrl,
 } from '@/lib/media/storage-proxy'
-import {
-  canResizeContentType,
-  parseMediaWidth,
-  resizeMediaImage,
-} from '@/lib/media/resize'
+import { parseMediaWidth } from '@/lib/media/resize'
+import { mediaVariantObjectPath } from '@/lib/media/variants'
 
 /** Long-lived CDN + browser cache so repeat visitors rarely hit origin storage. */
 const CACHE_CONTROL =
@@ -26,10 +23,29 @@ function cacheHeaders(extra?: HeadersInit): Headers {
   return headers
 }
 
+async function fetchUpstream(
+  url: string,
+  range: string | null,
+): Promise<Response> {
+  const upstreamHeaders: HeadersInit = {}
+  if (range) upstreamHeaders.Range = range
+
+  // Full responses are Data-Cache'd; Range (video seek) bypasses that cache.
+  return fetch(url, {
+    headers: upstreamHeaders,
+    ...(range
+      ? { cache: 'no-store' as const }
+      : { next: { revalidate: 31536000 } }),
+  })
+}
+
 /**
  * Same-origin media proxy. Browsers request `/api/media/…`; CDN (Cloudflare)
- * caches full responses for a year. Optional `?w=` serves a downscaled WebP
- * variant (also CDN-cached) so thumbs/cards do not download full product photos.
+ * caches full responses for a year.
+ *
+ * Optional `?w=` serves a pre-built width variant from storage when present
+ * (written at upload time). Never resizes on the request path — that kept
+ * the VPS memory high. Missing variants fall back to the original object.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { bucket, path: pathParts } = await context.params
@@ -46,23 +62,30 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 
   const objectPath = pathParts.map(decodeURIComponent).join('/')
-  const upstream = publicStorageUrl(bucket, objectPath)
+  const width = parseMediaWidth(request.nextUrl.searchParams.get('w'))
+
+  let servePath = objectPath
+  if (width) {
+    const variantPath = mediaVariantObjectPath(objectPath, width)
+    const variantUrl = publicStorageUrl(bucket, variantPath)
+    if (variantUrl) {
+      // HEAD + no-store so a missing variant is never stuck in Next's data cache.
+      const probe = await fetch(variantUrl, {
+        method: 'HEAD',
+        cache: 'no-store',
+      })
+      if (probe.ok) servePath = variantPath
+    }
+  }
+
+  const upstream = publicStorageUrl(bucket, servePath)
   if (!upstream) {
     return new NextResponse('Storage is not configured', { status: 500 })
   }
 
-  const width = parseMediaWidth(request.nextUrl.searchParams.get('w'))
+  // Variants are always full objects; Range only for original (video).
   const range = width ? null : request.headers.get('range')
-  const upstreamHeaders: HeadersInit = {}
-  if (range) upstreamHeaders.Range = range
-
-  // Full responses are Data-Cache'd; Range (video seek) bypasses that cache.
-  const upstreamRes = await fetch(upstream, {
-    headers: upstreamHeaders,
-    ...(range
-      ? { cache: 'no-store' as const }
-      : { next: { revalidate: 31536000 } }),
-  })
+  const upstreamRes = await fetchUpstream(upstream, range)
 
   if (!upstreamRes.ok && upstreamRes.status !== 206) {
     return new NextResponse('Not found', {
@@ -72,29 +95,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const contentType =
     upstreamRes.headers.get('content-type') || 'application/octet-stream'
-
-  if (width && canResizeContentType(contentType)) {
-    const bytes = Buffer.from(await upstreamRes.arrayBuffer())
-    try {
-      const resized = await resizeMediaImage(bytes, width)
-      return new NextResponse(new Uint8Array(resized.buffer), {
-        status: 200,
-        headers: cacheHeaders({
-          'Content-Type': resized.contentType,
-          'Content-Length': String(resized.buffer.byteLength),
-        }),
-      })
-    } catch {
-      // Serve the original bytes we already fetched.
-      return new NextResponse(new Uint8Array(bytes), {
-        status: 200,
-        headers: cacheHeaders({
-          'Content-Type': contentType,
-          'Content-Length': String(bytes.byteLength),
-        }),
-      })
-    }
-  }
 
   const headers = cacheHeaders({ 'Content-Type': contentType })
 

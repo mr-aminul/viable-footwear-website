@@ -11,11 +11,11 @@ import {
 import { optimizeProductImage } from '@/lib/catalog/optimize-image'
 import { isValidSlug, slugify } from '@/lib/catalog/slug'
 import type { ActionResult } from '@/lib/catalog/types'
+import { isObjectStoreConfigured, uploadObject } from '@/lib/media/object-store'
 import {
-  deleteObject,
-  isObjectStoreConfigured,
-  uploadObject,
-} from '@/lib/media/object-store'
+  deleteImageWithVariants,
+  uploadImageWidthVariants,
+} from '@/lib/media/variants'
 import { createClient } from '@/lib/db/server'
 
 function readString(formData: FormData, key: string): string {
@@ -44,7 +44,7 @@ async function removeCategoryImageObject(
 ) {
   if (!isStorageObjectPath(path) || !path?.startsWith('categories/')) return
   if (isObjectStoreConfigured()) {
-    await deleteObject(PRODUCT_IMAGE_BUCKET, path!)
+    await deleteImageWithVariants(PRODUCT_IMAGE_BUCKET, path!)
   }
 }
 
@@ -240,6 +240,14 @@ export async function uploadCategoryImage(
   })
   if (!uploaded.ok) {
     return { ok: false, error: uploaded.error || 'Upload failed.' }
+  }
+
+  if (contentType !== 'image/gif') {
+    await uploadImageWidthVariants({
+      bucket: PRODUCT_IMAGE_BUCKET,
+      objectPath: storagePath,
+      bytes: uploadBody,
+    })
   }
 
   return { ok: true, data: { path: storagePath } }
