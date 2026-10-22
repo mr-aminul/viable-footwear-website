@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   BarChart3,
   Boxes,
+  HardDriveDownload,
   LayoutDashboard,
   LogOut,
   Package,
@@ -46,6 +47,7 @@ const nav: NavItem[] = [
 
 const adminOnly: NavItem[] = [
   { href: '/admin/integrations', label: 'Integrations', icon: Plug },
+  { href: '/admin/backup', label: 'Backup', icon: HardDriveDownload },
   { href: '/admin/users', label: 'Users', icon: Users },
 ]
 

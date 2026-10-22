@@ -1,6 +1,8 @@
 import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
@@ -121,4 +123,47 @@ export async function deleteObjects(
       // Best-effort cleanup.
     }
   }
+}
+
+/** List every object key in a bucket (paginated). */
+export async function listObjectKeys(bucket: string): Promise<string[]> {
+  const keys: string[] = []
+  let continuationToken: string | undefined
+
+  do {
+    const res = await s3Client().send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        ContinuationToken: continuationToken,
+        MaxKeys: 1000,
+      }),
+    )
+    for (const obj of res.Contents ?? []) {
+      if (obj.Key && !obj.Key.endsWith('/')) keys.push(obj.Key)
+    }
+    continuationToken = res.IsTruncated
+      ? res.NextContinuationToken
+      : undefined
+  } while (continuationToken)
+
+  return keys
+}
+
+/** Download one object as a Buffer. */
+export async function getObjectBuffer(
+  bucket: string,
+  path: string,
+): Promise<Buffer> {
+  const key = path.replace(/^\/+/, '')
+  const res = await s3Client().send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  )
+  if (!res.Body) {
+    throw new Error(`Empty object body for ${bucket}/${key}`)
+  }
+  const bytes = await res.Body.transformToByteArray()
+  return Buffer.from(bytes)
 }
