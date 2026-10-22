@@ -4,6 +4,7 @@ import {
   STAFF_SESSION_COOKIE,
   verifySessionToken,
 } from '@/lib/db/session-token'
+import { publicRedirect } from '@/lib/http/public-origin'
 
 /** Gate admin surfaces with the Viable staff JWT cookie. */
 export async function middleware(request: NextRequest) {
@@ -16,17 +17,12 @@ export async function middleware(request: NextRequest) {
   const signedIn = Boolean(session)
 
   if (needsAuth && !signedIn) {
-    const login = request.nextUrl.clone()
-    login.pathname = '/admin/login'
-    login.searchParams.set('next', path)
-    return NextResponse.redirect(login)
+    const search = new URLSearchParams({ next: path })
+    return publicRedirect(request, '/admin/login', `?${search}`)
   }
 
   if (isLogin && signedIn) {
-    const dash = request.nextUrl.clone()
-    dash.pathname = '/admin'
-    dash.search = ''
-    return NextResponse.redirect(dash)
+    return publicRedirect(request, '/admin')
   }
 
   return NextResponse.next({ request })
