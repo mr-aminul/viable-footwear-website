@@ -4,8 +4,29 @@ import { useRef, useState, useTransition } from 'react'
 import { ImagePlus, Loader2 } from 'lucide-react'
 import { prepareMediaFileForUpload } from '@/lib/catalog/compress-image-client'
 import { uploadSiteMedia } from '@/lib/website/actions'
-import type { SitePageKey } from '@/lib/website/constants'
+import {
+  SITE_IMAGE_MAX_BYTES,
+  SITE_VIDEO_MAX_BYTES,
+  type SitePageKey,
+} from '@/lib/website/constants'
 import { resolveSiteMediaUrl } from '@/lib/website/media-url'
+
+function formatMegabytes(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))}MB`
+}
+
+/** Production Next.js redacts thrown server errors — never show that to staff. */
+function friendlyUploadError(err: unknown): string {
+  const message = err instanceof Error ? err.message : ''
+  if (
+    !message ||
+    message.includes('Server Components render') ||
+    message.includes('Unexpected end of form')
+  ) {
+    return 'Upload failed — the file may be too large or the connection dropped. Try a smaller file.'
+  }
+  return message
+}
 
 type SiteMediaPickerProps = {
   pageKey: SitePageKey
@@ -53,6 +74,18 @@ export function SiteMediaPicker({
   const onPick = (file: File | undefined) => {
     if (!file) return
     setError(null)
+
+    // Reject oversize files here — past the server limit the request body
+    // is truncated and the upload fails with an opaque production error.
+    const isVideoFile = file.type.startsWith('video/')
+    const maxBytes = isVideoFile ? SITE_VIDEO_MAX_BYTES : SITE_IMAGE_MAX_BYTES
+    if (file.size > maxBytes) {
+      setError(
+        `${isVideoFile ? 'Video' : 'Image'} must be ${formatMegabytes(maxBytes)} or smaller. This file is ${formatMegabytes(file.size)}.`,
+      )
+      return
+    }
+
     startTransition(async () => {
       try {
         const prepared = await prepareMediaFileForUpload(file)
@@ -65,7 +98,7 @@ export function SiteMediaPicker({
         }
         onChange(result.data!.path)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed.')
+        setError(friendlyUploadError(err))
       }
     })
   }
