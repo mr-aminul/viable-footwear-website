@@ -980,7 +980,16 @@ export function CheckoutPage() {
             Checkout
           </h1>
           <p className="mt-2 text-[15px] text-mute">
-            Delivery via Pathao · Pay on delivery, bKash, or Nagad
+            {gatewaysChecked
+              ? [
+                  'Delivery via Pathao',
+                  'Cash on delivery',
+                  bkashAvailable ? 'bKash' : null,
+                  nagadAvailable ? 'Nagad' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Delivery via Pathao'}
           </p>
         </div>
         <Link
@@ -1269,7 +1278,15 @@ export function CheckoutPage() {
                     .join(' · ')
                 : 'Checking available payment methods…'}
             </p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div
+              className={[
+                'mt-5 grid gap-3',
+                bkashAvailable || nagadAvailable ? 'sm:grid-cols-2' : '',
+                bkashAvailable && nagadAvailable ? 'lg:grid-cols-3' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
               <button
                 type="button"
                 onClick={() => setPaymentMethod('cod')}
@@ -1293,54 +1310,52 @@ export function CheckoutPage() {
                   Pay when your order arrives
                 </span>
               </button>
-              <button
-                type="button"
-                disabled={!bkashAvailable}
-                onClick={() => setPaymentMethod('bkash')}
-                aria-pressed={paymentMethod === 'bkash'}
-                className={[
-                  'rounded-xl border px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45',
-                  paymentMethod === 'bkash'
-                    ? 'border-navy bg-navy text-white'
-                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
-                ].join(' ')}
-              >
-                <span className="block text-[14px] font-semibold">bKash</span>
-                <span
+              {bkashAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('bkash')}
+                  aria-pressed={paymentMethod === 'bkash'}
                   className={[
-                    'mt-1 block text-[12px] font-normal',
-                    paymentMethod === 'bkash' ? 'text-white/75' : 'text-mute',
+                    'rounded-xl border px-4 py-3.5 text-left transition',
+                    paymentMethod === 'bkash'
+                      ? 'border-navy bg-navy text-white'
+                      : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
                   ].join(' ')}
                 >
-                  {!bkashAvailable
-                    ? 'Not configured yet'
-                    : 'Pay now, then we ship'}
-                </span>
-              </button>
-              <button
-                type="button"
-                disabled={!nagadAvailable}
-                onClick={() => setPaymentMethod('nagad')}
-                aria-pressed={paymentMethod === 'nagad'}
-                className={[
-                  'rounded-xl border px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45',
-                  paymentMethod === 'nagad'
-                    ? 'border-navy bg-navy text-white'
-                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
-                ].join(' ')}
-              >
-                <span className="block text-[14px] font-semibold">Nagad</span>
-                <span
+                  <span className="block text-[14px] font-semibold">bKash</span>
+                  <span
+                    className={[
+                      'mt-1 block text-[12px] font-normal',
+                      paymentMethod === 'bkash' ? 'text-white/75' : 'text-mute',
+                    ].join(' ')}
+                  >
+                    Pay now, then we ship
+                  </span>
+                </button>
+              ) : null}
+              {nagadAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('nagad')}
+                  aria-pressed={paymentMethod === 'nagad'}
                   className={[
-                    'mt-1 block text-[12px] font-normal',
-                    paymentMethod === 'nagad' ? 'text-white/75' : 'text-mute',
+                    'rounded-xl border px-4 py-3.5 text-left transition',
+                    paymentMethod === 'nagad'
+                      ? 'border-navy bg-navy text-white'
+                      : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
                   ].join(' ')}
                 >
-                  {!nagadAvailable
-                    ? 'Not configured yet'
-                    : 'Pay now, then we ship'}
-                </span>
-              </button>
+                  <span className="block text-[14px] font-semibold">Nagad</span>
+                  <span
+                    className={[
+                      'mt-1 block text-[12px] font-normal',
+                      paymentMethod === 'nagad' ? 'text-white/75' : 'text-mute',
+                    ].join(' ')}
+                  >
+                    Pay now, then we ship
+                  </span>
+                </button>
+              ) : null}
             </div>
           </section>
 

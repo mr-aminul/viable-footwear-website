@@ -68,7 +68,11 @@ export function BkashSettingsForm({
     setAppSecret('')
     setPassword('')
     setSavedSnapshot(JSON.stringify(nonSecretDraft))
-    setSuccess('Saved. Checkout can offer bKash when configured.')
+    setSuccess(
+      initial.paymentsEnabled
+        ? 'Saved. Checkout can offer bKash when configured.'
+        : 'Saved. Checkout still hides bKash until BKASH_ENABLED=true.',
+    )
     router.refresh()
     return true
   }
@@ -84,6 +88,14 @@ export function BkashSettingsForm({
       <p className="mt-2 rounded-xl bg-mist px-3 py-2 font-mono text-[11px] text-mute break-all">
         {initial.callbackUrl}
       </p>
+
+      {!initial.paymentsEnabled ? (
+        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+          Checkout bKash is disabled (set{' '}
+          <span className="font-mono">BKASH_ENABLED=true</span> when live
+          credentials are ready). Customers currently only see cash on delivery.
+        </p>
+      ) : null}
 
       {initial.source === 'env' ? (
         <p className="mt-3 rounded-xl bg-mist px-3 py-2 text-[12px] text-mute">

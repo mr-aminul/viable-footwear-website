@@ -3,6 +3,14 @@ import { createServiceClient } from '@/lib/db/admin'
 
 export const BKASH_SETTINGS_KEY = 'bkash'
 
+/**
+ * bKash checkout is off by default while sandbox credentials confuse shoppers.
+ * Set BKASH_ENABLED=true in the environment to turn it back on.
+ */
+export function isBkashPaymentsEnabled(): boolean {
+  return process.env.BKASH_ENABLED?.trim() === 'true'
+}
+
 /** Tokenized Checkout Without Agreement (V2). */
 export const BKASH_SANDBOX_BASE =
   'https://tokenized.sandbox.bka.sh/v2/tokenized-checkout'
@@ -22,6 +30,8 @@ export type BkashConfig = {
 
 export type BkashSettingsView = {
   configured: boolean
+  /** False until BKASH_ENABLED=true — credentials can still be saved. */
+  paymentsEnabled: boolean
   source: 'admin' | 'env' | 'none'
   mode: BkashMode
   username: string
@@ -129,6 +139,7 @@ export const resolveBkashConfig = cache(async (): Promise<BkashConfig> => {
 })
 
 export async function isBkashConfigured(): Promise<boolean> {
+  if (!isBkashPaymentsEnabled()) return false
   try {
     await resolveBkashConfig()
     return true
@@ -163,6 +174,7 @@ export async function getBkashSettingsView(): Promise<BkashSettingsView> {
 
   return {
     configured: source !== 'none',
+    paymentsEnabled: isBkashPaymentsEnabled(),
     source,
     mode: fromDb.mode || fromEnv.mode || 'sandbox',
     username: fromDb.username || fromEnv.username || '',
