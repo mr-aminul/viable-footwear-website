@@ -17,7 +17,7 @@ import { DiscountChip } from '@/components/DiscountChip'
 import { SafeImage } from '@/components/SafeImage'
 import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
-import { trackAddToCart } from '@/lib/analytics/events'
+import { trackAddToCart, trackAddToWishlist } from '@/lib/analytics/events'
 
 interface ProductCardProps {
   product: Product
@@ -122,7 +122,18 @@ function ProductCardInteractive({
       onSelectColor={setSelectedKey}
       wished={wished}
       canAdd={Boolean(defaultVariant && defaultVariant.stock >= 1)}
-      onToggleWishlist={() => toggleWishlist(product.id)}
+      onToggleWishlist={() => {
+        if (!wished) {
+          trackAddToWishlist({
+            item_id: product.id,
+            item_name: product.name,
+            item_category: product.categoryLabel || product.category,
+            price: product.price,
+            quantity: 1,
+          })
+        }
+        toggleWishlist(product.id)
+      }}
       onAddToCart={() => {
         if (!defaultVariant || defaultVariant.stock < 1) return
         addToCart(product, defaultVariant.sizeEu, 1, defaultVariant.id)

@@ -17,6 +17,7 @@ import {
   PATHAO_ADDRESS_MAX_LENGTH,
 } from '@/lib/orders/cod-total'
 import {
+  trackAddPaymentInfo,
   trackBeginCheckout,
   trackPurchase,
 } from '@/lib/analytics/events'
@@ -1289,7 +1290,12 @@ export function CheckoutPage() {
             >
               <button
                 type="button"
-                onClick={() => setPaymentMethod('cod')}
+                onClick={() => {
+                  if (paymentMethod !== 'cod') {
+                    trackAddPaymentInfo({ value: cartTotal })
+                  }
+                  setPaymentMethod('cod')
+                }}
                 aria-pressed={paymentMethod === 'cod'}
                 className={[
                   'rounded-xl border px-4 py-3.5 text-left transition',
@@ -1313,7 +1319,12 @@ export function CheckoutPage() {
               {bkashAvailable ? (
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('bkash')}
+                  onClick={() => {
+                    if (paymentMethod !== 'bkash') {
+                      trackAddPaymentInfo({ value: cartTotal })
+                    }
+                    setPaymentMethod('bkash')
+                  }}
                   aria-pressed={paymentMethod === 'bkash'}
                   className={[
                     'rounded-xl border px-4 py-3.5 text-left transition',
@@ -1336,7 +1347,12 @@ export function CheckoutPage() {
               {nagadAvailable ? (
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('nagad')}
+                  onClick={() => {
+                    if (paymentMethod !== 'nagad') {
+                      trackAddPaymentInfo({ value: cartTotal })
+                    }
+                    setPaymentMethod('nagad')
+                  }}
                   aria-pressed={paymentMethod === 'nagad'}
                   className={[
                     'rounded-xl border px-4 py-3.5 text-left transition',

@@ -100,5 +100,51 @@ export function trackPurchase(input: {
     currency: 'BDT',
     value: input.value,
     content_ids: (input.items ?? []).map((i) => i.item_id),
+    content_type: 'product',
+    num_items: (input.items ?? []).reduce((sum, i) => sum + i.quantity, 0),
+  })
+}
+
+export function trackAddToWishlist(item: AnalyticsItem) {
+  pushDataLayer({
+    event: 'add_to_wishlist',
+    ecommerce: {
+      currency: 'BDT',
+      value: item.price * item.quantity,
+      items: [item],
+    },
+  })
+  trackMeta('AddToWishlist', {
+    content_ids: [item.item_id],
+    content_name: item.item_name,
+    content_type: 'product',
+    currency: 'BDT',
+    value: item.price * item.quantity,
+  })
+}
+
+export function trackSearch(searchString: string) {
+  const query = searchString.trim()
+  if (!query) return
+  pushDataLayer({
+    event: 'search',
+    search_term: query,
+  })
+  trackMeta('Search', {
+    search_string: query,
+  })
+}
+
+export function trackAddPaymentInfo(input?: { value?: number }) {
+  pushDataLayer({
+    event: 'add_payment_info',
+    ecommerce: {
+      currency: 'BDT',
+      value: input?.value ?? 0,
+    },
+  })
+  trackMeta('AddPaymentInfo', {
+    currency: 'BDT',
+    value: input?.value ?? 0,
   })
 }

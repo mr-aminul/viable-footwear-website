@@ -9,6 +9,7 @@ import {
   productColorways,
 } from '@/lib/catalog/product-colorways'
 import { ProductCard } from '@/components/ProductCard'
+import { trackSearch } from '@/lib/analytics/events'
 
 export function ShopPage({
   products,
@@ -99,8 +100,10 @@ export function ShopPage({
     const next = new URLSearchParams(params.toString())
     next.delete('focus')
     const trimmed = value.trim()
-    if (trimmed) next.set('q', trimmed)
-    else next.delete('q')
+    if (trimmed) {
+      next.set('q', trimmed)
+      if (trimmed !== queryParam.trim()) trackSearch(trimmed)
+    } else next.delete('q')
     setParams(next)
   }
 

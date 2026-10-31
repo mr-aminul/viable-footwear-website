@@ -36,7 +36,11 @@ import { ProductImageZoom } from '@/components/ProductImageZoom'
 import { SafeImage } from '@/components/SafeImage'
 import { SizeGuideDrawer } from '@/components/SizeGuideDrawer'
 import { SizeOptionButton } from '@/components/SizeOptionButton'
-import { trackAddToCart, trackViewItem } from '@/lib/analytics/events'
+import {
+  trackAddToCart,
+  trackAddToWishlist,
+  trackViewItem,
+} from '@/lib/analytics/events'
 
 type SizeUnit = 'EU' | 'UK'
 
@@ -580,7 +584,18 @@ export function ProductPage({
           <div className="mt-8 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => toggleWishlist(product.id)}
+              onClick={() => {
+                if (!wished) {
+                  trackAddToWishlist({
+                    item_id: product.id,
+                    item_name: product.name,
+                    item_category: product.categoryLabel || product.category,
+                    price: product.price,
+                    quantity: 1,
+                  })
+                }
+                toggleWishlist(product.id)
+              }}
               className="inline-flex h-[50px] w-[50px] items-center justify-center rounded-full border border-cloud transition hover:border-navy/30"
               aria-label="Wishlist"
             >
