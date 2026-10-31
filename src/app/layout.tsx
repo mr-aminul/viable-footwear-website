@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   },
   verification: {
     other: {
-      'facebook-domain-verification': 'tmfj10x5y6sfrcthggh8nflnvfimlp',
+      'facebook-domain-verification': 'a0tvppxvh9vnsnfxzuteii7vahc64a',
     },
   },
 }
