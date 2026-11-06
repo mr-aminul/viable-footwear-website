@@ -54,24 +54,24 @@ export function Footer() {
           </a>
         </div>
 
-        <nav className="mt-8 flex max-w-xs flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-[13px] text-white/85">
-          <Link href="/shop" className="hover:text-white">
+        <nav className="mt-8 flex max-w-sm flex-wrap items-center justify-center gap-x-1 gap-y-1 text-[14px] text-white/85">
+          <Link href="/shop" className="rounded-full px-2.5 py-2 hover:text-white">
             Shop
           </Link>
-          <Link href="/shop?sale=1" className="hover:text-white">
+          <Link href="/shop?sale=1" className="rounded-full px-2.5 py-2 hover:text-white">
             Sale
           </Link>
-          <Link href="/about" className="hover:text-white">
+          <Link href="/about" className="rounded-full px-2.5 py-2 hover:text-white">
             Size guide
           </Link>
-          <Link href="/about" className="hover:text-white">
+          <Link href="/about" className="rounded-full px-2.5 py-2 hover:text-white">
             About us
           </Link>
           <a
             href={whatsappHref(brand.whatsapp)}
             target="_blank"
             rel="noreferrer"
-            className="hover:text-white"
+            className="rounded-full px-2.5 py-2 hover:text-white"
           >
             WhatsApp
           </a>
@@ -238,7 +238,7 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-4 py-4 text-center text-[11px] text-white/45 md:flex-row md:items-center md:justify-between md:px-6 md:text-left md:text-[12px] lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-4 py-4 pb-24 text-center text-[12px] text-white/45 md:flex-row md:items-center md:justify-between md:px-6 md:py-4 md:pb-4 md:text-left lg:px-8">
           <p>{copyright}</p>
           <div className="hidden gap-5 md:flex">
             <Link href="/terms" className="hover:text-white/70">

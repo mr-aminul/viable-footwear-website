@@ -52,20 +52,32 @@ type CachedToken = {
 /** Process-local cache — Grant Token is limited to 2 calls/hour. */
 let tokenCache: CachedToken | null = null
 
-function apiErrorMessage(data: {
+type BkashErrorFields = {
   statusMessage?: string
   errorMessage?: string
   errorMessageEn?: string
   msg?: string
   externalCode?: string
-}): string | undefined {
-  return (
-    data.statusMessage ||
-    data.errorMessageEn ||
-    data.errorMessage ||
-    data.msg ||
-    (data.externalCode ? `bKash error ${data.externalCode}` : undefined)
-  )
+  statusCode?: string
+}
+
+/**
+ * Prefer errorMessageEn per bKash error-code docs so customers see the
+ * official English message. https://developer.bka.sh/docs/error-codes
+ */
+export function customerFacingBkashError(data: BkashErrorFields): string {
+  return apiErrorMessage(data) || 'Payment Failed'
+}
+
+function apiErrorMessage(data: BkashErrorFields): string | undefined {
+  const official =
+    data.errorMessageEn || data.errorMessage || data.statusMessage || data.msg
+  if (official) return official
+  if (data.externalCode) return `Payment error (${data.externalCode})`
+  if (data.statusCode && data.statusCode !== '0000') {
+    return `Payment error (${data.statusCode})`
+  }
+  return undefined
 }
 
 function paymentIdOf(
@@ -293,6 +305,42 @@ export async function queryBkashPayment(
     },
   )
   return normalizeExecute((await res.json()) as BkashExecutePaymentResponse)
+}
+
+export type BkashSearchTransactionResponse = {
+  trxID?: string
+  trxId?: string
+  transactionStatus?: string
+  amount?: string
+  currency?: string
+  customerMsisdn?: string
+  initiationTime?: string
+  completedTime?: string
+  statusCode?: string
+  statusMessage?: string
+  errorMessage?: string
+  errorMessageEn?: string
+  externalCode?: string
+}
+
+/** Successful transactions only — search by trxId from Execute (V2 path). */
+export async function searchBkashTransaction(
+  trxID: string,
+  override?: BkashConfig,
+): Promise<BkashSearchTransactionResponse> {
+  const config = await getConfig(override)
+  const res = await fetchWithTokenRetry(
+    config,
+    `${config.baseUrl}/general/search-transaction`,
+    {
+      method: 'POST',
+      // V2 expects trxId; older docs used trxID.
+      body: JSON.stringify({ trxId: trxID, trxID }),
+    },
+  )
+  const data = (await res.json()) as BkashSearchTransactionResponse
+  const normalizedId = data.trxID || data.trxId || trxID
+  return { ...data, trxID: normalizedId, trxId: normalizedId }
 }
 
 export function isBkashPaymentCompleted(

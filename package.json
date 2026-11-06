@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "bkash:sandbox-validate": "node scripts/bkash-sandbox-validate.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1153.0",
@@ -28,6 +29,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "oxlint": "^1.79.0",
+    "playwright": "^1.65.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.0"
   }

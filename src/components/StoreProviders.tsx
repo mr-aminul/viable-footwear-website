@@ -29,7 +29,7 @@ export function StoreProviders({
           <Suspense fallback={null}>
             <Header announcement={announcement} />
           </Suspense>
-          <main className="flex-1">
+          <main className="min-w-0 w-full flex-1">
             <PageTransition>{children}</PageTransition>
           </main>
           <Footer />

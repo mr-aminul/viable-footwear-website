@@ -285,16 +285,16 @@ export function CheckoutPage() {
       finishCheckout()
       return
     }
-    if (pay === 'failed') {
-      const message = msg || 'Payment did not finish. You can try again.'
-      setError({
-        title: 'Payment not completed',
-        message,
-      })
-      showToast({
-        title: 'Payment not completed',
-        message,
-      })
+    if (pay === 'cancelled' || pay === 'failed') {
+      const isCancelled = pay === 'cancelled'
+      const title = isCancelled ? 'Payment Cancelled' : 'Payment Failed'
+      const message =
+        msg ||
+        (isCancelled
+          ? 'Payment Cancelled'
+          : 'Payment Failed. You can try again.')
+      setError({ title, message })
+      showToast({ title, message })
     }
   }, [searchParams, finishCheckout])
 

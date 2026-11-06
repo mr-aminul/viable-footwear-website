@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { amountsMatch } from '@/lib/payments/amount-match'
 import {
+  customerFacingBkashError,
   executeBkashPayment,
   isBkashPaymentCompleted,
   queryBkashPayment,
@@ -30,22 +31,24 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get('status') || ''
   ).toLowerCase()
 
-  const fail = (msg: string) =>
+  const fail = (msg: string, payStatus: 'failed' | 'cancelled' = 'failed') =>
     NextResponse.redirect(
-      `${site}/checkout?pay=failed&message=${encodeURIComponent(msg)}`,
+      `${site}/checkout?pay=${payStatus}&message=${encodeURIComponent(msg)}`,
     )
 
   if (!paymentID) {
     return fail('Missing bKash payment reference.')
   }
 
+  // Do not call Execute for cancelled / failed redirects (bKash formal sandbox rule).
   if (status === 'cancel' || status === 'failure' || status === 'failed') {
+    const isCancel = status === 'cancel'
     try {
       const db = createServiceClient()
       await db
         .from('payment_attempts')
         .update({
-          status: status === 'cancel' ? 'cancelled' : 'failed',
+          status: isCancel ? 'cancelled' : 'failed',
         })
         .eq('external_id', paymentID)
         .eq('status', 'created')
@@ -53,9 +56,8 @@ export async function GET(request: NextRequest) {
       // ignore
     }
     return fail(
-      status === 'cancel'
-        ? 'bKash payment was cancelled.'
-        : 'bKash payment failed.',
+      isCancel ? 'Payment Cancelled' : 'Payment Failed',
+      isCancel ? 'cancelled' : 'failed',
     )
   }
 
@@ -107,12 +109,7 @@ export async function GET(request: NextRequest) {
               raw_json: queried as unknown as Json,
             })
             .eq('id', attempt.id)
-          return fail(
-            queried.statusMessage ||
-              queried.errorMessageEn ||
-              queried.errorMessage ||
-              'bKash could not confirm the payment.',
-          )
+          return fail(customerFacingBkashError(queried))
         }
       } catch {
         await db
@@ -122,12 +119,7 @@ export async function GET(request: NextRequest) {
             raw_json: executed as unknown as Json,
           })
           .eq('id', attempt.id)
-        return fail(
-          executed.statusMessage ||
-            executed.errorMessageEn ||
-            executed.errorMessage ||
-            'bKash could not confirm the payment.',
-        )
+        return fail(customerFacingBkashError(executed))
       }
     }
 

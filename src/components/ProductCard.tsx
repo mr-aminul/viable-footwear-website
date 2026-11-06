@@ -219,7 +219,7 @@ function ProductCardView({
       whileHover={springHover(reduceMotion)}
       viewport={{ once: true, margin: '-40px' }}
       transition={enterTransition(reduceMotion, index * 0.04)}
-      className="group relative flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift"
+      className="group relative flex h-full min-w-0 flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-card transition-shadow duration-500 ease-out hover:shadow-lift"
     >
       {product.badge && (
         <span
@@ -256,7 +256,7 @@ function ProductCardView({
         media
       )}
 
-      <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1 px-3 pb-3.5 pt-3 sm:px-4 sm:pb-4">
         {interactive ? (
           <Link href={productHref} prefetch={false}>
             {title}
