@@ -28,6 +28,10 @@ import {
 } from '@/lib/orders/delivery-rates'
 import { getPathaoPrice, normalizePathaoPhone } from '@/lib/pathao'
 import { decrementOrderStock } from '@/lib/orders/stock'
+import {
+  isPreorderLine,
+  splitPreorderPayment,
+} from '@/lib/orders/preorder'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { createServiceClient } from '@/lib/db/admin'
 import type { Json } from '@/lib/db/database.types'
@@ -181,7 +185,7 @@ export async function POST(request: NextRequest) {
     const { data: variants, error: variantsError } = await db
       .from('product_variants')
       .select(
-        'id, product_id, size_eu, color, sku, stock, price_override, active, products!inner(id, name, price, weight_kg, active)',
+        'id, product_id, size_eu, color, sku, stock, price_override, active, products!inner(id, name, price, weight_kg, active, preorder_enabled)',
       )
       .in('id', variantIds)
 
@@ -209,6 +213,7 @@ export async function POST(request: NextRequest) {
             price: number
             weight_kg: number
             active: boolean
+            preorder_enabled: boolean
           }
         | {
             id: string
@@ -216,6 +221,7 @@ export async function POST(request: NextRequest) {
             price: number
             weight_kg: number
             active: boolean
+            preorder_enabled: boolean
           }[]
     }
 
@@ -234,6 +240,7 @@ export async function POST(request: NextRequest) {
       unit_price: number
       quantity: number
       weight_kg: number
+      is_preorder: boolean
     }> = []
 
     for (const line of lines) {
@@ -256,7 +263,14 @@ export async function POST(request: NextRequest) {
           { status: 409, headers: NO_STORE_HEADERS },
         )
       }
-      if (variant.stock < line.quantity) {
+
+      const lineIsPreorder = isPreorderLine({
+        stock: variant.stock,
+        quantity: line.quantity,
+        preorderEnabled: product.preorder_enabled,
+      })
+
+      if (variant.stock < line.quantity && !lineIsPreorder) {
         const sizeHint =
           Number(variant.size_eu) > 0 ? ` (EU ${variant.size_eu})` : ''
         return NextResponse.json(
@@ -281,7 +295,25 @@ export async function POST(request: NextRequest) {
         unit_price: unitPrice,
         quantity: line.quantity,
         weight_kg: weightKg,
+        is_preorder: lineIsPreorder,
       })
+    }
+
+    const preorderLineCount = orderItemsPayload.filter((i) => i.is_preorder)
+      .length
+    const isPreorderOrder = preorderLineCount > 0
+    if (
+      isPreorderOrder &&
+      preorderLineCount !== orderItemsPayload.length
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Pre-order items must be checked out separately from in-stock items.',
+        },
+        { status: 400, headers: NO_STORE_HEADERS },
+      )
     }
 
     let pathaoDeliveryFee = 0
@@ -334,13 +366,26 @@ export async function POST(request: NextRequest) {
     const deliveryAfterCampaign =
       match?.adjustedDeliveryFee ?? pathaoDeliveryFee
 
+    if (isPreorderOrder && paymentMethod !== 'bkash') {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Pre-orders require bKash so we can take the ৳500 advance payment.',
+        },
+        { status: 400, headers: NO_STORE_HEADERS },
+      )
+    }
+
     if (paymentMethod === 'bkash') {
       const ready = await isBkashConfigured()
       if (!ready) {
         return NextResponse.json(
           {
             success: false,
-            error: 'bKash is not available yet. Please pay with Cash on Delivery.',
+            error: isPreorderOrder
+              ? 'bKash is not available yet, so pre-orders cannot be placed right now.'
+              : 'bKash is not available yet. Please pay with Cash on Delivery.',
           },
           { status: 400, headers: NO_STORE_HEADERS },
         )
@@ -367,6 +412,14 @@ export async function POST(request: NextRequest) {
       ? computePrepaidCheckoutTotals(goodsAfterPromo, deliveryAfterCampaign)
       : computeCodCheckoutTotals(goodsAfterPromo, deliveryAfterCampaign)
 
+    const { amountPaid, amountDue } = isPreorderOrder
+      ? splitPreorderPayment(total)
+      : paymentMethod === 'cod'
+        ? { amountPaid: 0, amountDue: total }
+        : { amountPaid: total, amountDue: 0 }
+
+    const chargeAmount = isPreorderOrder ? amountPaid : total
+
     const orderNumber = generateOrderNumber()
 
     const { data: insertedOrder, error: orderInsertError } = await db
@@ -389,6 +442,9 @@ export async function POST(request: NextRequest) {
         subtotal,
         shipping,
         total,
+        is_preorder: isPreorderOrder,
+        amount_paid: amountPaid,
+        amount_due: amountDue,
         pathao_delivery_fee: pathaoDeliveryFee,
         campaign_id: match?.campaignId ?? null,
         ...(promoApplied
@@ -429,14 +485,15 @@ export async function POST(request: NextRequest) {
     }
 
     // COD: decrement on place. Gateways: decrement on successful payment.
+    // Pre-order lines never decrement (already sold out).
     if (paymentMethod === 'cod') {
-      const reserved = await decrementOrderStock(
-        db,
-        lines.map((line) => ({
-          variantId: line.variantId,
-          quantity: line.quantity,
-        })),
-      )
+      const stockLines = orderItemsPayload
+        .filter((item) => !item.is_preorder)
+        .map((item) => ({
+          variantId: item.variant_id,
+          quantity: item.quantity,
+        }))
+      const reserved = await decrementOrderStock(db, stockLines)
 
       if (!reserved.ok) {
         await db.from('order_items').delete().eq('order_id', insertedOrder.id)
@@ -497,6 +554,9 @@ export async function POST(request: NextRequest) {
           total,
           shipping,
           pathaoDeliveryFee,
+          isPreorder: isPreorderOrder,
+          amountPaid,
+          amountDue,
         },
         { headers: NO_STORE_HEADERS },
       )
@@ -514,7 +574,7 @@ export async function POST(request: NextRequest) {
           request.headers.get('x-real-ip') ||
           '103.100.200.100'
         const created = await createNagadPayment({
-          amount: total,
+          amount: chargeAmount,
           orderId: insertedOrder.order_number,
           clientIp,
           callbackURL: `${site}/api/payments/nagad/callback`,
@@ -526,7 +586,7 @@ export async function POST(request: NextRequest) {
           gateway: 'nagad',
           external_id: created.paymentRefId,
           status: 'created',
-          amount: total,
+          amount: chargeAmount,
           raw_json: created as unknown as Json,
         })
 
@@ -556,6 +616,9 @@ export async function POST(request: NextRequest) {
             total,
             shipping,
             pathaoDeliveryFee,
+            isPreorder: isPreorderOrder,
+            amountPaid,
+            amountDue,
             nagadURL: created.redirectUrl,
             paymentRefId: created.paymentRefId,
           },
@@ -577,7 +640,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const created = await createBkashPayment({
-        amount: total,
+        amount: chargeAmount,
         merchantInvoiceNumber: insertedOrder.order_number,
         callbackURL: `${site}/api/payments/bkash/callback`,
         payerReference: phone,
@@ -588,7 +651,7 @@ export async function POST(request: NextRequest) {
         gateway: 'bkash',
         external_id: created.paymentID ?? null,
         status: 'created',
-        amount: total,
+        amount: chargeAmount,
         raw_json: created as unknown as Json,
       })
 
@@ -618,6 +681,9 @@ export async function POST(request: NextRequest) {
           total,
           shipping,
           pathaoDeliveryFee,
+          isPreorder: isPreorderOrder,
+          amountPaid,
+          amountDue,
           bkashURL: created.bkashURL,
           paymentID: created.paymentID,
         },

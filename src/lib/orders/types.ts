@@ -14,6 +14,7 @@ export type AdminOrderListRow = Pick<
   | 'phone'
   | 'city_name'
   | 'total'
+  | 'is_preorder'
   | 'pathao_consignment_id'
   | 'pathao_status'
   | 'pathao_error'

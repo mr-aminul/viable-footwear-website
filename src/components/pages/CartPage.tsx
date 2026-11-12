@@ -120,9 +120,15 @@ export function CartPage() {
                       item.size,
                       color,
                     )
-                    return label ? (
+                    const line = [
+                      item.isPreorder ? 'Pre-order' : null,
+                      label,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                    return line ? (
                       <p className="mt-0.5 text-[12px] text-mute sm:text-[13px]">
-                        {label}
+                        {line}
                       </p>
                     ) : null
                   })()}

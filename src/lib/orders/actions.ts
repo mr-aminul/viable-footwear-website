@@ -79,7 +79,7 @@ export async function dispatchOrderToPathao(
   const { data: order, error: orderError } = await db
     .from('orders')
     .select(
-      'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id',
+      'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id, is_preorder, amount_due',
     )
     .eq('id', orderId)
     .single()
@@ -183,7 +183,9 @@ export async function dispatchOrderToPathao(
       amount_to_collect:
         order.payment_method === 'cod'
           ? Math.round(Number(order.total) || 0)
-          : 0,
+          : order.is_preorder
+            ? Math.round(Number(order.amount_due) || 0)
+            : 0,
       item_description:
         itemsSummary.length > 0 && itemsSummary.length <= 220
           ? itemsSummary

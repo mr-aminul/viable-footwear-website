@@ -10,12 +10,15 @@ import {
   type ReactNode,
 } from 'react'
 import type { Product } from '@/lib/catalog/types'
+import { isProductPreorderEnabled } from '@/lib/orders/preorder'
 
 export interface CartItem {
   product: Product
   size: number
   quantity: number
   variantId?: string
+  /** True when this line was added as a sold-out pre-order. */
+  isPreorder?: boolean
 }
 
 interface CartContextValue {
@@ -43,6 +46,8 @@ interface CartContextValue {
   cartCount: number
   cartTotal: number
   cartWeightKg: number
+  hasPreorderItems: boolean
+  hasRegularItems: boolean
   clearCart: () => void
 }
 
@@ -57,6 +62,7 @@ type PersistedCartItem = {
   size: number
   quantity: number
   variantId?: string
+  isPreorder?: boolean
 }
 
 function readJson<T>(key: string, fallback: T, storage: Storage): T {
@@ -77,15 +83,47 @@ function writeJson(key: string, value: unknown, storage: Storage) {
   }
 }
 
-function resolveVariantId(
+function resolveVariant(
   product: Product,
   size: number,
   variantId?: string,
 ) {
-  return (
-    variantId ??
-    product.variants.find((v) => v.sizeEu === size && v.stock > 0)?.id
+  if (variantId) {
+    const exact = product.variants.find((v) => v.id === variantId)
+    if (exact) return exact
+  }
+
+  const inStock = product.variants.find(
+    (v) => v.sizeEu === size && v.stock > 0,
   )
+  if (inStock) return inStock
+
+  if (isProductPreorderEnabled(product.preorderEnabled)) {
+    return product.variants.find((v) => v.sizeEu === size)
+  }
+
+  return undefined
+}
+
+function buildCartLine(
+  product: Product,
+  size: number,
+  quantity: number,
+  variantId?: string,
+): CartItem {
+  const variant = resolveVariant(product, size, variantId)
+  const isPreorder = Boolean(
+    variant &&
+      variant.stock < 1 &&
+      isProductPreorderEnabled(product.preorderEnabled),
+  )
+  return {
+    product,
+    size,
+    quantity,
+    variantId: variant?.id ?? variantId,
+    isPreorder,
+  }
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -148,28 +186,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
       quantity = 1,
       variantId?: string,
     ) => {
-      const resolvedVariantId = resolveVariantId(product, size, variantId)
+      const line = buildCartLine(product, size, quantity, variantId)
 
       setItems((prev) => {
         const existing = prev.find(
           (i) =>
             i.product.id === product.id &&
             i.size === size &&
-            i.variantId === resolvedVariantId,
+            i.variantId === line.variantId,
         )
         if (existing) {
           return prev.map((i) =>
             i.product.id === product.id &&
             i.size === size &&
-            i.variantId === resolvedVariantId
-              ? { ...i, quantity: i.quantity + quantity }
+            i.variantId === line.variantId
+              ? {
+                  ...i,
+                  quantity: i.quantity + quantity,
+                  isPreorder: line.isPreorder,
+                  product,
+                }
               : i,
           )
         }
-        return [
-          ...prev,
-          { product, size, quantity, variantId: resolvedVariantId },
-        ]
+        return [...prev, line]
       })
     },
     [],
@@ -182,9 +222,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       quantity = 1,
       variantId?: string,
     ) => {
-      const resolvedVariantId = resolveVariantId(product, size, variantId)
       const next: CartItem[] = [
-        { product, size, quantity, variantId: resolvedVariantId },
+        buildCartLine(product, size, quantity, variantId),
       ]
       // Persist before navigation so /checkout never races an empty bag.
       writeJson(BUY_NOW_STORAGE_KEY, next, window.sessionStorage)
@@ -262,6 +301,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [items],
   )
 
+  const hasPreorderItems = useMemo(
+    () => items.some((i) => i.isPreorder),
+    [items],
+  )
+
+  const hasRegularItems = useMemo(
+    () => items.some((i) => !i.isPreorder),
+    [items],
+  )
+
   const value = useMemo(
     () => ({
       items,
@@ -278,6 +327,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cartCount,
       cartTotal,
       cartWeightKg,
+      hasPreorderItems,
+      hasRegularItems,
       clearCart,
     }),
     [
@@ -295,6 +346,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cartCount,
       cartTotal,
       cartWeightKg,
+      hasPreorderItems,
+      hasRegularItems,
       clearCart,
     ],
   )

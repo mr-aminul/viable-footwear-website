@@ -17,6 +17,10 @@ import {
   PATHAO_ADDRESS_MAX_LENGTH,
 } from '@/lib/orders/cod-total'
 import {
+  PREORDER_ADVANCE_BDT,
+  splitPreorderPayment,
+} from '@/lib/orders/preorder'
+import {
   trackAddPaymentInfo,
   trackBeginCheckout,
   trackPurchase,
@@ -174,6 +178,38 @@ export function CheckoutPage() {
     () => items.reduce((sum, i) => sum + i.quantity, 0),
     [items],
   )
+  const hasPreorderItems = useMemo(
+    () =>
+      items.some((item) => {
+        if (item.isPreorder) return true
+        const variant = item.product.variants.find(
+          (v) => v.id === item.variantId,
+        )
+        return Boolean(
+          variant &&
+            variant.stock < item.quantity &&
+            item.product.preorderEnabled !== false,
+        )
+      }),
+    [items],
+  )
+  const hasRegularItems = useMemo(
+    () =>
+      items.some((item) => {
+        if (item.isPreorder) return false
+        const variant = item.product.variants.find(
+          (v) => v.id === item.variantId,
+        )
+        if (!variant) return true
+        return !(
+          variant.stock < item.quantity &&
+          item.product.preorderEnabled !== false
+        )
+      }),
+    [items],
+  )
+  const isMixedCart = hasPreorderItems && hasRegularItems
+  const isPreorderCheckout = hasPreorderItems && !hasRegularItems
   const cartWeightKg = useMemo(
     () =>
       Math.max(
@@ -193,6 +229,9 @@ export function CheckoutPage() {
   const [orderPlaced, setOrderPlaced] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [placedTotal, setPlacedTotal] = useState<number | null>(null)
+  const [placedAmountPaid, setPlacedAmountPaid] = useState<number | null>(null)
+  const [placedAmountDue, setPlacedAmountDue] = useState<number | null>(null)
+  const [placedIsPreorder, setPlacedIsPreorder] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<CheckoutErrorState | null>(null)
   const [paymentMethod, setPaymentMethod] =
@@ -251,6 +290,10 @@ export function CheckoutPage() {
     paymentMethod === 'cod' ? quoteCodShipping : quotePrepaidShipping
   const quoteTotal =
     paymentMethod === 'cod' ? quoteCodTotal : quotePrepaidTotal
+  const preorderSplit =
+    isPreorderCheckout && quoteTotal != null
+      ? splitPreorderPayment(quoteTotal)
+      : null
 
   useEffect(() => {
     const pay = searchParams.get('pay')
@@ -266,10 +309,20 @@ export function CheckoutPage() {
           const pending = JSON.parse(raw) as {
             orderId?: string
             total?: number
+            amountPaid?: number
+            amountDue?: number
+            isPreorder?: boolean
           }
           if (pending.orderId === oid && typeof pending.total === 'number') {
             purchaseValue = pending.total
             setPlacedTotal(pending.total)
+            if (typeof pending.amountPaid === 'number') {
+              setPlacedAmountPaid(pending.amountPaid)
+            }
+            if (typeof pending.amountDue === 'number') {
+              setPlacedAmountDue(pending.amountDue)
+            }
+            setPlacedIsPreorder(Boolean(pending.isPreorder))
           }
           window.sessionStorage.removeItem('viable-purchase')
         }
@@ -474,13 +527,23 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!gatewaysChecked) return
+    if (isPreorderCheckout) {
+      if (bkashAvailable) setPaymentMethod('bkash')
+      return
+    }
     if (paymentMethod === 'bkash' && !bkashAvailable) {
       setPaymentMethod('cod')
     }
     if (paymentMethod === 'nagad' && !nagadAvailable) {
       setPaymentMethod('cod')
     }
-  }, [gatewaysChecked, bkashAvailable, nagadAvailable, paymentMethod])
+  }, [
+    gatewaysChecked,
+    bkashAvailable,
+    nagadAvailable,
+    paymentMethod,
+    isPreorderCheckout,
+  ])
 
   const loadShippingPrice = useCallback(
     (
@@ -718,6 +781,24 @@ export function CheckoutPage() {
       return
     }
 
+    if (isMixedCart) {
+      setError({
+        title: 'Separate your checkout',
+        message:
+          'Pre-order items must be checked out separately from in-stock items.',
+      })
+      return
+    }
+
+    if (isPreorderCheckout && !bkashAvailable) {
+      setError({
+        title: 'bKash required',
+        message:
+          'Pre-orders need bKash for the ৳500 advance. Please try again later.',
+      })
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch('/api/orders', {
@@ -754,6 +835,9 @@ export function CheckoutPage() {
         error?: string
         orderId?: string
         total?: number
+        amountPaid?: number
+        amountDue?: number
+        isPreorder?: boolean
         paymentMethod?: string
         bkashURL?: string
         nagadURL?: string
@@ -784,6 +868,15 @@ export function CheckoutPage() {
               JSON.stringify({
                 orderId: data.orderId,
                 total: typeof data.total === 'number' ? data.total : cartTotal,
+                amountPaid:
+                  typeof data.amountPaid === 'number'
+                    ? data.amountPaid
+                    : undefined,
+                amountDue:
+                  typeof data.amountDue === 'number'
+                    ? data.amountDue
+                    : undefined,
+                isPreorder: Boolean(data.isPreorder),
               }),
             )
           } catch {
@@ -813,6 +906,13 @@ export function CheckoutPage() {
 
       setOrderId(data.orderId ?? null)
       setPlacedTotal(typeof data.total === 'number' ? data.total : null)
+      setPlacedAmountPaid(
+        typeof data.amountPaid === 'number' ? data.amountPaid : null,
+      )
+      setPlacedAmountDue(
+        typeof data.amountDue === 'number' ? data.amountDue : null,
+      )
+      setPlacedIsPreorder(Boolean(data.isPreorder))
       setOrderPlaced(true)
       if (data.orderId) {
         trackPurchase({
@@ -924,7 +1024,32 @@ export function CheckoutPage() {
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
-            {placedTotal != null ? (
+            {placedIsPreorder &&
+            placedAmountPaid != null &&
+            placedAmountDue != null ? (
+              <div className="mt-4 space-y-2 border-t border-cloud pt-4 text-[13px]">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-mute">Advance paid</span>
+                  <span className="font-semibold tabular-nums text-ink">
+                    {formatPrice(placedAmountPaid)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-mute">Due later</span>
+                  <span className="font-semibold tabular-nums text-ink">
+                    {formatPrice(placedAmountDue)}
+                  </span>
+                </div>
+                {placedTotal != null ? (
+                  <div className="flex items-baseline justify-between gap-3 border-t border-cloud pt-2">
+                    <span className="text-mute">Order total</span>
+                    <span className="font-display text-[22px] tabular-nums tracking-tight text-navy-deep">
+                      {formatPrice(placedTotal)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : placedTotal != null ? (
               <div className="mt-4 flex items-baseline justify-between border-t border-cloud pt-4">
                 <span className="text-[13px] text-mute">
                   {paidOnline ? 'Amount paid' : 'Amount to pay'}
@@ -960,18 +1085,24 @@ export function CheckoutPage() {
   }
 
   const canSubmit =
-    !loading && !shippingPriceLoading && shippingPrice != null
+    !loading &&
+    !shippingPriceLoading &&
+    shippingPrice != null &&
+    !isMixedCart &&
+    !(isPreorderCheckout && !bkashAvailable)
   const submitLabel = loading
     ? paymentMethod === 'bkash'
       ? 'Redirecting to bKash…'
       : paymentMethod === 'nagad'
         ? 'Redirecting to Nagad…'
         : 'Placing order…'
-    : paymentMethod === 'bkash'
-      ? 'Pay with bKash'
-      : paymentMethod === 'nagad'
-        ? 'Pay with Nagad'
-        : 'Place COD order'
+    : isPreorderCheckout
+      ? `Pay ${formatPrice(PREORDER_ADVANCE_BDT)} advance`
+      : paymentMethod === 'bkash'
+        ? 'Pay with bKash'
+        : paymentMethod === 'nagad'
+          ? 'Pay with Nagad'
+          : 'Place COD order'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 pb-28 md:px-6 md:py-14 lg:px-8 lg:pb-14">
@@ -1268,54 +1399,76 @@ export function CheckoutPage() {
 
           <section className="rounded-2xl border border-cloud bg-white p-5 sm:p-6">
             <SectionHeading step={3} title="Payment" />
-            <p className="mt-2 text-[13px] text-mute">
-              {gatewaysChecked
-                ? [
-                    'Cash on delivery',
-                    bkashAvailable ? 'bKash' : null,
-                    nagadAvailable ? 'Nagad' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : 'Checking available payment methods…'}
-            </p>
+            {isMixedCart ? (
+              <p className="mt-2 rounded-xl bg-spark/10 px-3.5 py-3 text-[13px] text-ink">
+                Pre-order items must be checked out separately from in-stock
+                items. Remove one type from your bag to continue.
+              </p>
+            ) : isPreorderCheckout ? (
+              <p className="mt-2 text-[13px] text-mute">
+                Pre-order: pay{' '}
+                <span className="font-semibold text-ink">
+                  {formatPrice(PREORDER_ADVANCE_BDT)}
+                </span>{' '}
+                advance with bKash now. The rest (including delivery) is due
+                later.
+              </p>
+            ) : (
+              <p className="mt-2 text-[13px] text-mute">
+                {gatewaysChecked
+                  ? [
+                      'Cash on delivery',
+                      bkashAvailable ? 'bKash' : null,
+                      nagadAvailable ? 'Nagad' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Checking available payment methods…'}
+              </p>
+            )}
             <div
               className={[
                 'mt-5 grid gap-3',
-                bkashAvailable || nagadAvailable ? 'sm:grid-cols-2' : '',
-                bkashAvailable && nagadAvailable ? 'lg:grid-cols-3' : '',
+                !isPreorderCheckout && (bkashAvailable || nagadAvailable)
+                  ? 'sm:grid-cols-2'
+                  : '',
+                !isPreorderCheckout && bkashAvailable && nagadAvailable
+                  ? 'lg:grid-cols-3'
+                  : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  if (paymentMethod !== 'cod') {
-                    trackAddPaymentInfo({ value: cartTotal })
-                  }
-                  setPaymentMethod('cod')
-                }}
-                aria-pressed={paymentMethod === 'cod'}
-                className={[
-                  'rounded-xl border px-4 py-3.5 text-left transition',
-                  paymentMethod === 'cod'
-                    ? 'border-navy bg-navy text-white'
-                    : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
-                ].join(' ')}
-              >
-                <span className="block text-[14px] font-semibold">
-                  Cash on delivery
-                </span>
-                <span
+              {!isPreorderCheckout ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (paymentMethod !== 'cod') {
+                      trackAddPaymentInfo({ value: cartTotal })
+                    }
+                    setPaymentMethod('cod')
+                  }}
+                  aria-pressed={paymentMethod === 'cod'}
                   className={[
-                    'mt-1 block text-[12px] font-normal',
-                    paymentMethod === 'cod' ? 'text-white/75' : 'text-mute',
+                    'rounded-xl border px-4 py-3.5 text-left transition',
+                    paymentMethod === 'cod'
+                      ? 'border-navy bg-navy text-white'
+                      : 'border-cloud bg-ink/[0.03] text-ink hover:bg-ink/[0.06]',
                   ].join(' ')}
                 >
-                  Pay when your order arrives
-                </span>
-              </button>
+                  <span className="block text-[14px] font-semibold">
+                    Cash on delivery
+                  </span>
+                  <span
+                    className={[
+                      'mt-1 block text-[12px] font-normal',
+                      paymentMethod === 'cod' ? 'text-white/75' : 'text-mute',
+                    ].join(' ')}
+                  >
+                    Pay when your order arrives
+                  </span>
+                </button>
+              ) : null}
               {bkashAvailable ? (
                 <button
                   type="button"
@@ -1340,11 +1493,13 @@ export function CheckoutPage() {
                       paymentMethod === 'bkash' ? 'text-white/75' : 'text-mute',
                     ].join(' ')}
                   >
-                    Pay now, then we ship
+                    {isPreorderCheckout
+                      ? `Pay ${formatPrice(PREORDER_ADVANCE_BDT)} advance`
+                      : 'Pay now, then we ship'}
                   </span>
                 </button>
               ) : null}
-              {nagadAvailable ? (
+              {nagadAvailable && !isPreorderCheckout ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1446,7 +1601,13 @@ export function CheckoutPage() {
                         item.quantity > 1
                           ? `${item.quantity} × ${formatPrice(item.product.price)}`
                           : null
-                      return [label, qty].filter(Boolean).join(' · ')
+                      return [
+                        item.isPreorder ? 'Pre-order' : null,
+                        label,
+                        qty,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
                     })()}
                   </p>
                 </div>
@@ -1611,23 +1772,53 @@ export function CheckoutPage() {
             {shippingPriceError ? (
               <p className="text-[12px] text-spark">{shippingPriceError}</p>
             ) : null}
-            <div className="flex items-end justify-between border-t border-cloud pt-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-                  {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
-                </p>
-                <p className="mt-0.5 text-[12px] text-mute">
-                  {paymentMethod === 'bkash'
-                    ? 'Paid via bKash'
-                    : paymentMethod === 'nagad'
-                      ? 'Paid via Nagad'
-                      : 'Pay when you receive'}
-                </p>
+            {preorderSplit ? (
+              <div className="space-y-2 border-t border-cloud pt-3 text-[14px]">
+                <div className="flex justify-between text-mute">
+                  <span>Order total</span>
+                  <span className="font-medium tabular-nums text-ink">
+                    {formatPrice(quoteTotal!)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-mute">
+                  <span>Pay now (advance)</span>
+                  <span className="font-medium tabular-nums text-ink">
+                    {formatPrice(preorderSplit.amountPaid)}
+                  </span>
+                </div>
+                <div className="flex items-end justify-between pt-1">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+                      Due later
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-mute">
+                      Includes delivery — pay when ready
+                    </p>
+                  </div>
+                  <span className="font-display text-[26px] tabular-nums tracking-tight text-navy-deep">
+                    {formatPrice(preorderSplit.amountDue)}
+                  </span>
+                </div>
               </div>
-              <span className="font-display text-[26px] tabular-nums tracking-tight text-navy-deep">
-                {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-end justify-between border-t border-cloud pt-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
+                    {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-mute">
+                    {paymentMethod === 'bkash'
+                      ? 'Paid via bKash'
+                      : paymentMethod === 'nagad'
+                        ? 'Paid via Nagad'
+                        : 'Pay when you receive'}
+                  </p>
+                </div>
+                <span className="font-display text-[26px] tabular-nums tracking-tight text-navy-deep">
+                  {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
+                </span>
+              </div>
+            )}
           </div>
 
           <button
@@ -1660,10 +1851,18 @@ export function CheckoutPage() {
               <div className="mx-auto flex max-w-7xl items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-                    {paymentMethod === 'cod' ? 'Total (COD)' : 'Total'}
+                    {preorderSplit
+                      ? 'Pay now'
+                      : paymentMethod === 'cod'
+                        ? 'Total (COD)'
+                        : 'Total'}
                   </p>
                   <p className="truncate font-display text-[20px] tabular-nums tracking-tight text-navy-deep">
-                    {quoteTotal != null ? formatPrice(quoteTotal) : '—'}
+                    {preorderSplit
+                      ? formatPrice(preorderSplit.amountPaid)
+                      : quoteTotal != null
+                        ? formatPrice(quoteTotal)
+                        : '—'}
                   </p>
                 </div>
                 <button

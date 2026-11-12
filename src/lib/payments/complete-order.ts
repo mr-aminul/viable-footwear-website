@@ -23,20 +23,23 @@ export async function completeGatewayPaidOrder(
   if (order.status === 'pending_payment' && !order.payment_trx_id) {
     const { data: items } = await db
       .from('order_items')
-      .select('variant_id, quantity')
+      .select('variant_id, quantity, is_preorder')
       .eq('order_id', order.id)
 
+    // Pre-order lines never decrement stock — they were already sold out.
     const lines = (items ?? [])
-      .filter((item) => item.variant_id)
+      .filter((item) => item.variant_id && !item.is_preorder)
       .map((item) => ({
         variantId: item.variant_id as string,
         quantity: Number(item.quantity),
       }))
 
-    const reserved = await decrementOrderStock(db, lines)
-    if (!reserved.ok) {
-      console.error('[completeGatewayPaidOrder] stock', reserved.error)
-      return null
+    if (lines.length > 0) {
+      const reserved = await decrementOrderStock(db, lines)
+      if (!reserved.ok) {
+        console.error('[completeGatewayPaidOrder] stock', reserved.error)
+        return null
+      }
     }
 
     const { error: payError } = await db

@@ -18,6 +18,7 @@ import { SafeImage } from '@/components/SafeImage'
 import { enterTransition, springHover } from '@/lib/motion'
 import { useCart } from '@/context/CartContext'
 import { trackAddToCart, trackAddToWishlist } from '@/lib/analytics/events'
+import { isProductPreorderEnabled } from '@/lib/orders/preorder'
 
 interface ProductCardProps {
   product: Product
@@ -100,16 +101,21 @@ function ProductCardInteractive({
   const defaultSize =
     product.sizes[Math.floor(product.sizes.length / 2)] ?? product.sizes[0]
 
+  const preorderEnabled = isProductPreorderEnabled(product.preorderEnabled)
   const defaultVariant = selectedColorway
     ? variantForColorway(product.variants, selectedColorway.key, defaultSize)
     : product.variants.find((v) => v.sizeEu === defaultSize && v.stock > 0) ??
       product.variants.find((v) => v.stock > 0) ??
-      product.variants[0]
+      (preorderEnabled ? product.variants[0] : undefined)
 
   const displayImage =
     selectedColorway?.imageUrl ?? product.image
 
   const href = productPath(product.slug, selectedColorway?.key)
+  const canAdd = Boolean(
+    defaultVariant &&
+      (defaultVariant.stock >= 1 || preorderEnabled),
+  )
 
   return (
     <ProductCardView
@@ -121,7 +127,7 @@ function ProductCardInteractive({
       selectedColorKey={selectedColorway?.key ?? null}
       onSelectColor={setSelectedKey}
       wished={wished}
-      canAdd={Boolean(defaultVariant && defaultVariant.stock >= 1)}
+      canAdd={canAdd}
       onToggleWishlist={() => {
         if (!wished) {
           trackAddToWishlist({
@@ -135,7 +141,8 @@ function ProductCardInteractive({
         toggleWishlist(product.id)
       }}
       onAddToCart={() => {
-        if (!defaultVariant || defaultVariant.stock < 1) return
+        if (!defaultVariant) return
+        if (defaultVariant.stock < 1 && !preorderEnabled) return
         addToCart(product, defaultVariant.sizeEu, 1, defaultVariant.id)
         trackAddToCart({
           item_id: product.id,

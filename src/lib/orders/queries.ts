@@ -29,7 +29,7 @@ export type ListOrdersFilters = {
 
 /** Columns the admin orders table actually renders. */
 const ORDER_LIST_SELECT =
-  'id, order_number, status, payment_method, full_name, phone, city_name, total, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
+  'id, order_number, status, payment_method, full_name, phone, city_name, total, is_preorder, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
 
 async function fetchUndispatchedOrderCount(): Promise<number> {
   const db = createServiceClient()

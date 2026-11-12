@@ -27,6 +27,11 @@ export type Product = {
    * When false, product is one-size (bags, accessories) — no size UI.
    */
   requiresSize: boolean
+  /**
+   * When true (default), sold-out sizes can be pre-ordered.
+   * Admin can turn this off per product.
+   */
+  preorderEnabled: boolean
   /** Active variants for stock-aware add-to-cart. */
   variants: ProductVariantView[]
   badge: ProductBadge

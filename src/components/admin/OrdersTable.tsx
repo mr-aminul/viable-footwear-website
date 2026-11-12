@@ -364,6 +364,11 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                       >
                         {order.order_number}
                       </Link>
+                      {order.is_preorder ? (
+                        <p className="mt-0.5 text-[11px] font-medium text-navy">
+                          Pre-order
+                        </p>
+                      ) : null}
                       {order.pathao_consignment_id ? (
                         <p
                           className="mt-0.5 font-mono text-[11px] text-mute"

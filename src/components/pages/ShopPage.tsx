@@ -10,6 +10,7 @@ import {
 } from '@/lib/catalog/product-colorways'
 import { ProductCard } from '@/components/ProductCard'
 import { trackSearch } from '@/lib/analytics/events'
+import { isPreorderOnlyListing } from '@/lib/orders/preorder'
 
 export function ShopPage({
   products,
@@ -22,6 +23,7 @@ export function ShopPage({
   const params = useSearchParams()
   const category = params.get('category') ?? 'all'
   const saleOnly = params.get('sale') === '1'
+  const preorderOnly = params.get('preorder') === '1'
   const queryParam = params.get('q') ?? ''
   const focusSearch = params.get('focus') === 'search'
   const [sort, setSort] = useState('featured')
@@ -45,6 +47,12 @@ export function ShopPage({
     if (saleOnly) list = list.filter((p) => p.badge === 'Sale' || p.compareAt)
 
     let listings = expandProductsByColorway(list)
+
+    if (preorderOnly) {
+      listings = listings.filter(({ product, colorwayKey }) =>
+        isPreorderOnlyListing(product, colorwayKey),
+      )
+    }
 
     const needle = query.trim().toLowerCase()
     if (needle) {
@@ -77,7 +85,7 @@ export function ShopPage({
       )
     }
     return listings
-  }, [category, saleOnly, sort, products, query])
+  }, [category, saleOnly, preorderOnly, sort, products, query])
 
   const setParams = (next: URLSearchParams | Record<string, string>) => {
     const qs =
@@ -96,6 +104,15 @@ export function ShopPage({
     setParams(next)
   }
 
+  const setPreorderOnly = () => {
+    const next = new URLSearchParams(params.toString())
+    next.delete('sale')
+    next.delete('focus')
+    if (preorderOnly) next.delete('preorder')
+    else next.set('preorder', '1')
+    setParams(next)
+  }
+
   const commitSearch = (value: string) => {
     const next = new URLSearchParams(params.toString())
     next.delete('focus')
@@ -111,12 +128,14 @@ export function ShopPage({
     <div className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14 lg:px-8">
       <div className="max-w-2xl">
         <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink md:text-5xl">
-          {saleOnly ? 'Sale' : 'Shop'}
+          {saleOnly ? 'Sale' : preorderOnly ? 'Pre-order' : 'Shop'}
         </h1>
         <p className="mt-2 text-[15px] text-mute">
           {saleOnly
             ? 'Limited deals on foam, crocs & kicks.'
-            : 'Casual footwear for every Dhaka day.'}
+            : preorderOnly
+              ? 'Sold-out styles you can book now — ৳500 advance via bKash.'
+              : 'Casual footwear for every Dhaka day.'}
         </p>
       </div>
 
@@ -145,11 +164,16 @@ export function ShopPage({
       <div className="mt-6 flex flex-col gap-4 border-b border-cloud pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <FilterChip
-            active={category === 'all' && !saleOnly}
+            active={category === 'all' && !saleOnly && !preorderOnly}
             onClick={() => {
               setParams({})
             }}
             label="All"
+          />
+          <FilterChip
+            active={preorderOnly}
+            onClick={setPreorderOnly}
+            label="Pre-order"
           />
           {categories.map((c) => (
             <FilterChip

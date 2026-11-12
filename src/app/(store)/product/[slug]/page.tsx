@@ -79,9 +79,10 @@ export default async function ProductRoute({ params, searchParams }: Props) {
       '@type': 'Offer',
       priceCurrency: 'BDT',
       price: product.price,
-      availability:
-        product.variants.some((v) => v.stock > 0)
-          ? 'https://schema.org/InStock'
+      availability: product.variants.some((v) => v.stock > 0)
+        ? 'https://schema.org/InStock'
+        : product.preorderEnabled !== false
+          ? 'https://schema.org/PreOrder'
           : 'https://schema.org/OutOfStock',
       url: `/product/${product.slug}`,
     },

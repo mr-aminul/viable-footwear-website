@@ -102,6 +102,7 @@ function mapProduct(
     colors,
     sizes,
     requiresSize: row.requires_size !== false,
+    preorderEnabled: row.preorder_enabled !== false,
     variants: variantViews,
     badge: parseBadge(row.badge),
     description: row.description,

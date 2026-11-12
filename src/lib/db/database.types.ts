@@ -109,6 +109,7 @@ export interface Database {
           featured: boolean
           active: boolean
           requires_size: boolean
+          preorder_enabled: boolean
           related_product_ids: string[]
           seo_title: string | null
           seo_description: string | null
@@ -134,6 +135,7 @@ export interface Database {
           featured?: boolean
           active?: boolean
           requires_size?: boolean
+          preorder_enabled?: boolean
           related_product_ids?: string[]
           seo_title?: string | null
           seo_description?: string | null
@@ -328,6 +330,9 @@ export interface Database {
           promo_code_id: string | null
           promo_code: string | null
           discount_amount: number
+          is_preorder: boolean
+          amount_paid: number
+          amount_due: number
           notes: string | null
           paid_at: string | null
           payment_trx_id: string | null
@@ -363,6 +368,9 @@ export interface Database {
           promo_code_id?: string | null
           promo_code?: string | null
           discount_amount?: number
+          is_preorder?: boolean
+          amount_paid?: number
+          amount_due?: number
           notes?: string | null
           paid_at?: string | null
           payment_trx_id?: string | null
@@ -383,6 +391,7 @@ export interface Database {
           unit_price: number
           quantity: number
           weight_kg: number
+          is_preorder: boolean
           created_at: string
         }
         Insert: {
@@ -397,6 +406,7 @@ export interface Database {
           unit_price: number
           quantity: number
           weight_kg?: number
+          is_preorder?: boolean
         }
         Update: Partial<Database['public']['Tables']['order_items']['Insert']>
         Relationships: []

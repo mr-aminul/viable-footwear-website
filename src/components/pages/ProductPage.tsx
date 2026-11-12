@@ -41,6 +41,10 @@ import {
   trackAddToWishlist,
   trackViewItem,
 } from '@/lib/analytics/events'
+import {
+  isProductPreorderEnabled,
+  PREORDER_ADVANCE_BDT,
+} from '@/lib/orders/preorder'
 
 type SizeUnit = 'EU' | 'UK'
 
@@ -96,6 +100,8 @@ export function ProductPage({
       : product.sizes
   }, [product, selectedColor])
 
+  const preorderEnabled = isProductPreorderEnabled(product.preorderEnabled)
+
   const inStockSizesForColor = useMemo(() => {
     const matched = product.variants
       .filter((v) => {
@@ -107,40 +113,63 @@ export function ProductPage({
     return [...new Set(matched)].sort((a, b) => a - b)
   }, [product.variants, selectedColor])
 
-  const isSizeAvailable = (sizeEu: number) =>
+  const preorderSizesForColor = useMemo(() => {
+    if (!preorderEnabled) return [] as number[]
+    const matched = product.variants
+      .filter((v) => {
+        if (v.stock >= 1 || v.sizeEu <= 0) return false
+        if (!selectedColor) return true
+        return colorwayKey(v.color) === selectedColor.key
+      })
+      .map((v) => v.sizeEu)
+    return [...new Set(matched)].sort((a, b) => a - b)
+  }, [product.variants, selectedColor, preorderEnabled])
+
+  const selectableSizesForColor = useMemo(
+    () =>
+      [...new Set([...inStockSizesForColor, ...preorderSizesForColor])].sort(
+        (a, b) => a - b,
+      ),
+    [inStockSizesForColor, preorderSizesForColor],
+  )
+
+  const isSizeInStock = (sizeEu: number) =>
     inStockSizesForColor.includes(sizeEu)
+  const isSizePreorder = (sizeEu: number) =>
+    !isSizeInStock(sizeEu) && preorderSizesForColor.includes(sizeEu)
 
   const hasSingleSize =
-    sizesForColor.length === 1 && inStockSizesForColor.length === 1
+    sizesForColor.length === 1 && selectableSizesForColor.length === 1
   const showColorPicker = colorOptions.length > 1
   // Show the grid when there are multiple sizes, or a lone out-of-stock size
   // so shoppers can still see what exists but is unavailable.
   const showSizePicker =
     product.requiresSize !== false &&
     (sizesForColor.length > 1 ||
-      (sizesForColor.length === 1 && inStockSizesForColor.length === 0))
-  const isProductUnavailable = useMemo(
-    () =>
-      product.variants.length === 0 ||
-      product.variants.every((variant) => variant.stock < 1),
-    [product.variants],
-  )
+      (sizesForColor.length === 1 && selectableSizesForColor.length === 0))
+  const isProductUnavailable = useMemo(() => {
+    if (product.variants.length === 0) return true
+    if (product.variants.some((variant) => variant.stock >= 1)) return false
+    return !preorderEnabled
+  }, [product.variants, preorderEnabled])
 
   // Colorway can be fully sold out even when other colors still have stock.
   const hasSelectableVariant = useMemo(() => {
     if (product.requiresSize !== false) {
-      return inStockSizesForColor.length > 0
+      return selectableSizesForColor.length > 0
     }
-    return product.variants.some(
-      (variant) =>
-        variant.stock >= 1 &&
-        (!selectedColor || colorwayKey(variant.color) === selectedColor.key),
-    )
+    return product.variants.some((variant) => {
+      const matchesColor =
+        !selectedColor || colorwayKey(variant.color) === selectedColor.key
+      if (!matchesColor) return false
+      return variant.stock >= 1 || preorderEnabled
+    })
   }, [
     product.requiresSize,
     product.variants,
-    inStockSizesForColor,
+    selectableSizesForColor,
     selectedColor,
+    preorderEnabled,
   ])
 
   const isPurchaseUnavailable = isProductUnavailable || !hasSelectableVariant
@@ -177,14 +206,14 @@ export function ProductPage({
   useEffect(() => {
     if (product.requiresSize === false) return
     if (hasSingleSize) {
-      setSize(inStockSizesForColor[0]!)
+      setSize(selectableSizesForColor[0]!)
       return
     }
-    // Drop a size that no longer exists or is out of stock for the new colorway.
-    if (size != null && !inStockSizesForColor.includes(size)) {
+    // Drop a size that no longer exists or cannot be bought / pre-ordered.
+    if (size != null && !selectableSizesForColor.includes(size)) {
       setSize(null)
     }
-  }, [product.requiresSize, hasSingleSize, inStockSizesForColor, size])
+  }, [product.requiresSize, hasSingleSize, selectableSizesForColor, size])
 
   const gallery = useMemo(() => {
     return galleryForColorway(
@@ -218,51 +247,97 @@ export function ProductPage({
     const resolvedSize =
       size ??
       (product.requiresSize !== false && hasSingleSize
-        ? inStockSizesForColor[0]!
+        ? selectableSizesForColor[0]!
         : null)
 
-    if (product.requiresSize !== false) {
-      if (resolvedSize == null) {
-        setError('Select a size')
-        return null
-      }
-
-      const variant =
-        product.variants.find((v) => {
-          return (
-            v.sizeEu === resolvedSize &&
-            (!color || colorwayKey(v.color) === color.key) &&
-            v.stock > 0
-          )
-        }) ??
-        product.variants.find(
-          (v) => v.sizeEu === resolvedSize && v.stock > 0,
+    const matchVariant = (preferInStock: boolean) => {
+      if (product.requiresSize !== false) {
+        if (resolvedSize == null) return null
+        return (
+          product.variants.find((v) => {
+            const matchesSize = v.sizeEu === resolvedSize
+            const matchesColor =
+              !color || colorwayKey(v.color) === color.key
+            const matchesStock = preferInStock ? v.stock > 0 : v.stock < 1
+            return matchesSize && matchesColor && matchesStock
+          }) ??
+          product.variants.find((v) => {
+            const matchesSize = v.sizeEu === resolvedSize
+            const matchesStock = preferInStock ? v.stock > 0 : true
+            return matchesSize && matchesStock
+          })
         )
-
-      if (!variant) {
-        setError('That size is out of stock')
-        return null
       }
 
-      setError('')
-      return variant
+      return (
+        product.variants.find((v) => {
+          const matchesColor =
+            !color || colorwayKey(v.color) === color.key
+          const matchesStock = preferInStock ? v.stock > 0 : v.stock < 1
+          return matchesColor && matchesStock
+        }) ??
+        product.variants.find((v) => (preferInStock ? v.stock > 0 : true))
+      )
     }
 
-    const variant =
-      product.variants.find((v) => {
-        return (
-          (!color || colorwayKey(v.color) === color.key) && v.stock > 0
-        )
-      }) ?? product.variants.find((v) => v.stock > 0)
-
-    if (!variant) {
-      setError('Out of stock')
+    if (product.requiresSize !== false && resolvedSize == null) {
+      setError('Select a size')
       return null
     }
 
-    setError('')
-    return variant
+    const inStockVariant = matchVariant(true)
+    if (inStockVariant) {
+      setError('')
+      return inStockVariant
+    }
+
+    if (preorderEnabled) {
+      const preorderVariant = matchVariant(false)
+      if (preorderVariant) {
+        setError('')
+        return preorderVariant
+      }
+    }
+
+    setError(
+      product.requiresSize !== false
+        ? 'That size is out of stock'
+        : 'Out of stock',
+    )
+    return null
   }
+
+  // Entire colorway is sold out but still bookable — don't wait for a size tap
+  // before switching CTAs from "Buy now" to "Pre-order".
+  const colorwayIsPreorderOnly =
+    preorderEnabled &&
+    inStockSizesForColor.length === 0 &&
+    preorderSizesForColor.length > 0
+
+  const selectedIsPreorder = useMemo(() => {
+    if (!preorderEnabled) return false
+    if (product.requiresSize !== false) {
+      if (size != null) return isSizePreorder(size)
+      return colorwayIsPreorderOnly
+    }
+    return (
+      !product.variants.some(
+        (v) =>
+          v.stock >= 1 &&
+          (!selectedColor || colorwayKey(v.color) === selectedColor.key),
+      ) && hasSelectableVariant
+    )
+  }, [
+    preorderEnabled,
+    product.requiresSize,
+    product.variants,
+    size,
+    colorwayIsPreorderOnly,
+    inStockSizesForColor,
+    preorderSizesForColor,
+    selectedColor,
+    hasSelectableVariant,
+  ])
 
   const trackSelectedVariantAdd = (variantSize: number) => {
     trackAddToCart({
@@ -498,6 +573,20 @@ export function ProductPage({
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-spark" />
               <p>{unavailableMessage}</p>
             </div>
+          ) : selectedIsPreorder ? (
+            <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-navy/5 px-3.5 py-3 text-[13px] leading-snug text-ink">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-navy" />
+              <p>
+                {size != null || product.requiresSize === false
+                  ? 'This size is sold out. '
+                  : 'Currently sold out. '}
+                Pre-order with a{' '}
+                <span className="font-semibold">
+                  {formatPrice(PREORDER_ADVANCE_BDT)}
+                </span>{' '}
+                advance — pay the rest when it ships.
+              </p>
+            </div>
           ) : null}
 
           {product.note ? (
@@ -563,7 +652,8 @@ export function ProductPage({
                     <SizeOptionButton
                       key={s}
                       label={formatSizeLabel(s, sizeUnit)}
-                      available={isSizeAvailable(s)}
+                      available={isSizeInStock(s)}
+                      preorder={isSizePreorder(s)}
                       selected={size === s}
                       onSelect={() => {
                         setSize(s)
@@ -620,7 +710,7 @@ export function ProductPage({
               ) : (
                 <>
                   <ShoppingCart className="h-4 w-4" />
-                  Add to cart
+                  {selectedIsPreorder ? 'Pre-order' : 'Add to cart'}
                 </>
               )}
             </button>
@@ -630,7 +720,11 @@ export function ProductPage({
               disabled={isPurchaseUnavailable}
               className="inline-flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-full bg-navy px-6 py-3.5 text-[14px] font-semibold text-white transition hover:bg-navy-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy sm:flex-none"
             >
-              {isPurchaseUnavailable ? 'Out of stock' : 'Buy now'}
+              {isPurchaseUnavailable
+                ? 'Out of stock'
+                : selectedIsPreorder
+                  ? 'Pre-order now'
+                  : 'Buy now'}
             </button>
           </div>
 

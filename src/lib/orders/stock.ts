@@ -49,7 +49,7 @@ export async function restoreOrderStock(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: items, error } = await db
     .from('order_items')
-    .select('variant_id, quantity')
+    .select('variant_id, quantity, is_preorder')
     .eq('order_id', orderId)
 
   if (error) {
@@ -58,6 +58,8 @@ export async function restoreOrderStock(
 
   for (const item of items ?? []) {
     if (!item.variant_id) continue
+    // Pre-order lines never reserved stock, so nothing to restore.
+    if (item.is_preorder) continue
     const qty = Number(item.quantity)
     if (!Number.isFinite(qty) || qty <= 0) continue
 

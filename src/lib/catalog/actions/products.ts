@@ -615,6 +615,13 @@ export async function updateProduct(
       : requiresSizeRaw === 'on' ||
         requiresSizeRaw === 'true' ||
         requiresSizeRaw === '1'
+  const preorderEnabledRaw = formData.get('preorder_enabled')
+  const preorderEnabled =
+    preorderEnabledRaw == null
+      ? true
+      : preorderEnabledRaw === 'on' ||
+        preorderEnabledRaw === 'true' ||
+        preorderEnabledRaw === '1'
 
   if (!name) return { ok: false, error: 'Name is required.' }
   if (!isValidSlug(slug)) {
@@ -661,6 +668,7 @@ export async function updateProduct(
       featured,
       active,
       requires_size: requiresSize,
+      preorder_enabled: preorderEnabled,
     })
     .eq('id', productId)
 

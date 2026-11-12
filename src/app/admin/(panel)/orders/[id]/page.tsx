@@ -116,6 +116,7 @@ export default async function OrderDetailPage({
               <dt className="text-mute">Payment</dt>
               <dd className="font-medium uppercase text-ink">
                 {order.payment_method}
+                {order.is_preorder ? ' · Pre-order' : ''}
               </dd>
             </div>
             {order.paid_at ? (
@@ -196,16 +197,45 @@ export default async function OrderDetailPage({
                 {formatPrice(customerShipping)}
               </dd>
             </div>
-            <div className="flex justify-between gap-4 border-t border-cloud pt-2">
-              <dt className="font-semibold text-ink">
-                {order.payment_method === 'cod'
-                  ? 'Amount to collect'
-                  : 'Order total'}
-              </dt>
-              <dd className="font-semibold text-ink">
-                {formatPrice(Number(order.total))}
-              </dd>
-            </div>
+            {order.is_preorder ? (
+              <>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-mute">Advance paid</dt>
+                  <dd className="font-medium text-ink">
+                    {formatPrice(Number(order.amount_paid))}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-mute">Balance due</dt>
+                  <dd className="font-medium text-ink">
+                    {formatPrice(Number(order.amount_due))}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-cloud pt-2">
+                  <dt className="font-semibold text-ink">Order total</dt>
+                  <dd className="font-semibold text-ink">
+                    {formatPrice(Number(order.total))}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-mute">Pathao collect</dt>
+                  <dd className="font-medium text-ink">
+                    {formatPrice(Number(order.amount_due))}
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between gap-4 border-t border-cloud pt-2">
+                <dt className="font-semibold text-ink">
+                  {order.payment_method === 'cod'
+                    ? 'Amount to collect'
+                    : 'Order total'}
+                </dt>
+                <dd className="font-semibold text-ink">
+                  {formatPrice(Number(order.total))}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between gap-4 pt-2">
               <dt className="text-mute">Pathao consignment</dt>
               <dd className="font-mono text-[13px] font-medium text-ink">
@@ -353,6 +383,11 @@ export default async function OrderDetailPage({
                   {item.product_name}
                   {item.color ? (
                     <span className="ml-1 text-mute">· {item.color}</span>
+                  ) : null}
+                  {item.is_preorder ? (
+                    <span className="ml-1 text-[11px] font-semibold uppercase tracking-wide text-navy">
+                      Pre-order
+                    </span>
                   ) : null}
                 </td>
                 <td className="px-4 py-3 text-mute">

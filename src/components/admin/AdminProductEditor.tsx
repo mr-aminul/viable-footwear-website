@@ -118,6 +118,9 @@ export function AdminProductEditor({
   const [requiresSize, setRequiresSize] = useState(
     product.requiresSize !== false,
   )
+  const [preorderEnabled, setPreorderEnabled] = useState(
+    product.preorderEnabled !== false,
+  )
   const [relatedIds, setRelatedIds] = useState<string[]>(initialRelatedIds)
 
   const [size, setSize] = useState<number | null>(null)
@@ -142,6 +145,7 @@ export function AdminProductEditor({
       seoTitle,
       seoDescription,
       requiresSize,
+      preorderEnabled,
       variantRows,
       relatedIds,
     }),
@@ -163,6 +167,7 @@ export function AdminProductEditor({
       seoTitle,
       seoDescription,
       requiresSize,
+      preorderEnabled,
       variantRows,
       relatedIds,
     ],
@@ -307,6 +312,7 @@ export function AdminProductEditor({
     formData.set('seo_title', seoTitle)
     formData.set('seo_description', seoDescription)
     formData.set('requires_size', requiresSize ? 'true' : 'false')
+    formData.set('preorder_enabled', preorderEnabled ? 'true' : 'false')
     if (featured) formData.set('featured', 'on')
     if (active) formData.set('active', 'on')
 
@@ -398,6 +404,38 @@ export function AdminProductEditor({
             />
             Featured
           </label>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preorderEnabled}
+            aria-label="Pre-order when sold out"
+            disabled={pending}
+            onClick={() => setPreorderEnabled((prev) => !prev)}
+            className={[
+              'inline-flex items-center gap-2.5 rounded-full border bg-white px-3 py-2 text-[12px] font-medium disabled:opacity-60',
+              preorderEnabled
+                ? 'border-navy text-ink'
+                : 'border-cloud text-ink',
+            ].join(' ')}
+            title="When on, sold-out sizes can be pre-ordered for ৳500 advance"
+          >
+            <span className={preorderEnabled ? 'text-navy' : 'text-mute'}>
+              Pre-order
+            </span>
+            <span
+              className={[
+                'relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200',
+                preorderEnabled ? 'bg-navy' : 'bg-cloud',
+              ].join(' ')}
+            >
+              <span
+                className={[
+                  'absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                  preorderEnabled ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')}
+              />
+            </span>
+          </button>
           <button
             type="button"
             role="switch"
