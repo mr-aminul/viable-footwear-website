@@ -1,7 +1,35 @@
 import {
+  bkashApiStyle,
   resolveBkashConfig,
   type BkashConfig,
 } from '@/lib/integrations/bkash-settings'
+
+/** Endpoint paths differ between sandbox V2 and production v1.2.0-beta. */
+function pathsFor(config: BkashConfig) {
+  const style = bkashApiStyle(config.baseUrl)
+  if (style === 'v2') {
+    return {
+      grant: '/auth/grant-token',
+      refresh: '/auth/refresh-token',
+      create: '/payment/create',
+      execute: '/payment/execute',
+      query: '/query/payment',
+      search: '/general/search-transaction',
+      /** V2 Without Agreement omits mode. */
+      createNeedsMode: false as const,
+    }
+  }
+  return {
+    grant: '/token/grant',
+    refresh: '/token/refresh',
+    create: '/create',
+    execute: '/execute',
+    query: '/payment/status',
+    search: '/general/searchTransaction',
+    /** Classic Without Agreement uses mode 0011. */
+    createNeedsMode: true as const,
+  }
+}
 
 type GrantTokenResponse = {
   id_token?: string
@@ -146,7 +174,8 @@ function storeToken(config: BkashConfig, data: GrantTokenResponse): string {
 }
 
 async function requestGrant(config: BkashConfig): Promise<string> {
-  const res = await fetch(`${config.baseUrl}/auth/grant-token`, {
+  const paths = pathsFor(config)
+  const res = await fetch(`${config.baseUrl}${paths.grant}`, {
     method: 'POST',
     cache: 'no-store',
     headers: {
@@ -172,7 +201,8 @@ async function requestGrant(config: BkashConfig): Promise<string> {
 async function requestRefresh(config: BkashConfig): Promise<string | null> {
   const refresh = tokenCache?.refreshToken
   if (!refresh) return null
-  const res = await fetch(`${config.baseUrl}/auth/refresh-token`, {
+  const paths = pathsFor(config)
+  const res = await fetch(`${config.baseUrl}${paths.refresh}`, {
     method: 'POST',
     cache: 'no-store',
     headers: {
@@ -249,20 +279,24 @@ export async function createBkashPayment(input: {
   override?: BkashConfig
 }): Promise<BkashCreatePaymentResponse> {
   const config = await getConfig(input.override)
+  const paths = pathsFor(config)
+  const body: Record<string, string> = {
+    payerReference: input.payerReference || ' ',
+    callbackURL: input.callbackURL,
+    amount: String(input.amount),
+    currency: 'BDT',
+    intent: 'sale',
+    merchantInvoiceNumber: input.merchantInvoiceNumber,
+  }
+  // Classic Without Agreement requires mode 0011; V2 omits it.
+  if (paths.createNeedsMode) body.mode = '0011'
+
   const res = await fetchWithTokenRetry(
     config,
-    `${config.baseUrl}/payment/create`,
+    `${config.baseUrl}${paths.create}`,
     {
       method: 'POST',
-      body: JSON.stringify({
-        // V2 Without Agreement: do not send mode
-        payerReference: input.payerReference || ' ',
-        callbackURL: input.callbackURL,
-        amount: String(input.amount),
-        currency: 'BDT',
-        intent: 'sale',
-        merchantInvoiceNumber: input.merchantInvoiceNumber,
-      }),
+      body: JSON.stringify(body),
     },
   )
   const data = normalizeCreate(
@@ -279,9 +313,10 @@ export async function executeBkashPayment(
   override?: BkashConfig,
 ): Promise<BkashExecutePaymentResponse> {
   const config = await getConfig(override)
+  const paths = pathsFor(config)
   const res = await fetchWithTokenRetry(
     config,
-    `${config.baseUrl}/payment/execute`,
+    `${config.baseUrl}${paths.execute}`,
     {
       method: 'POST',
       body: JSON.stringify({ paymentId: paymentID, paymentID }),
@@ -296,9 +331,10 @@ export async function queryBkashPayment(
   override?: BkashConfig,
 ): Promise<BkashExecutePaymentResponse> {
   const config = await getConfig(override)
+  const paths = pathsFor(config)
   const res = await fetchWithTokenRetry(
     config,
-    `${config.baseUrl}/query/payment`,
+    `${config.baseUrl}${paths.query}`,
     {
       method: 'POST',
       body: JSON.stringify({ paymentId: paymentID, paymentID }),
@@ -323,18 +359,19 @@ export type BkashSearchTransactionResponse = {
   externalCode?: string
 }
 
-/** Successful transactions only — search by trxId from Execute (V2 path). */
+/** Successful transactions only — search by trxId / trxID from Execute. */
 export async function searchBkashTransaction(
   trxID: string,
   override?: BkashConfig,
 ): Promise<BkashSearchTransactionResponse> {
   const config = await getConfig(override)
+  const paths = pathsFor(config)
   const res = await fetchWithTokenRetry(
     config,
-    `${config.baseUrl}/general/search-transaction`,
+    `${config.baseUrl}${paths.search}`,
     {
       method: 'POST',
-      // V2 expects trxId; older docs used trxID.
+      // V2 expects trxId; classic docs used trxID — send both.
       body: JSON.stringify({ trxId: trxID, trxID }),
     },
   )

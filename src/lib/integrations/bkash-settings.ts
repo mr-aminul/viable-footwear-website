@@ -11,11 +11,28 @@ export function isBkashPaymentsEnabled(): boolean {
   return process.env.BKASH_ENABLED?.trim() === 'true'
 }
 
-/** Tokenized Checkout Without Agreement (V2). */
+/**
+ * Sandbox onboarded on Tokenized Checkout V2.
+ * Production credentials from bKash use the classic v1.2.0-beta context root.
+ */
 export const BKASH_SANDBOX_BASE =
   'https://tokenized.sandbox.bka.sh/v2/tokenized-checkout'
 export const BKASH_PRODUCTION_BASE =
-  'https://tokenized.pay.bka.sh/v2/tokenized-checkout'
+  'https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized/checkout'
+
+/** Which path style `bkash.ts` should call for this base URL. */
+export function bkashApiStyle(
+  baseUrl: string,
+): 'v2' | 'legacy' {
+  const normalized = baseUrl.replace(/\/$/, '')
+  if (
+    normalized.includes('/v2/') ||
+    normalized.endsWith('/tokenized-checkout')
+  ) {
+    return 'v2'
+  }
+  return 'legacy'
+}
 
 export type BkashMode = 'sandbox' | 'production'
 
