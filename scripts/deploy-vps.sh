@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Deploy Viable storefront on the VPS (run on the server as root).
+# Deploy Viable storefront on the production VPS (run on that server as root).
+# App: /var/www/viable  Service: viable-web.service :3000
+# Domains: viable.fashion + s3.viable.fashion (PostgREST /viable-rest)
+# SSH host and credentials: local gitignored .env / docs/ops.local.md — not this file.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/viable}"

@@ -33,3 +33,5 @@ next-env.d.ts
 *.tsbuildinfo
 certs/
 viable-bkash/
+# Local-only ops notes (IPs, SSH, provider tokens) — never push to GitHub
+docs/ops.local.md

@@ -1,10 +1,10 @@
 # Viable Footwear — Requirements & Task Breakdown
 
 **Status:** Phase 5 complete — motion system + storefront polish; cross-cutting / launch checklist remain  
-**Last updated:** 2026-09-14  
-**Current codebase:** Next.js App Router storefront (DB catalog) + Admin CMS + COD/bKash/Nagad checkout/Pathao + sales/logistics analytics + GTM/Pixel/OMS webhooks + motion polish + production on Vercel (`viable.inventivelab.bd`).
+**Last updated:** 2026-11-13  
+**Current codebase:** Next.js App Router storefront (DB catalog) + Admin CMS + COD/bKash/Nagad checkout/Pathao + sales/logistics analytics + GTM/Pixel/OMS webhooks + motion polish. **Production:** VPS → `viable.fashion` / `s3.viable.fashion` (see README). Secrets stay in gitignored env files only.
 
-**Secrets approach (4.4):** Payment/Pathao/OMS credentials live in `integration_settings` (Admin UI) with optional Vercel env fallback. Views expose only non-secret flags (`hasApiKey`, etc.). Marketing IDs are Admin-configured and injected server-side on the storefront only.
+**Secrets approach (4.4):** Payment/Pathao/OMS credentials live in `integration_settings` (Admin UI) with optional env fallback (VPS `.env.local`). Views expose only non-secret flags (`hasApiKey`, etc.). Marketing IDs are Admin-configured and injected server-side on the storefront only.
 
 ---
 
@@ -31,7 +31,7 @@ Ship a Bangladesh-ready ecommerce site for Viable Footwear where customers can b
 | Payments | bKash PGW + Nagad merchant APIs (transaction fees only) |
 | Shipping | Pathao Merchant API |
 
-**Secrets:** Vercel env vars + Admin-only Integration settings. Never expose service role, payment, or Pathao keys to the client.
+**Secrets:** VPS `/var/www/viable/.env.local` + Admin-only Integration settings. Never expose service role, payment, or Pathao keys to the client.
 
 ---
 

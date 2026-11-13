@@ -46,17 +46,26 @@ npm run dev
 - Storefront: http://localhost:3000  
 - Staff login: http://localhost:3000/admin/login  
 
-## Deploy (VPS)
+## Production
 
-Production: **https://viable.fashion** (also `www`, plus inventivelab aliases when DNS points at the VPS)
+Public sites: **https://viable.fashion** (+ `www`) and media/API **https://s3.viable.fashion**.
 
-On the server (`/var/www/viable`):
+| | |
+|--|--|
+| App | `/var/www/viable`, systemd `viable-web.service`, port **3000** |
+| API | Docker PostgREST on **3001**, DB `viable` / role `viable_app` (native PG17) |
+| Media | MinIO buckets `product-images`, `product-videos`, `site-media` |
+| Edge | Caddy for the web app + `s3.viable.fashion` (`/viable-rest`) |
+
+Secrets, SSH host, and provider tokens stay in **gitignored** `.env` / `.env.local` (and server `/var/www/viable/.env.local`). Never commit them. Local ops notes (IPs, etc.) go in `docs/ops.local.md` (also gitignored).
+
+On the production server:
 
 ```bash
 sudo bash scripts/deploy-vps.sh
 ```
 
-That pulls `main`, builds, and restarts `viable-web.service`. It also applies a **~400 MB memory cap**, a **nightly restart** (03:15), and a **weekly** `.next/cache` wipe. Caddy terminates HTTPS and reverse-proxies to `127.0.0.1:3000`. Production secrets live in `/var/www/viable/.env.local` (not in git).
+Pulls `main`, builds, restarts `viable-web.service`, applies the memory drop-in in `scripts/systemd/viable-web-memory.conf`, nightly restart (03:15), weekly `.next/cache` wipe. On the server, prefer **localhost** for `MEDIA_*` / `VIABLE_API_URL`; browsers use `/api/media/...` and the public domain.
 
 Product photos are resized once on upload (not on every customer view). Old photos without size variants still load; re-upload in admin if you want smaller thumbs.
 

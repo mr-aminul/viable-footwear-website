@@ -32,7 +32,7 @@ export function isObjectStoreConfigured(): boolean {
   )
 }
 
-/** Public base for object URLs, e.g. https://s3.storage.inventivelab.bd */
+/** Public base for object URLs, e.g. https://s3.viable.fashion */
 export function mediaPublicBaseUrl(): string | null {
   const explicit = process.env.MEDIA_PUBLIC_BASE_URL?.replace(/\/$/, '')
   if (explicit) return explicit
