@@ -90,18 +90,29 @@ function formatPathaoNetworkError(err: unknown): Error {
   return new Error(`Pathao request failed: ${detail}`)
 }
 
+/** Default budget for Pathao HTTP calls — fail fast so checkout stays usable. */
+const PATHAO_FETCH_TIMEOUT_MS = 8_000
+
 /** fetch() with optional Pathao TLS agent + clearer network errors. */
 async function pathaoFetch(
   url: string,
   init: RequestInit = {},
 ): Promise<Response> {
   const agent = getPathaoHttpsAgent()
+  const timeoutMs = PATHAO_FETCH_TIMEOUT_MS
 
   if (!agent) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      return await fetch(url, init)
+      return await fetch(url, {
+        ...init,
+        signal: init.signal ?? controller.signal,
+      })
     } catch (err) {
       throw formatPathaoNetworkError(err)
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -134,6 +145,7 @@ async function pathaoFetch(
           method,
           headers,
           agent,
+          timeout: timeoutMs,
         },
         (res) => {
           const chunks: Buffer[] = []
@@ -160,6 +172,9 @@ async function pathaoFetch(
         },
       )
 
+      req.on('timeout', () => {
+        req.destroy(new Error('UND_ERR_CONNECT_TIMEOUT'))
+      })
       req.on('error', (err) => reject(formatPathaoNetworkError(err)))
       if (body != null) req.write(body)
       req.end()
@@ -485,14 +500,39 @@ async function pathaoGet<T>(
   return data.data as T
 }
 
+/** City list almost never changes — cache to ride out Pathao blips. */
+const CITIES_CACHE_TTL_MS = 60 * 60 * 1000
+let citiesCache: { at: number; cities: PathaoCity[] } | null = null
+
 export async function getPathaoCities(
   override?: PathaoConfig,
 ): Promise<PathaoCity[]> {
-  const data = await pathaoGet<{ data: PathaoCity[] }>(
-    '/aladdin/api/v1/city-list',
-    override,
-  )
-  return Array.isArray(data?.data) ? data.data : []
+  // Only share the cache for the default (DB/env) config — overrides bypass it.
+  if (!override && citiesCache && Date.now() - citiesCache.at < CITIES_CACHE_TTL_MS) {
+    return citiesCache.cities
+  }
+
+  try {
+    const data = await pathaoGet<{ data: PathaoCity[] }>(
+      '/aladdin/api/v1/city-list',
+      override,
+    )
+    const cities = Array.isArray(data?.data) ? data.data : []
+    if (!override && cities.length > 0) {
+      citiesCache = { at: Date.now(), cities }
+    }
+    return cities
+  } catch (error) {
+    // Serve last good list if Pathao is timing out.
+    if (!override && citiesCache?.cities.length) {
+      console.error(
+        '[Pathao cities] upstream failed; serving cached list:',
+        error instanceof Error ? error.message : error,
+      )
+      return citiesCache.cities
+    }
+    throw error
+  }
 }
 
 export async function getPathaoZones(cityId: number): Promise<PathaoZone[]> {

@@ -4,6 +4,11 @@ import {
 } from '@/lib/catalog/constants'
 import { SITE_MEDIA_BUCKET } from '@/lib/website/constants'
 import { mediaPublicBaseUrl } from '@/lib/media/object-store'
+import {
+  isMediaVariantObjectPath,
+  mediaVariantObjectPath,
+  parseMediaWidth,
+} from '@/lib/media/widths'
 
 /** Buckets the storefront may proxy (never open-ended). */
 export const MEDIA_PROXY_BUCKETS = [
@@ -56,20 +61,49 @@ export function mediaProxyPath(bucket: string, objectPath: string): string {
 }
 
 /**
- * Append a width hint to a proxied media URL (`?w=`).
- * The media route serves a pre-built storage variant when available.
+ * Point a proxied media URL at a pre-built width variant object
+ * (`….w640.webp`) so Caddy/MinIO can serve it without Node.
  * Non-proxy URLs (local `/images/…`, absolute third-party) are unchanged.
+ * Legacy `?w=` query strings are stripped — width lives in the object path.
  */
 export function withMediaWidth(
   url: string,
   width: number | null | undefined,
 ): string {
-  if (!width || width <= 0) return url
+  const snapped = parseMediaWidth(width)
+  if (!snapped) {
+    // Drop legacy ?w= if present so MinIO/Caddy get a clean object path.
+    if (url.startsWith('/api/media/') && url.includes('?')) {
+      try {
+        const parsed = new URL(url, 'http://local.invalid')
+        parsed.searchParams.delete('w')
+        const search = parsed.searchParams.toString()
+        return search ? `${parsed.pathname}?${search}` : parsed.pathname
+      } catch {
+        return url
+      }
+    }
+    return url
+  }
   if (!url.startsWith('/api/media/')) return url
+
   try {
     const parsed = new URL(url, 'http://local.invalid')
-    parsed.searchParams.set('w', String(Math.round(width)))
-    return `${parsed.pathname}${parsed.search}`
+    const parts = parsed.pathname.split('/').filter(Boolean)
+    // ["api", "media", bucket, ...object]
+    if (parts.length < 4 || parts[0] !== 'api' || parts[1] !== 'media') {
+      return url
+    }
+    const bucket = decodeURIComponent(parts[2])
+    const objectPath = parts
+      .slice(3)
+      .map((part) => decodeURIComponent(part))
+      .join('/')
+    if (!isAllowedMediaBucket(bucket) || !objectPath) return url
+    if (isMediaVariantObjectPath(objectPath)) {
+      return mediaProxyPath(bucket, objectPath)
+    }
+    return mediaProxyPath(bucket, mediaVariantObjectPath(objectPath, snapped))
   } catch {
     return url
   }

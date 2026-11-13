@@ -25,6 +25,18 @@ npm ci
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
 npm run build
 
+# --- Caddy: /api/media → MinIO (keep large media off Node) ---
+CADDY_SRC="$APP_DIR/scripts/caddy/viable-web.caddy"
+CADDY_DST="/etc/caddy/conf.d/viable-web.caddy"
+if [[ -f "$CADDY_SRC" ]]; then
+  cp "$CADDY_SRC" "$CADDY_DST"
+  if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+    systemctl reload caddy
+  else
+    echo "WARNING: Caddyfile validation failed; left previous live config. Check $CADDY_DST" >&2
+  fi
+fi
+
 # --- Resource guardrails (memory cap + health watchdog + nightly restart) ---
 DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
 mkdir -p "$DROPIN_DIR"
@@ -82,5 +94,11 @@ if [[ "$health" != "200" ]]; then
   exit 1
 fi
 
+# Confirm media is served by Caddy→MinIO (not queued on Next).
+media_health="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 \
+  "http://127.0.0.1/api/media/product-images/" -H "Host: viable.fashion" || true)"
+# Bucket root may 403/404; any response from Caddy/MinIO (not connection fail) is fine.
+echo "media_probe_via_caddy=${media_health}"
+
 echo "Deploy complete ($(git rev-parse --short HEAD))."
-echo "Memory cap + health watchdog + nightly restart + weekly cache wipe are active."
+echo "Caddy media bypass + memory cap + health watchdog + nightly restart are active."

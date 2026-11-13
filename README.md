@@ -65,7 +65,7 @@ On the production server:
 sudo bash scripts/deploy-vps.sh
 ```
 
-Pulls `main`, builds, restarts `viable-web.service`, applies the memory drop-in in `scripts/systemd/viable-web-memory.conf`, nightly restart (03:15), weekly `.next/cache` wipe. On the server, prefer **localhost** for `MEDIA_*` / `VIABLE_API_URL`; browsers use `/api/media/...` and the public domain.
+Pulls `main`, builds, restarts `viable-web.service`, applies Caddy (`scripts/caddy/viable-web.caddy` so `/api/media` → MinIO), memory drop-in, health watchdog, nightly restart (03:15), weekly `.next/cache` wipe. On the server, prefer **localhost** for `MEDIA_*` / `VIABLE_API_URL`; browsers still use `/api/media/...` on the public domain (Caddy serves those from MinIO, not Node).
 
 Product photos are resized once on upload (not on every customer view). Old photos without size variants still load; re-upload in admin if you want smaller thumbs.
 

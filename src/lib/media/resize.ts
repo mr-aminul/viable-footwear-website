@@ -1,34 +1,11 @@
 import sharp from 'sharp'
+import {
+  MEDIA_WIDTHS,
+  parseMediaWidth,
+  type MediaWidth,
+} from '@/lib/media/widths'
 
-/**
- * Whitelisted longest-edge widths for `/api/media/…?w=`.
- * Variants are encoded at upload time (see `uploadImageWidthVariants`).
- */
-export const MEDIA_WIDTHS = [
-  64, 96, 128, 256, 384, 640, 828, 1200, 1600,
-] as const
-
-export type MediaWidth = (typeof MEDIA_WIDTHS)[number]
-
-const WIDTH_SET = new Set<number>(MEDIA_WIDTHS)
-
-/** Parse `?w=` to a allowed width, or null for original. */
-export function parseMediaWidth(
-  raw: string | null | undefined,
-): MediaWidth | null {
-  if (!raw) return null
-  const n = Number.parseInt(raw, 10)
-  if (!Number.isFinite(n) || n <= 0) return null
-  if (WIDTH_SET.has(n)) return n as MediaWidth
-
-  // Snap to nearest allowed width (prefer not upsizing past request).
-  let best: MediaWidth = MEDIA_WIDTHS[0]
-  for (const w of MEDIA_WIDTHS) {
-    if (w <= n) best = w
-    else break
-  }
-  return best
-}
+export { MEDIA_WIDTHS, parseMediaWidth, type MediaWidth }
 
 export function canResizeContentType(contentType: string): boolean {
   const type = contentType.toLowerCase().split(';')[0]?.trim() ?? ''

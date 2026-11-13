@@ -1,12 +1,14 @@
+import { resizeMediaImage, type MediaWidth } from '@/lib/media/resize'
 import {
   MEDIA_WIDTHS,
-  resizeMediaImage,
-  type MediaWidth,
-} from '@/lib/media/resize'
+  mediaVariantObjectPath,
+} from '@/lib/media/widths'
 import {
   deleteObjects,
   uploadObject,
 } from '@/lib/media/object-store'
+
+export { mediaVariantObjectPath }
 
 /**
  * Pre-built thumb/card sizes written at upload time.
@@ -15,17 +17,6 @@ import {
 export const UPLOAD_VARIANT_WIDTHS: readonly MediaWidth[] = [
   64, 96, 128, 256, 384, 640, 828, 1200,
 ]
-
-/** `product/uuid.webp` → `product/uuid.w640.webp` */
-export function mediaVariantObjectPath(
-  objectPath: string,
-  width: MediaWidth,
-): string {
-  const cleaned = objectPath.replace(/^\/+/, '')
-  const lastDot = cleaned.lastIndexOf('.')
-  if (lastDot <= 0) return `${cleaned}.w${width}.webp`
-  return `${cleaned.slice(0, lastDot)}.w${width}.webp`
-}
 
 /** Original + every whitelisted width variant (for deletes). */
 export function mediaObjectPathsIncludingVariants(

@@ -9,7 +9,7 @@ export const MEDIA_FALLBACK = '/favicon.png'
 
 /**
  * Resolve a storage path or absolute/public path to a browser URL.
- * Storage objects are served via `/api/media/…` so Vercel CDN caches them.
+ * Storage objects use `/api/media/…` (Caddy → MinIO in production).
  */
 export function resolveMediaUrl(
   path: string | null | undefined,

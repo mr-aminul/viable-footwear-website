@@ -1,0 +1,30 @@
+# Viable Footwear storefront (Next.js on 127.0.0.1:3000)
+# Installed by scripts/deploy-vps.sh → /etc/caddy/conf.d/viable-web.caddy
+#
+# /api/media/{bucket}/… is served by MinIO directly (not Next.js) so Facebook
+# ad traffic and home video Range requests cannot exhaust Node memory.
+viable.fashion, www.viable.fashion {
+	encode gzip zstd
+
+	@nextStatic path /_next/static/*
+	header @nextStatic Cache-Control "public, max-age=31536000, immutable"
+
+	# Only the public media buckets — never open-ended MinIO proxy.
+	@mediaApi path /api/media/product-images/* /api/media/product-videos/* /api/media/site-media/*
+	handle @mediaApi {
+		uri strip_prefix /api/media
+		@cachedObjects method GET HEAD
+		header @cachedObjects Cache-Control "public, max-age=31536000, immutable"
+		header @cachedObjects CDN-Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy 127.0.0.1:9000 {
+			header_up Host s3.viable.fashion
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

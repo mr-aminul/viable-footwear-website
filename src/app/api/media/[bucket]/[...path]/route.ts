@@ -3,8 +3,7 @@ import {
   isAllowedMediaBucket,
   publicStorageUrl,
 } from '@/lib/media/storage-proxy'
-import { parseMediaWidth } from '@/lib/media/resize'
-import { mediaVariantObjectPath } from '@/lib/media/variants'
+import { mediaVariantObjectPath, parseMediaWidth } from '@/lib/media/widths'
 
 /** Long-lived CDN + browser cache so repeat visitors rarely hit origin storage. */
 const CACHE_CONTROL =
@@ -40,12 +39,12 @@ async function fetchUpstream(
 }
 
 /**
- * Same-origin media proxy. Browsers request `/api/media/…`; CDN (Cloudflare)
- * caches full responses for a year.
+ * Local / fallback media proxy (used when Caddy is not fronting the app).
+ * Production Caddy serves `/api/media/…` straight from MinIO so this route
+ * is not on the hot path for Facebook ads or home video.
  *
- * Optional `?w=` serves a pre-built width variant from storage when present
- * (written at upload time). Never resizes on the request path — that kept
- * the VPS memory high. Missing variants fall back to the original object.
+ * Optional `?w=` still maps to a pre-built `….w{N}.webp` when present.
+ * Prefer path-based variants via `withMediaWidth` in HTML.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { bucket, path: pathParts } = await context.params
