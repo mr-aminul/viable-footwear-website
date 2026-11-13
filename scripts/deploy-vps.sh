@@ -25,11 +25,24 @@ npm ci
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
 npm run build
 
-# --- Resource guardrails (memory cap + nightly restart) ---
+# --- Resource guardrails (memory cap + health watchdog + nightly restart) ---
 DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
 mkdir -p "$DROPIN_DIR"
 cp "$APP_DIR/scripts/systemd/viable-web-memory.conf" "$DROPIN_DIR/memory.conf"
 systemctl daemon-reload
+
+# Intelligent heal: if :3000 stops answering, restart (old VPS behaviour).
+WATCHDOG_SRC="$APP_DIR/scripts/viable-web-watchdog.sh"
+WATCHDOG_BIN="/usr/local/sbin/viable-web-watchdog"
+install -m 755 "$WATCHDOG_SRC" "$WATCHDOG_BIN"
+WATCHDOG_CRON="/etc/cron.d/viable-web-watchdog"
+cat >"$WATCHDOG_CRON" <<EOF
+# Restart Viable when local health check fails (hung Next / memory pressure).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+* * * * * root ${WATCHDOG_BIN}
+EOF
+chmod 644 "$WATCHDOG_CRON"
 
 # Nightly restart at 03:15 local time — clears memory creep with a short blip.
 CRON_FILE="/etc/cron.d/viable-web-nightly"
@@ -70,4 +83,4 @@ if [[ "$health" != "200" ]]; then
 fi
 
 echo "Deploy complete ($(git rev-parse --short HEAD))."
-echo "Memory cap + nightly restart + weekly cache wipe are active."
+echo "Memory cap + health watchdog + nightly restart + weekly cache wipe are active."
