@@ -254,13 +254,9 @@ export function StatusPage({ initial }: { initial: VpsStatusReport }) {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
-                    <linearGradient id="busyFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#1a3668" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#1a3668" stopOpacity={0} />
-                    </linearGradient>
                     <linearGradient id="memFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#e31c23" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#e31c23" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#1a3668" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#1a3668" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(26,54,104,0.08)" vertical={false} />
@@ -287,14 +283,7 @@ export function StatusPage({ initial }: { initial: VpsStatusReport }) {
                     formatter={(value, name) => {
                       const n = typeof value === 'number' ? value : Number(value)
                       const label =
-                        name === 'memPercent'
-                          ? 'Memory'
-                          : name === 'diskPercent'
-                            ? 'Storage'
-                            : 'Busyness'
-                      if (name === 'load1') {
-                        return [n.toFixed(2), label]
-                      }
+                        name === 'memPercent' ? 'Memory' : 'Storage'
                       return [`${Math.round(n)}%`, label]
                     }}
                   />
@@ -302,7 +291,7 @@ export function StatusPage({ initial }: { initial: VpsStatusReport }) {
                     type="monotone"
                     dataKey="memPercent"
                     name="memPercent"
-                    stroke="#e31c23"
+                    stroke="#1a3668"
                     fill="url(#memFill)"
                     strokeWidth={2}
                   />
@@ -310,9 +299,10 @@ export function StatusPage({ initial }: { initial: VpsStatusReport }) {
                     type="monotone"
                     dataKey="diskPercent"
                     name="diskPercent"
-                    stroke="#c9a227"
+                    stroke="#2a4a7a"
                     fill="transparent"
                     strokeWidth={2}
+                    strokeDasharray="4 4"
                   />
                 </AreaChart>
               </ResponsiveContainer>
