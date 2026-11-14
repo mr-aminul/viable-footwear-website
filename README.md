@@ -48,13 +48,14 @@ npm run dev
 
 ## Production
 
-Public sites: **https://viable.fashion** (+ `www`) and media/API **https://s3.viable.fashion**.
+Public sites: **https://viable.fashion** (+ `www`), media/API **https://s3.viable.fashion**, status **https://status.viable.fashion**.
 
 | | |
 |--|--|
 | App | `/var/www/viable`, systemd `viable-web.service`, port **3000** |
 | API | Docker PostgREST on **3001**, DB `viable` / role `viable_app` (native PG17) |
 | Media | MinIO buckets `product-images`, `product-videos`, `site-media` |
+| Status | `status.viable.fashion` → `/status` + `/api/status` (collector cron → `/var/lib/vps-status/report.json`) |
 | Edge | Caddy for the web app + `s3.viable.fashion` (`/viable-rest`) |
 
 Secrets, SSH host, and provider tokens stay in **gitignored** `.env` / `.env.local` (and server `/var/www/viable/.env.local`). Never commit them. Local ops notes (IPs, etc.) go in `docs/ops.local.md` (also gitignored).
@@ -65,7 +66,7 @@ On the production server:
 sudo bash scripts/deploy-vps.sh
 ```
 
-Pulls `main`, builds, restarts `viable-web.service`, applies Caddy (`scripts/caddy/viable-web.caddy` so `/api/media` → MinIO), memory drop-in, health watchdog, nightly restart (03:15), weekly `.next/cache` wipe. On the server, prefer **localhost** for `MEDIA_*` / `VIABLE_API_URL`; browsers still use `/api/media/...` on the public domain (Caddy serves those from MinIO, not Node).
+Pulls `main`, builds, restarts `viable-web.service`, applies Caddy (`viable-web.caddy` so `/api/media` → MinIO, plus `status-viable.caddy`), memory drop-in, health watchdog, VPS status collector, nightly restart (03:15), weekly `.next/cache` wipe. On the server, prefer **localhost** for `MEDIA_*` / `VIABLE_API_URL`; browsers still use `/api/media/...` on the public domain (Caddy serves those from MinIO, not Node).
 
 Product photos are resized once on upload (not on every customer view). Old photos without size variants still load; re-upload in admin if you want smaller thumbs.
 

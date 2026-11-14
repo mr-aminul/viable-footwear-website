@@ -25,15 +25,22 @@ npm ci
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
 npm run build
 
-# --- Caddy: /api/media → MinIO (keep large media off Node) ---
-CADDY_SRC="$APP_DIR/scripts/caddy/viable-web.caddy"
-CADDY_DST="/etc/caddy/conf.d/viable-web.caddy"
-if [[ -f "$CADDY_SRC" ]]; then
-  cp "$CADDY_SRC" "$CADDY_DST"
+# --- Caddy: storefront media bypass + public status subdomain ---
+CADDY_RELOAD=0
+install_caddy_snippet() {
+  local src="$1" dst="$2"
+  if [[ -f "$src" ]]; then
+    cp "$src" "$dst"
+    CADDY_RELOAD=1
+  fi
+}
+install_caddy_snippet "$APP_DIR/scripts/caddy/viable-web.caddy" /etc/caddy/conf.d/viable-web.caddy
+install_caddy_snippet "$APP_DIR/scripts/caddy/status-viable.caddy" /etc/caddy/conf.d/status-viable.caddy
+if (( CADDY_RELOAD == 1 )); then
   if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
     systemctl reload caddy
   else
-    echo "WARNING: Caddyfile validation failed; left previous live config. Check $CADDY_DST" >&2
+    echo "WARNING: Caddyfile validation failed; left previous live config." >&2
   fi
 fi
 
@@ -55,6 +62,22 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 * * * * * root ${WATCHDOG_BIN}
 EOF
 chmod 644 "$WATCHDOG_CRON"
+
+# Public VPS status collector → /var/lib/vps-status/report.json
+STATUS_SRC="$APP_DIR/scripts/vps-status-collector.sh"
+STATUS_BIN="/usr/local/sbin/vps-status-collector"
+install -m 755 "$STATUS_SRC" "$STATUS_BIN"
+mkdir -p /var/lib/vps-status
+STATUS_CRON="/etc/cron.d/vps-status-collector"
+cat >"$STATUS_CRON" <<EOF
+# Snapshot host + stack health for status.viable.fashion
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+* * * * * root ${STATUS_BIN} >/dev/null 2>&1
+EOF
+chmod 644 "$STATUS_CRON"
+# Seed a report immediately so the status page is not empty after deploy.
+"${STATUS_BIN}" || echo "WARNING: initial status collector run failed" >&2
 
 # Nightly restart at 03:15 local time — clears memory creep with a short blip.
 CRON_FILE="/etc/cron.d/viable-web-nightly"
@@ -101,4 +124,4 @@ media_health="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 \
 echo "media_probe_via_caddy=${media_health}"
 
 echo "Deploy complete ($(git rev-parse --short HEAD))."
-echo "Caddy media bypass + memory cap + health watchdog + nightly restart are active."
+echo "Caddy media bypass + status.viable.fashion + memory cap + health watchdog + nightly restart are active."
