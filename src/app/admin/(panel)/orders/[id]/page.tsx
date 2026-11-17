@@ -9,6 +9,7 @@ import {
 } from '@/lib/orders/queries'
 import { pathaoTrackingUrl } from '@/lib/orders/pathao-tracking'
 import { parsePathaoHistory } from '@/lib/orders/pathao-history'
+import { orderChannelLabel } from '@/lib/orders/channels'
 import {
   isPathaoShipmentStranded,
   pathaoStatusLabel,
@@ -62,7 +63,7 @@ export default async function OrderDetailPage({
     <>
       <AdminPageHeader
         title={order.order_number}
-        description={`${order.full_name} · ${order.payment_method.toUpperCase()}`}
+        description={`${order.full_name} · ${orderChannelLabel(order.channel)} · ${order.payment_method.toUpperCase()}`}
         backHref="/admin/orders"
         backLabel="Back to orders"
         actions={<OrderAdminActions order={order} showSync />}
@@ -74,6 +75,12 @@ export default async function OrderDetailPage({
             Customer
           </h2>
           <dl className="mt-4 space-y-2 text-[14px]">
+            <div className="flex justify-between gap-4">
+              <dt className="text-mute">Channel</dt>
+              <dd className="font-medium text-ink">
+                {orderChannelLabel(order.channel)}
+              </dd>
+            </div>
             <div className="flex justify-between gap-4">
               <dt className="text-mute">Name</dt>
               <dd className="font-medium text-ink">{order.full_name}</dd>
@@ -332,13 +339,13 @@ export default async function OrderDetailPage({
             </h2>
           </div>
           <table className="w-full min-w-[520px] text-left text-[13px]">
-            <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+            <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
               <tr>
-                <th className="px-4 py-3 font-semibold">Gateway</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Trx / external</th>
-                <th className="px-4 py-3 font-semibold">Amount</th>
-                <th className="px-4 py-3 font-semibold">When</th>
+                <th className="px-3 py-2 font-semibold">Gateway</th>
+                <th className="px-3 py-2 font-semibold">Status</th>
+                <th className="px-3 py-2 font-semibold">Trx / external</th>
+                <th className="px-3 py-2 font-semibold">Amount</th>
+                <th className="px-3 py-2 font-semibold">When</th>
               </tr>
             </thead>
             <tbody>
@@ -347,15 +354,15 @@ export default async function OrderDetailPage({
                   key={attempt.id}
                   className="border-b border-cloud last:border-0"
                 >
-                  <td className="px-4 py-3 uppercase">{attempt.gateway}</td>
-                  <td className="px-4 py-3">{attempt.status}</td>
-                  <td className="px-4 py-3 font-mono text-[12px]">
+                  <td className="px-3 py-2 uppercase">{attempt.gateway}</td>
+                  <td className="px-3 py-2">{attempt.status}</td>
+                  <td className="px-3 py-2 font-mono text-[12px]">
                     {attempt.trx_id || attempt.external_id || '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     {formatPrice(Number(attempt.amount))}
                   </td>
-                  <td className="px-4 py-3 text-mute">
+                  <td className="px-3 py-2 text-mute">
                     {new Date(attempt.created_at).toLocaleString('en-BD')}
                   </td>
                 </tr>
@@ -367,19 +374,19 @@ export default async function OrderDetailPage({
 
       <section className="mt-6 overflow-x-auto rounded-2xl border border-cloud bg-white">
         <table className="w-full min-w-[520px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+          <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
             <tr>
-              <th className="px-4 py-3 font-semibold">Item</th>
-              <th className="px-4 py-3 font-semibold">Size</th>
-              <th className="px-4 py-3 font-semibold">Qty</th>
-              <th className="px-4 py-3 font-semibold">Unit</th>
-              <th className="px-4 py-3 font-semibold">Line</th>
+              <th className="px-3 py-2 font-semibold">Item</th>
+              <th className="px-3 py-2 font-semibold">Size</th>
+              <th className="px-3 py-2 font-semibold">Qty</th>
+              <th className="px-3 py-2 font-semibold">Unit</th>
+              <th className="px-3 py-2 font-semibold">Line</th>
             </tr>
           </thead>
           <tbody>
             {order.items.map((item) => (
               <tr key={item.id} className="border-b border-cloud last:border-0">
-                <td className="px-4 py-3 font-medium text-ink">
+                <td className="px-3 py-2 font-medium text-ink">
                   {item.product_name}
                   {item.color ? (
                     <span className="ml-1 text-mute">· {item.color}</span>
@@ -390,16 +397,16 @@ export default async function OrderDetailPage({
                     </span>
                   ) : null}
                 </td>
-                <td className="px-4 py-3 text-mute">
+                <td className="px-3 py-2 text-mute">
                   {item.size_eu != null && Number(item.size_eu) > 0
                     ? `EU ${item.size_eu}`
                     : '—'}
                 </td>
-                <td className="px-4 py-3">{item.quantity}</td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">{item.quantity}</td>
+                <td className="px-3 py-2">
                   {formatPrice(Number(item.unit_price))}
                 </td>
-                <td className="px-4 py-3 font-medium">
+                <td className="px-3 py-2 font-medium">
                   {formatPrice(Number(item.unit_price) * item.quantity)}
                 </td>
               </tr>

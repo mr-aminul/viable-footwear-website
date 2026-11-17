@@ -74,11 +74,12 @@ export function PromoProductPicker({
 
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
         <table className="w-full min-w-[520px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+          <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
             <tr>
-              <th className="w-10 px-4 py-3">
+              <th className="w-10 px-3 py-2">
                 <input
                   type="checkbox"
+                  className="h-4 w-4 rounded border-white/40 accent-white"
                   checked={allFilteredSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = someFilteredSelected
@@ -88,16 +89,16 @@ export function PromoProductPicker({
                   aria-label="Select all visible products"
                 />
               </th>
-              <th className="px-4 py-3 font-semibold">Product</th>
-              <th className="px-4 py-3 font-semibold">Category</th>
-              <th className="px-4 py-3 font-semibold">Price</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-3 py-2 font-semibold">Product</th>
+              <th className="px-3 py-2 font-semibold">Category</th>
+              <th className="px-3 py-2 font-semibold">Price</th>
+              <th className="px-3 py-2 font-semibold">Status</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-mute">
+                <td colSpan={5} className="px-3 py-8 text-center text-mute">
                   {catalog.length === 0
                     ? 'No products yet. Create products first.'
                     : 'No products match your search.'}
@@ -111,7 +112,7 @@ export function PromoProductPicker({
                     key={product.id}
                     className="border-b border-cloud last:border-0"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -120,7 +121,7 @@ export function PromoProductPicker({
                         aria-label={`Select ${product.name}`}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-mist/40">
                           <img
@@ -134,13 +135,13 @@ export function PromoProductPicker({
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-mute">
+                    <td className="px-3 py-2 text-mute">
                       {product.categoryLabel}
                     </td>
-                    <td className="px-4 py-3 tabular-nums">
+                    <td className="px-3 py-2 tabular-nums">
                       {formatPrice(product.price)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <span
                         className={
                           product.active

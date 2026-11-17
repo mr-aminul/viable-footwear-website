@@ -8,14 +8,25 @@ import {
   orderPayloadFromRow,
 } from '@/lib/integrations/oms-webhook'
 import {
+  notifyDiscordBulkOrders,
+  type DiscordOrderNotification,
+} from '@/lib/integrations/discord-orders'
+import {
   cancelPathaoOrder,
   createPathaoOrder,
+  getPathaoCities,
   getPathaoOrderInfo,
   isPathaoOrderNotFoundError,
   normalizePathaoPhone,
 } from '@/lib/pathao'
 import type { OrderStatus } from '@/lib/db/database.types'
 import { revalidateAdminOrders } from '@/lib/orders/cache-tags'
+import { orderChannelLabel } from '@/lib/orders/channels'
+import { createImportedOrder } from '@/lib/orders/import'
+import type {
+  BulkOrderRowInput,
+  BulkOrderRowResult,
+} from '@/lib/orders/import-types'
 import { isPathaoShipmentStranded } from '@/lib/orders/status-labels'
 import { parsePathaoHistory } from '@/lib/orders/pathao-history'
 import {
@@ -23,6 +34,7 @@ import {
   restoreOrderStock,
 } from '@/lib/orders/stock'
 import { createClient } from '@/lib/db/server'
+import { createServiceClient } from '@/lib/db/admin'
 
 async function assertPathaoConfigured(): Promise<ActionResult | null> {
   try {
@@ -757,5 +769,124 @@ export async function reactivateOrderForResend(
   return {
     ok: true,
     data: { orderId: order.id, orderNumber: order.order_number },
+  }
+}
+
+const MAX_BULK_ORDERS = 200
+
+/**
+ * Create many orders from the admin spreadsheet / CSV import.
+ * Sends one Discord digest when more than one order succeeds.
+ */
+export async function bulkCreateOrders(
+  rows: BulkOrderRowInput[],
+): Promise<ActionResult<{ created: number; results: BulkOrderRowResult[] }>> {
+  await requireRole(['admin', 'manager'])
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, error: 'Add at least one order row.' }
+  }
+  if (rows.length > MAX_BULK_ORDERS) {
+    return {
+      ok: false,
+      error: `Bulk import is limited to ${MAX_BULK_ORDERS} orders at a time.`,
+    }
+  }
+
+  const db = createServiceClient()
+  let citiesCache: Awaited<ReturnType<typeof getPathaoCities>> | undefined
+  try {
+    citiesCache = await getPathaoCities()
+  } catch {
+    citiesCache = undefined
+  }
+
+  const results: BulkOrderRowResult[] = []
+  const createdOrders: DiscordOrderNotification[] = []
+  let created = 0
+
+  for (const row of rows) {
+    const result = await createImportedOrder(db, row, { citiesCache })
+    if (!result.ok || !result.data) {
+      results.push({
+        key: row.key,
+        ok: false,
+        error: result.ok ? 'Failed to save order.' : result.error,
+      })
+      continue
+    }
+
+    created += 1
+    results.push({
+      key: row.key,
+      ok: true,
+      id: result.data.id,
+      orderNumber: result.data.orderNumber,
+    })
+
+    createdOrders.push({
+      orderId: result.data.orderNumber,
+      fullName: result.data.fullName,
+      email: result.data.email,
+      phone: result.data.phone,
+      secondaryPhone: result.data.secondaryPhone,
+      address: result.data.address,
+      cityName: result.data.cityName,
+      zoneName: result.data.zoneName,
+      areaName: result.data.areaName,
+      paymentMethod: result.data.paymentMethod,
+      channel: orderChannelLabel(result.data.channel),
+      items: result.data.items,
+      subtotal: result.data.subtotal,
+      shipping: result.data.shipping,
+      total: result.data.total,
+    })
+
+    void emitOmsWebhook(
+      'order.created',
+      orderPayloadFromRow({
+        id: result.data.id,
+        order_number: result.data.orderNumber,
+        status: 'awaiting_fulfillment',
+        payment_method: result.data.paymentMethod,
+        total: result.data.total,
+        full_name: result.data.fullName,
+        phone: result.data.phone,
+        email: result.data.email,
+        city_name: result.data.cityName,
+        zone_name: result.data.zoneName,
+        area_name: result.data.areaName,
+        address: result.data.address,
+      }),
+    )
+  }
+
+  if (created > 0) {
+    revalidateAdminOrders()
+    void notifyDiscordBulkOrders(createdOrders)
+  }
+
+  return { ok: true, data: { created, results } }
+}
+
+/** Create a single offline / social-channel order from the manual form. */
+export async function createManualOrder(
+  row: BulkOrderRowInput,
+): Promise<ActionResult<{ id: string; orderNumber: string }>> {
+  await requireRole(['admin', 'manager'])
+  const result = await bulkCreateOrders([row])
+  if (!result.ok) return result
+
+  const first = result.data?.results[0]
+  if (!first?.ok || !first.id || !first.orderNumber) {
+    return {
+      ok: false,
+      error: first?.error ?? 'Failed to create order.',
+    }
+  }
+
+  return {
+    ok: true,
+    data: { id: first.id, orderNumber: first.orderNumber },
   }
 }

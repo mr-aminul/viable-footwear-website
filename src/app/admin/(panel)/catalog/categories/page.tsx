@@ -23,7 +23,6 @@ export default async function CategoriesListPage() {
     <>
       <AdminPageHeader
         title="Categories"
-        description="Organize the shop. Drag rows to set storefront order. Deactivate categories you are not using instead of deleting them."
         backHref="/admin/catalog"
         backLabel="Back to products"
         actions={
@@ -33,11 +32,11 @@ export default async function CategoriesListPage() {
         }
       />
 
-      <div className="mt-8">
+      <div className="mt-4">
         {(categories ?? []).length === 0 ? (
           <EmptyState
             title="No categories"
-            description="Create Crocs, Slides, Sneakers, and the rest of your range."
+            description="Add your first category."
             action={
               <AdminButton href="/admin/catalog/categories/new">
                 Create category

@@ -45,16 +45,9 @@ export function publicRedirect(
   pathname: string,
   search = '',
 ): NextResponse {
-  const origin = publicOrigin(request)
-  if (origin) {
-    const url = new URL(pathname, origin)
-    url.search = search
-    return NextResponse.redirect(url, 307)
-  }
-
-  // Relative Location: browser resolves against the host the user typed.
-  return new NextResponse(null, {
-    status: 307,
-    headers: { Location: `${pathname}${search}` },
-  })
+  // Next middleware requires an absolute Location; relative ones throw Invalid URL.
+  const origin = publicOrigin(request) ?? request.nextUrl.origin
+  const url = new URL(pathname, origin)
+  url.search = search.startsWith('?') ? search.slice(1) : search
+  return NextResponse.redirect(url, 307)
 }

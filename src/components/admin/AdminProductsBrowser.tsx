@@ -385,11 +385,11 @@ export function AdminProductsBrowser({
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-2xl border border-cloud bg-white">
-          <div className="hidden border-b border-cloud bg-mist/50 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-mute md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4">
+          <div className="hidden border-b border-navy bg-navy px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4">
             <span className="flex items-center justify-center">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-cloud accent-navy"
+                className="h-4 w-4 rounded border-white/40 accent-white"
                 checked={allSelected}
                 ref={(el) => {
                   if (el) el.indeterminate = someSelected
@@ -430,7 +430,7 @@ export function AdminProductsBrowser({
                   key={product.id}
                   className={isSelected ? 'bg-navy/[0.03]' : undefined}
                 >
-                  <div className="flex items-center gap-2 px-3 py-3 md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4 md:px-4">
+                  <div className="flex items-center gap-2 px-3 py-2 md:grid md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_7rem_5.5rem_5.5rem_1.25rem] md:gap-4 md:px-3">
                     <div className="flex shrink-0 items-center justify-center">
                       <input
                         type="checkbox"

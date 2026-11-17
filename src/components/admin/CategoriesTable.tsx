@@ -145,19 +145,16 @@ export function CategoriesTable({
   return (
     <div className="space-y-3">
       <FormError message={error} />
-      <p className="text-[13px] text-mute">
-        Drag the handle to set the order shown on the storefront.
-      </p>
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
         <div className="min-w-[560px]">
           <div
-            className={`${rowGridClassName} border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute`}
+            className={`${rowGridClassName} border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white`}
           >
-            <div className="py-3" aria-label="Reorder" />
-            <div className="py-3">Name</div>
-            <div className="py-3">Slug</div>
-            <div className="py-3">Status</div>
-            <div className="py-3" />
+            <div className="py-2" aria-label="Reorder" />
+            <div className="py-2">Name</div>
+            <div className="py-2">Slug</div>
+            <div className="py-2">Status</div>
+            <div className="py-2" />
           </div>
 
           <Reorder.Group

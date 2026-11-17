@@ -156,7 +156,7 @@ function InventoryRow({ row }: { row: AdminInventoryRow }) {
 
   return (
     <tr className="border-b border-cloud last:border-0">
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <div className="min-w-0">
           <Link
             href={adminProductPath(row.productSlug)}
@@ -180,10 +180,10 @@ function InventoryRow({ row }: { row: AdminInventoryRow }) {
           </div>
         </div>
       </td>
-      <td className="px-3 py-3 tabular-nums text-ink">
+      <td className="px-3 py-2 tabular-nums text-ink">
         {row.sizeEu > 0 ? row.sizeEu : '—'}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <div className="flex items-center gap-2">
           {row.colorHex ? (
             <span
@@ -195,10 +195,10 @@ function InventoryRow({ row }: { row: AdminInventoryRow }) {
           <span className="text-ink">{row.color || '—'}</span>
         </div>
       </td>
-      <td className="px-3 py-3 font-mono text-[12px] text-mute">
+      <td className="px-3 py-2 font-mono text-[12px] text-mute">
         {row.sku || '—'}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <div className="flex items-center gap-2">
           <StockStepper
             value={state.draft}
@@ -227,10 +227,10 @@ function InventoryRow({ row }: { row: AdminInventoryRow }) {
           <p className="mt-1 text-[11px] text-spark">{state.error}</p>
         ) : null}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <StockLevelPill stock={state.saved} />
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <Link
           href={adminProductPath(row.productSlug)}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-mute transition hover:bg-mist hover:text-navy"
@@ -250,8 +250,7 @@ export function InventoryTable({ rows }: { rows: AdminInventoryRow[] }) {
       <div className="rounded-2xl border border-dashed border-cloud bg-white px-6 py-16 text-center">
         <p className="text-[15px] font-semibold text-ink">No variants found</p>
         <p className="mx-auto mt-2 max-w-md text-[14px] text-mute">
-          Try a different search, or clear stock filters. Variants appear here
-          once products have sizes and colors.
+          Try another search or clear filters.
         </p>
       </div>
     )
@@ -260,15 +259,15 @@ export function InventoryTable({ rows }: { rows: AdminInventoryRow[] }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
       <table className="w-full min-w-[920px] text-left text-[13px]">
-        <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+        <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
           <tr>
-            <th className="px-3 py-3">Product</th>
-            <th className="px-3 py-3">Size</th>
-            <th className="px-3 py-3">Color</th>
-            <th className="px-3 py-3">SKU</th>
-            <th className="px-3 py-3">Stock</th>
-            <th className="px-3 py-3">Level</th>
-            <th className="px-3 py-3" />
+            <th className="px-3 py-2">Product</th>
+            <th className="px-3 py-2">Size</th>
+            <th className="px-3 py-2">Color</th>
+            <th className="px-3 py-2">SKU</th>
+            <th className="px-3 py-2">Stock</th>
+            <th className="px-3 py-2">Level</th>
+            <th className="px-3 py-2" />
           </tr>
         </thead>
         <tbody>

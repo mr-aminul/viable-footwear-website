@@ -26,10 +26,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
 
   return (
     <>
-      <AdminPageHeader
-        title="Analytics"
-        description="Sales performance and live logistics for fulfillment."
-      />
+      <AdminPageHeader title="Analytics" />
 
       <div className="mt-6 flex flex-wrap gap-2">
         <TabLink

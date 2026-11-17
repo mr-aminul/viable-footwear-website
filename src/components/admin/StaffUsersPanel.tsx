@@ -43,7 +43,7 @@ function StaffDialogShell({
   children,
 }: {
   title: string
-  description: string
+  description?: string
   onDismiss: () => void
   isSubmitting: boolean
   children: React.ReactNode
@@ -91,9 +91,11 @@ function StaffDialogShell({
             >
               {title}
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-mute">
-              {description}
-            </p>
+            {description ? (
+              <p className="mt-2 text-sm leading-relaxed text-mute">
+                {description}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -280,7 +282,6 @@ export function StaffUsersPanel({
     <div className="space-y-6">
       <AdminPageHeader
         title="Staff users"
-        description="People who can manage the store. Admins have full access; Managers can update products and categories."
         actions={
           <AdminActionButton
             onClick={() => {
@@ -300,13 +301,13 @@ export function StaffUsersPanel({
 
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
         <table className="w-full min-w-[640px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+          <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
             <tr>
-              <th className="px-4 py-3 font-semibold">Email</th>
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="px-4 py-3 font-semibold">Role</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">
+              <th className="px-3 py-2 font-semibold">Email</th>
+              <th className="px-3 py-2 font-semibold">Name</th>
+              <th className="px-3 py-2 font-semibold">Role</th>
+              <th className="px-3 py-2 font-semibold">Status</th>
+              <th className="px-3 py-2 font-semibold">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -314,7 +315,7 @@ export function StaffUsersPanel({
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-mute">
+                <td colSpan={5} className="px-3 py-8 text-center text-mute">
                   No staff users yet.
                 </td>
               </tr>
@@ -327,7 +328,7 @@ export function StaffUsersPanel({
                     key={user.id}
                     className="border-b border-cloud last:border-0"
                   >
-                    <td className="px-4 py-3 font-medium text-ink">
+                    <td className="px-3 py-2 font-medium text-ink">
                       {user.email}
                       {isYou ? (
                         <span className="ml-2 text-[11px] font-normal text-mute">
@@ -335,10 +336,10 @@ export function StaffUsersPanel({
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-mute">
+                    <td className="px-3 py-2 text-mute">
                       {user.full_name || '—'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <select
                         className={`${inputClassName} w-auto min-w-[7.5rem] py-1.5 capitalize`}
                         value={user.role}
@@ -352,7 +353,7 @@ export function StaffUsersPanel({
                         <option value="manager">Manager</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <select
                         className={`${inputClassName} w-auto min-w-[7rem] py-1.5`}
                         value={user.active ? 'active' : 'disabled'}
@@ -369,7 +370,7 @@ export function StaffUsersPanel({
                         <option value="disabled">Disabled</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-2 text-right">
                       <button
                         type="button"
                         className="inline-flex items-center gap-1.5 font-semibold text-navy hover:underline disabled:opacity-50"
@@ -397,7 +398,6 @@ export function StaffUsersPanel({
       {dialog?.type === 'add' ? (
         <StaffDialogShell
           title="Add staff user"
-          description="Creates a login that can access the admin panel. Share the password securely."
           onDismiss={closeDialog}
           isSubmitting={pending}
         >
@@ -488,7 +488,7 @@ export function StaffUsersPanel({
       {dialog?.type === 'password' ? (
         <StaffDialogShell
           title="Set password"
-          description={`Choose a new password for ${dialog.user.email}. They can sign in immediately with it.`}
+          description={dialog.user.email}
           onDismiss={closeDialog}
           isSubmitting={pending}
         >

@@ -9,6 +9,7 @@ import type {
   OrderWithItems,
 } from '@/lib/orders/types'
 import type {
+  OrderChannel,
   OrderStatus,
   PaymentMethod,
 } from '@/lib/db/database.types'
@@ -20,6 +21,7 @@ type PaymentAttemptRow =
 export type ListOrdersFilters = {
   status?: OrderStatus | ''
   payment?: PaymentMethod | ''
+  channel?: OrderChannel | ''
   city?: string
   from?: string
   to?: string
@@ -29,7 +31,7 @@ export type ListOrdersFilters = {
 
 /** Columns the admin orders table actually renders. */
 const ORDER_LIST_SELECT =
-  'id, order_number, status, payment_method, full_name, phone, city_name, total, is_preorder, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
+  'id, order_number, status, payment_method, channel, full_name, phone, city_name, total, is_preorder, pathao_consignment_id, pathao_status, pathao_error, pathao_cancelled_at, created_at' as const
 
 async function fetchUndispatchedOrderCount(): Promise<number> {
   const db = createServiceClient()
@@ -109,6 +111,9 @@ export async function listOrders(
   }
   if (filters.payment) {
     query = query.eq('payment_method', filters.payment)
+  }
+  if (filters.channel) {
+    query = query.eq('channel', filters.channel)
   }
   if (filters.city?.trim()) {
     query = query.eq('city_name', filters.city.trim())

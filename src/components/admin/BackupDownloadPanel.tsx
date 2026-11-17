@@ -25,35 +25,26 @@ export function BackupDownloadPanel() {
   }
 
   return (
-    <div className="rounded-2xl border border-cloud bg-white p-6 shadow-sm">
-      <h2 className="text-[16px] font-semibold text-ink">Full shop backup</h2>
-      <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-mute">
-        One zip file with your database, product photos, site media, and
-        public images. This can take a few minutes if you have many photos.
-        Keep the file private — it may include customer and payment settings.
-      </p>
-
-      <ul className="mt-4 list-disc space-y-1 pl-5 text-[13px] text-mute">
-        <li>database/ — all tables as JSON</li>
-        <li>object-storage/ — MinIO buckets (images &amp; videos)</li>
-        <li>public-images/ — files from public/images</li>
-      </ul>
-
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onDownload}
-          disabled={busy}
-          className={adminButtonClassName('primary')}
-        >
-          {busy ? (
-            <Loader2 size={16} className="mr-2 animate-spin" aria-hidden />
-          ) : (
-            <Download size={16} className="mr-2" aria-hidden />
-          )}
-          {busy ? 'Preparing backup…' : 'Download backup'}
-        </button>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cloud bg-white px-4 py-3">
+      <div className="min-w-0">
+        <h2 className="text-[14px] font-semibold text-ink">Full shop backup</h2>
+        <p className="mt-0.5 text-[12px] text-mute">
+          Database + media zip. Keep the file private.
+        </p>
       </div>
+      <button
+        type="button"
+        onClick={onDownload}
+        disabled={busy}
+        className={adminButtonClassName('primary')}
+      >
+        {busy ? (
+          <Loader2 size={14} className="mr-1.5 animate-spin" aria-hidden />
+        ) : (
+          <Download size={14} className="mr-1.5" aria-hidden />
+        )}
+        {busy ? 'Preparing…' : 'Download backup'}
+      </button>
     </div>
   )
 }

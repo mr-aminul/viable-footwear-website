@@ -1,9 +1,7 @@
 import Link from 'next/link'
 import { InventoryTable } from '@/components/admin/InventoryTable'
-import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import {
   AdminPageHeader,
-  inputClassName,
 } from '@/components/admin/ui'
 import {
   getAdminInventorySummary,
@@ -88,10 +86,7 @@ export default async function InventoryPage({ searchParams }: Props) {
 
   return (
     <>
-      <AdminPageHeader
-        title="Inventory"
-        description="All size × color stock in one place. Adjust quantities here — changes save immediately."
-      />
+      <AdminPageHeader title="Inventory" />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
@@ -123,53 +118,47 @@ export default async function InventoryPage({ searchParams }: Props) {
         />
       </div>
 
-      <form className="mt-6 flex flex-col gap-3 rounded-2xl border border-cloud bg-white p-4 sm:flex-row sm:items-end">
-        <label className="flex-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Search
-          </span>
-          <input
-            name="q"
-            defaultValue={params.q ?? ''}
-            placeholder="Product name, slug, or SKU"
-            className={`${inputClassName} mt-1`}
-          />
-        </label>
-        <label>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Stock
-          </span>
-          <select
-            name="stock"
-            defaultValue={stock}
-            className={`${inputClassName} mt-1`}
-          >
-            <option value="all">All levels</option>
-            <option value="in">In stock</option>
-            <option value="low">Low stock</option>
-            <option value="out">Out of stock</option>
-          </select>
-        </label>
-        <label>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Product
-          </span>
-          <select
-            name="status"
-            defaultValue={productStatus ?? ''}
-            className={`${inputClassName} mt-1`}
-          >
-            <option value="">All</option>
-            <option value="active">Live</option>
-            <option value="inactive">Draft</option>
-          </select>
-        </label>
-        <AdminActionButton type="submit" variant="secondary">
-          Filter
-        </AdminActionButton>
+      <form
+        method="get"
+        className="mt-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1"
+      >
+        <input
+          name="q"
+          defaultValue={params.q ?? ''}
+          placeholder="Name, slug, or SKU"
+          aria-label="Search"
+          className="h-8 w-48 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition placeholder:text-mute focus:border-navy"
+        />
+        <select
+          name="stock"
+          defaultValue={stock}
+          aria-label="Stock level"
+          className="h-8 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition focus:border-navy"
+        >
+          <option value="all">Stock</option>
+          <option value="in">In stock</option>
+          <option value="low">Low stock</option>
+          <option value="out">Out of stock</option>
+        </select>
+        <select
+          name="status"
+          defaultValue={productStatus ?? ''}
+          aria-label="Product status"
+          className="h-8 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition focus:border-navy"
+        >
+          <option value="">Product</option>
+          <option value="active">Live</option>
+          <option value="inactive">Draft</option>
+        </select>
+        <button
+          type="submit"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-navy px-3 text-[12px] font-semibold text-white transition hover:bg-navy-deep"
+        >
+          Apply
+        </button>
       </form>
 
-      <div className="mt-8">
+      <div className="mt-4">
         <InventoryTable rows={rows} />
 
         {totalPages > 1 ? (

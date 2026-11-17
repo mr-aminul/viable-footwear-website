@@ -116,22 +116,30 @@ export function OrderAdminActions({
     : 'Cancel order (keeps record)'
 
   const iconClass = compact ? 'h-3.5 w-3.5' : 'h-4 w-4'
+  const compactBtn =
+    'inline-flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50'
   const btnClass = compact
-    ? `${adminButtonClassName('secondary')} px-2.5 py-1.5 text-[12px]`
+    ? `${compactBtn} border-cloud bg-white text-ink hover:border-navy/30`
     : adminButtonClassName('secondary')
   const primaryClass = compact
-    ? `${adminButtonClassName('primary')} px-2.5 py-1.5 text-[12px]`
+    ? `${compactBtn} border-navy bg-navy text-white hover:bg-navy-deep`
     : adminButtonClassName('primary')
+  const dangerClass = compact
+    ? `${compactBtn} border-spark/30 bg-spark text-white hover:bg-spark-soft`
+    : adminButtonClassName('danger')
 
   return (
     <div className={compact ? 'space-y-1' : 'space-y-2'}>
-      <div className={`flex flex-wrap items-center ${compact ? 'gap-1' : 'gap-2'}`}>
+      <div
+        className={`flex flex-nowrap items-center ${compact ? 'gap-1' : 'gap-2'}`}
+      >
         {showSync && sent ? (
           <button
             type="button"
             className={btnClass}
             disabled={pending}
             title="Sync Pathao status"
+            aria-label="Sync Pathao status"
             onClick={() =>
               runAction('sync', async () => {
                 const result = await syncPathaoOrderStatus(order.id)
@@ -145,11 +153,15 @@ export function OrderAdminActions({
             }
           >
             {busyAction === 'sync' ? (
-              <Loader2 className={`mr-1.5 ${iconClass} animate-spin`} />
+              <Loader2 className={`${iconClass} animate-spin`} />
             ) : (
-              <RefreshCw className={`mr-1.5 ${iconClass}`} />
+              <RefreshCw className={iconClass} />
             )}
-            {busyAction === 'sync' ? 'Syncing…' : compact ? 'Sync' : 'Sync Pathao'}
+            {compact ? null : (
+              <span className="ml-1.5">
+                {busyAction === 'sync' ? 'Syncing…' : 'Sync Pathao'}
+              </span>
+            )}
           </button>
         ) : null}
 
@@ -158,16 +170,17 @@ export function OrderAdminActions({
           className={pathaoMode === 'sent' ? btnClass : primaryClass}
           disabled={pending || pathaoMode === 'sent'}
           title={pathaoTitle}
+          aria-label={pathaoLabel}
           onClick={() =>
             openDialog(pathaoMode === 'recreate' ? 'recreate' : 'pathao')
           }
         >
           {busyAction === 'dispatch' || busyAction === 'recreate' ? (
-            <Loader2 className={`mr-1.5 ${iconClass} animate-spin`} />
+            <Loader2 className={`${iconClass} animate-spin`} />
           ) : (
-            <Truck className={`mr-1.5 ${iconClass}`} />
+            <Truck className={iconClass} />
           )}
-          {pathaoLabel}
+          {compact ? null : <span className="ml-1.5">{pathaoLabel}</span>}
         </button>
 
         <button
@@ -175,33 +188,35 @@ export function OrderAdminActions({
           className={btnClass}
           disabled={pending || !canCancel}
           title={cancelTitle}
+          aria-label={stranded ? 'Cancel Pathao' : 'Cancel'}
           onClick={() => openDialog('cancel')}
         >
           {busyAction === 'cancel' ? (
-            <Loader2 className={`mr-1.5 ${iconClass} animate-spin`} />
+            <Loader2 className={`${iconClass} animate-spin`} />
           ) : (
-            <Ban className={`mr-1.5 ${iconClass}`} />
+            <Ban className={iconClass} />
           )}
-          {stranded ? 'Cancel Pathao' : 'Cancel'}
+          {compact ? null : (
+            <span className="ml-1.5">
+              {stranded ? 'Cancel Pathao' : 'Cancel'}
+            </span>
+          )}
         </button>
 
         <button
           type="button"
-          className={
-            compact
-              ? `${adminButtonClassName('danger')} px-2.5 py-1.5 text-[12px]`
-              : adminButtonClassName('danger')
-          }
+          className={dangerClass}
           disabled={pending}
           title="Delete order permanently"
+          aria-label="Delete"
           onClick={() => openDialog('delete')}
         >
           {busyAction === 'delete' ? (
-            <Loader2 className={`mr-1.5 ${iconClass} animate-spin`} />
+            <Loader2 className={`${iconClass} animate-spin`} />
           ) : (
-            <Trash2 className={`mr-1.5 ${iconClass}`} />
+            <Trash2 className={iconClass} />
           )}
-          Delete
+          {compact ? null : <span className="ml-1.5">Delete</span>}
         </button>
       </div>
 

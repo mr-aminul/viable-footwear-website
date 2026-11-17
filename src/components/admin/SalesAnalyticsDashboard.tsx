@@ -197,11 +197,11 @@ export function SalesAnalyticsDashboard({
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[360px] text-left text-[13px]">
-                <thead className="border-b border-cloud text-[11px] uppercase tracking-wider text-mute">
+                <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
                   <tr>
-                    <th className="pb-2 font-semibold">Product</th>
-                    <th className="pb-2 font-semibold">Qty</th>
-                    <th className="pb-2 font-semibold">Revenue</th>
+                    <th className="px-3 py-2 font-semibold">Product</th>
+                    <th className="px-3 py-2 font-semibold">Qty</th>
+                    <th className="px-3 py-2 font-semibold">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>

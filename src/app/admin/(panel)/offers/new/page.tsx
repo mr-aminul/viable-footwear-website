@@ -13,15 +13,13 @@ const types = [
   {
     href: offerDeliveryPath(),
     title: 'Delivery offer',
-    description:
-      'Automatic at checkout — free shipping, percent off delivery, or a fixed delivery charge. Powers the storefront top ribbon.',
+    description: 'Shipping rules at checkout.',
     icon: Megaphone,
   },
   {
     href: offerPromoPath(),
     title: 'Promo code',
-    description:
-      'Customers enter a code at checkout for a percent or flat discount on all products or a selected set.',
+    description: 'Discount code at checkout.',
     icon: Ticket,
   },
 ] as const
@@ -33,7 +31,6 @@ export default async function NewOfferPage() {
     <>
       <AdminPageHeader
         title="New offer"
-        description="Choose how you want to add value for customers."
         backHref={OFFERS_PATH}
         backLabel="Back to offers"
       />

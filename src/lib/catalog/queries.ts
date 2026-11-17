@@ -626,6 +626,95 @@ export function listPromoPickerProducts() {
   )()
 }
 
+export type OrderImportPickerVariant = {
+  id: string
+  sizeEu: number
+  color: string
+  stock: number
+  sku: string | null
+  unitPrice: number
+}
+
+export type OrderImportPickerProduct = {
+  id: string
+  name: string
+  slug: string
+  image: string
+  price: number
+  variants: OrderImportPickerVariant[]
+}
+
+/**
+ * Active products + active variants for admin order item picking (cached ~30s).
+ */
+export function listOrderImportPickerCatalog() {
+  return unstable_cache(
+    async (): Promise<OrderImportPickerProduct[]> => {
+      const admin = createServiceClient()
+      const [{ data: products }, { data: media }, { data: variants }] =
+        await Promise.all([
+          admin
+            .from('products')
+            .select('id, name, slug, price')
+            .eq('active', true)
+            .order('name', { ascending: true }),
+          admin
+            .from('product_media')
+            .select('product_id, storage_path, sort_order')
+            .eq('media_type', 'image')
+            .order('sort_order', { ascending: true }),
+          admin
+            .from('product_variants')
+            .select(
+              'id, product_id, size_eu, color, sku, stock, price_override, active',
+            )
+            .eq('active', true)
+            .order('size_eu', { ascending: true }),
+        ])
+
+      const primaryImageByProduct = new Map<string, string>()
+      for (const row of media ?? []) {
+        if (primaryImageByProduct.has(row.product_id)) continue
+        primaryImageByProduct.set(
+          row.product_id,
+          resolveMediaUrl(row.storage_path, 'image'),
+        )
+      }
+
+      const priceByProduct = new Map(
+        (products ?? []).map((product) => [product.id, Number(product.price)]),
+      )
+      const variantsByProduct = new Map<string, OrderImportPickerVariant[]>()
+      for (const row of variants ?? []) {
+        const list = variantsByProduct.get(row.product_id) ?? []
+        const productPrice = priceByProduct.get(row.product_id) ?? 0
+        list.push({
+          id: row.id,
+          sizeEu: Number(row.size_eu),
+          color: (row.color ?? '').trim() || 'Default',
+          stock: Number(row.stock),
+          sku: row.sku,
+          unitPrice: Number(row.price_override ?? productPrice),
+        })
+        variantsByProduct.set(row.product_id, list)
+      }
+
+      return (products ?? [])
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          image: primaryImageByProduct.get(row.id) ?? MEDIA_FALLBACK,
+          price: Number(row.price),
+          variants: variantsByProduct.get(row.id) ?? [],
+        }))
+        .filter((product) => product.variants.length > 0)
+    },
+    ['order-import-picker-catalog'],
+    { revalidate: 30, tags: ['admin-products'] },
+  )()
+}
+
 /**
  * Catalog home KPI counts (cached ~30s).
  */

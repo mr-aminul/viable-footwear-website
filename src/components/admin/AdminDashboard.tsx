@@ -87,10 +87,9 @@ export default function AdminDashboard({
       <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">
         Dashboard
       </h1>
-      <p className="mt-2 max-w-xl text-[14px] text-mute">
+      <p className="mt-2 text-[14px] text-mute">
         Welcome back
-        {profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}. Manage
-        your catalog and keep the storefront up to date.
+        {profile.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.
       </p>
 
       <div className="mt-8 flex flex-wrap gap-2">

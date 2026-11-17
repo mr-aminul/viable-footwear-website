@@ -14,6 +14,7 @@ import {
   pathaoStatusLabel,
   storeStatusLabel,
 } from '@/lib/orders/status-labels'
+import { orderChannelLabel } from '@/lib/orders/channels'
 import type { AdminOrderListRow } from '@/lib/orders/types'
 import { OrderAdminActions } from '@/components/admin/OrderAdminActions'
 import {
@@ -228,7 +229,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
         : undefined
 
   return (
-    <div className="mt-8 space-y-3">
+    <div className="mt-4 space-y-3">
       {showToolbar ? (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-cloud bg-white px-4 py-3 sm:gap-3">
           <p className="mr-1 text-[13px] font-medium text-ink">
@@ -296,13 +297,13 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
       ) : null}
 
       <div className="overflow-x-auto rounded-2xl border border-cloud bg-white">
-        <table className="w-full min-w-[1080px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+        <table className="w-full min-w-[980px] text-left text-[13px]">
+          <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
             <tr>
-              <th className="w-10 px-4 py-3">
+              <th className="w-10 px-3 py-2.5">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-cloud accent-navy"
+                  className="h-4 w-4 rounded border-white/40 accent-white"
                   checked={allSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = someSelected
@@ -312,22 +313,24 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                   aria-label="Select all orders"
                 />
               </th>
-              <th className="px-4 py-3 font-semibold">Order</th>
-              <th className="px-4 py-3 font-semibold">Payment</th>
-              <th className="px-4 py-3 font-semibold">Customer</th>
-              <th className="px-4 py-3 font-semibold">Total</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Created</th>
-              <th className="px-4 py-3 font-semibold">Actions</th>
+              <th className="px-3 py-2.5 font-semibold">Order</th>
+              <th className="px-3 py-2.5 font-semibold">Channel</th>
+              <th className="px-3 py-2.5 font-semibold">Payment</th>
+              <th className="px-3 py-2.5 font-semibold">Customer</th>
+              <th className="px-3 py-2.5 font-semibold">Total</th>
+              <th className="px-3 py-2.5 font-semibold">Status</th>
+              <th className="px-3 py-2.5 font-semibold">Created</th>
+              <th className="px-3 py-2.5 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center">
+                <td colSpan={9} className="px-4 py-10 text-center">
                   <p className="font-medium text-ink">No orders found</p>
                   <p className="mt-1 text-mute">
-                    Try clearing filters, or wait for the next storefront order.
+                    Try clearing filters, import offline orders, or wait for the
+                    next website order.
                   </p>
                 </td>
               </tr>
@@ -335,6 +338,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
               orders.map((order) => {
                 const isSelected = selected.has(order.id)
                 const stranded = isPathaoShipmentStranded(order)
+                const channel = order.channel ?? 'website'
 
                 return (
                   <tr
@@ -345,7 +349,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                       isSelected ? 'bg-navy/[0.03]' : '',
                     ].join(' ')}
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-cloud accent-navy disabled:opacity-40"
@@ -357,7 +361,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                         aria-label={`Select order ${order.order_number}`}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <Link
                         href={`/admin/orders/${order.id}`}
                         className="font-semibold text-navy hover:underline"
@@ -378,17 +382,28 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 uppercase text-mute">
+                    <td className="px-3 py-2">
+                      <span
+                        className={
+                          channel === 'website'
+                            ? 'text-mute'
+                            : 'font-medium text-navy'
+                        }
+                      >
+                        {orderChannelLabel(channel)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 uppercase text-mute">
                       {order.payment_method}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <p className="font-medium text-ink">{order.full_name}</p>
-                      <p className="text-mute">{order.phone}</p>
+                      <p className="text-[12px] text-mute">{order.phone}</p>
                     </td>
-                    <td className="px-4 py-3 font-medium">
+                    <td className="px-3 py-2 font-medium">
                       {formatPrice(Number(order.total))}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {order.pathao_error && !order.pathao_consignment_id ? (
                         <span className="font-medium text-spark">
                           Pathao failed
@@ -424,7 +439,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-mute">
+                    <td className="whitespace-nowrap px-3 py-2 text-mute">
                       {new Date(order.created_at).toLocaleString('en-BD', {
                         day: 'numeric',
                         month: 'short',
@@ -432,7 +447,7 @@ export function OrdersTable({ orders }: { orders: AdminOrderListRow[] }) {
                         minute: '2-digit',
                       })}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <OrderAdminActions order={order} compact />
                     </td>
                   </tr>

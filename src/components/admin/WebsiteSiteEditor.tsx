@@ -16,22 +16,17 @@ import type { SiteContent } from '@/lib/website/types'
 
 function Section({
   title,
-  description,
   children,
 }: {
   title: string
-  description?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-2xl border border-cloud bg-white p-5 shadow-soft md:p-6">
-      <h2 className="font-display text-xl font-extrabold tracking-tight text-ink">
+    <section className="rounded-2xl border border-cloud bg-white p-4">
+      <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">
         {title}
       </h2>
-      {description ? (
-        <p className="mt-1 text-[13px] text-mute">{description}</p>
-      ) : null}
-      <div className="mt-5 space-y-4">{children}</div>
+      <div className="mt-3 space-y-3">{children}</div>
     </section>
   )
 }
@@ -131,10 +126,7 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
       <FormError message={error} />
       <FormSuccess message={success} />
 
-      <Section
-        title="Brand & contact"
-        description="Used in the footer, About contact cards, WhatsApp links, campaign ribbon, and legal pages."
-      >
+      <Section title="Brand & contact">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Brand name">
             <input
@@ -250,7 +242,6 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
 
       <Section
         title="Footer"
-        description="Desktop blurb, drops CTA, and copyright line. Use {year} for the current year."
       >
         <Field label="Brand blurb">
           <textarea
@@ -309,7 +300,6 @@ export function WebsiteSiteEditor({ initial }: { initial: SiteContent }) {
 
       <Section
         title="Product page promises"
-        description="Shown under Add to bag on every product page."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Delivery label">

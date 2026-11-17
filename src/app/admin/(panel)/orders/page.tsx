@@ -6,12 +6,14 @@ import {
 } from '@/lib/orders/queries'
 import { expireAbandonedPendingOrders } from '@/lib/orders/expire-pending'
 import type {
+  OrderChannel,
   OrderStatus,
   PaymentMethod,
 } from '@/lib/db/database.types'
+import { ORDER_CHANNELS } from '@/lib/orders/channels'
 import { OrdersFilters } from '@/components/admin/OrdersFilters'
 import { OrdersTable } from '@/components/admin/OrdersTable'
-import { AdminPageHeader } from '@/components/admin/ui'
+import { AdminButton, AdminPageHeader } from '@/components/admin/ui'
 
 export const metadata = {
   title: 'Orders',
@@ -31,11 +33,13 @@ const STATUS_SET = new Set<OrderStatus>([
 ])
 
 const PAYMENT_SET = new Set<PaymentMethod>(['cod', 'bkash', 'nagad'])
+const CHANNEL_SET = new Set<OrderChannel>(ORDER_CHANNELS)
 
 type SearchParams = {
   q?: string
   status?: string
   payment?: string
+  channel?: string
   city?: string
   from?: string
   to?: string
@@ -54,11 +58,16 @@ function parseFilters(params: SearchParams) {
     params.payment && PAYMENT_SET.has(params.payment as PaymentMethod)
       ? (params.payment as PaymentMethod)
       : undefined
+  const channel =
+    params.channel && CHANNEL_SET.has(params.channel as OrderChannel)
+      ? (params.channel as OrderChannel)
+      : undefined
 
   return {
     q: params.q,
     status,
     payment,
+    channel,
     city: params.city,
     from: params.from,
     to: params.to,
@@ -92,16 +101,17 @@ async function OrdersHeader() {
   return (
     <AdminPageHeader
       title="Orders"
-      description={
-        <>
-          Filter by status, payment, city, or date. Select multiple to dispatch
-          to Pathao in bulk, or manage cancel / resend / delete per order.
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
           {pendingDispatch > 0 ? (
-            <span className="mt-1 block font-medium text-navy">
-              {pendingDispatch} awaiting Pathao dispatch
+            <span className="rounded-full bg-navy/10 px-2.5 py-1 text-[12px] font-medium text-navy">
+              {pendingDispatch} to dispatch
             </span>
           ) : null}
-        </>
+          <AdminButton href="/admin/orders/import" variant="secondary">
+            Add / import
+          </AdminButton>
+        </div>
       }
     />
   )
@@ -124,21 +134,20 @@ async function OrdersTableSection({
 
 function OrdersHeaderFallback() {
   return (
-    <div className="animate-pulse space-y-2">
-      <div className="h-8 w-36 rounded-lg bg-cloud/80" />
-      <div className="h-4 w-96 max-w-full rounded bg-cloud/60" />
+    <div className="animate-pulse">
+      <div className="h-8 w-28 rounded-lg bg-cloud/80" />
     </div>
   )
 }
 
 function OrdersFiltersFallback() {
   return (
-    <div className="mt-6 h-28 animate-pulse rounded-2xl border border-cloud bg-white/80" />
+    <div className="mt-4 h-8 animate-pulse rounded-lg bg-cloud/60" />
   )
 }
 
 function OrdersTableFallback() {
   return (
-    <div className="mt-6 h-80 animate-pulse rounded-2xl border border-cloud bg-white/80" />
+    <div className="mt-4 h-80 animate-pulse rounded-2xl border border-cloud bg-white/80" />
   )
 }

@@ -28,10 +28,7 @@ export default async function IntegrationsPage() {
 
   return (
     <>
-      <AdminPageHeader
-        title="Integrations"
-        description="Payments, shipping, marketing tags, and outbound OMS webhooks. Secrets stay server-side — never exposed to Managers or the storefront bundle."
-      />
+      <AdminPageHeader title="Integrations" />
       <IntegrationsPanel
         pathao={pathao}
         bkash={bkash}

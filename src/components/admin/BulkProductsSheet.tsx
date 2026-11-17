@@ -23,7 +23,6 @@ import {
 import type { ProductBadge } from '@/lib/catalog/constants'
 import { slugify } from '@/lib/catalog/slug'
 import { adminProductPath } from '@/lib/admin/paths'
-import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import { BadgePicker } from '@/components/admin/BadgePicker'
 import {
   AdminButton,
@@ -152,7 +151,9 @@ const COLUMNS: Array<{
 
 const cellShellClassName = 'min-w-0 overflow-hidden border-l border-cloud/70'
 const cellControlClassName =
-  'h-full w-full min-w-0 bg-transparent px-2 py-2.5 text-[13px] text-ink outline-none focus:bg-navy/[0.04]'
+  'h-full w-full min-w-0 bg-transparent px-2 py-1.5 text-[12px] text-ink outline-none focus:bg-navy/[0.04]'
+const compactBtn =
+  'inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition disabled:opacity-50'
 
 const COLUMN_KEYS = COLUMNS.map((column) => column.key)
 
@@ -608,38 +609,32 @@ export function BulkProductsSheet({
       <FormError message={error} />
       <FormSuccess message={success} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cloud bg-white px-4 py-3 text-[13px]">
-        <p className="text-mute">
-          <span className="font-medium text-ink">One row = one product.</span>{' '}
-          Type sizes like <span className="font-medium text-ink">40, 41, 42</span>{' '}
-          and colors like{' '}
-          <span className="font-medium text-ink">Black, White</span> — we create
-          every combination for you. Same stock applies to each variant; tweak
-          individually later on the product page.
-        </p>
-        <p className="shrink-0 font-semibold text-ink">
-          {productCount} product{productCount === 1 ? '' : 's'} ready
-        </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="ml-auto text-[12px] font-medium text-mute">
+          <span className="font-semibold text-ink">
+            {productCount} product{productCount === 1 ? '' : 's'} ready
+          </span>
+        </span>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-cloud bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+      <div className="overflow-hidden rounded-2xl border border-cloud bg-white">
         <div className="overflow-x-auto">
           <div className="w-max min-w-full">
             <div
-              className="sticky top-0 z-10 grid items-center gap-0 border-b border-cloud bg-mist/80 text-[11px] font-semibold uppercase tracking-wider text-mute backdrop-blur"
+              className="sticky top-0 z-10 grid items-center gap-0 border-b border-navy bg-navy text-[11px] font-semibold uppercase tracking-wider text-white"
               style={{ gridTemplateColumns: gridTemplate }}
             >
-              <div className="px-2 py-3 text-center">#</div>
+              <div className="px-2 py-2 text-center">#</div>
               {COLUMNS.map((column) => (
                 <div
                   key={column.key}
-                  className={`${cellShellClassName} truncate px-2 py-3`}
+                  className="min-w-0 overflow-hidden border-l border-white/15 truncate px-2 py-2"
                 >
                   {column.label}
                 </div>
               ))}
-              <div className={cellShellClassName} />
-              <div className={`${cellShellClassName} truncate px-2 py-3`}>
+              <div className="min-w-0 border-l border-white/15" />
+              <div className="min-w-0 overflow-hidden border-l border-white/15 truncate px-2 py-2">
                 Status
               </div>
             </div>
@@ -661,7 +656,7 @@ export function BulkProductsSheet({
                       .join(' ')}
                     style={{ gridTemplateColumns: gridTemplate }}
                   >
-                    <div className="flex items-center justify-center px-2 text-[12px] text-mute">
+                    <div className="flex items-center justify-center px-2 text-[11px] text-mute">
                       {rowIndex + 1}
                     </div>
 
@@ -841,44 +836,43 @@ export function BulkProductsSheet({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <AdminActionButton
+        <button
           type="button"
           disabled={pending}
           onClick={publishSheet}
+          className={`${compactBtn} bg-navy text-white hover:bg-navy-deep`}
         >
           {pending
             ? 'Creating…'
             : productCount > 0
-              ? `Create ${productCount} product${productCount === 1 ? '' : 's'}`
+              ? `Create ${productCount}`
               : 'Create products'}
-        </AdminActionButton>
-        <AdminActionButton
+        </button>
+        <button
           type="button"
-          variant="secondary"
           disabled={pending}
           onClick={() => addRows(1)}
+          className={`${compactBtn} border border-cloud bg-white text-ink hover:border-navy/30`}
         >
-          <span className="inline-flex items-center gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add row
-          </span>
-        </AdminActionButton>
-        <AdminActionButton
+          <Plus className="h-3.5 w-3.5" />
+          Add row
+        </button>
+        <button
           type="button"
-          variant="secondary"
           disabled={pending}
           onClick={() => addRows(10)}
+          className={`${compactBtn} border border-cloud bg-white text-ink hover:border-navy/30`}
         >
-          Add 10 rows
-        </AdminActionButton>
-        <AdminActionButton
+          Add 10
+        </button>
+        <button
           type="button"
-          variant="ghost"
           disabled={pending}
           onClick={clearEmptyRows}
+          className="text-[12px] font-semibold text-navy hover:underline disabled:opacity-50"
         >
           Trim empty
-        </AdminActionButton>
+        </button>
         <AdminButton href="/admin/catalog" variant="ghost">
           Back to products
         </AdminButton>

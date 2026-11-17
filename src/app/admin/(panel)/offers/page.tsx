@@ -81,26 +81,25 @@ export default async function OffersPage() {
     <>
       <AdminPageHeader
         title="Offers"
-        description="Customer value in one place — automatic delivery deals and checkout promo codes."
         actions={
           <AdminButton href={`${OFFERS_PATH}/new`}>New offer</AdminButton>
         }
       />
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-cloud bg-white">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-cloud bg-white">
         <table className="w-full min-w-[720px] text-left text-[13px]">
-          <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+          <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
             <tr>
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="px-4 py-3 font-semibold">Type</th>
-              <th className="px-4 py-3 font-semibold">Details</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-3 py-2 font-semibold">Name</th>
+              <th className="px-3 py-2 font-semibold">Type</th>
+              <th className="px-3 py-2 font-semibold">Details</th>
+              <th className="px-3 py-2 font-semibold">Status</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-mute">
+                <td colSpan={4} className="px-3 py-8 text-center text-mute">
                   No offers yet.{' '}
                   <Link
                     href={`${OFFERS_PATH}/new`}
@@ -114,7 +113,7 @@ export default async function OffersPage() {
             ) : (
               items.map((item) => (
                 <tr key={`${item.kind}-${item.id}`} className="border-b border-cloud last:border-0">
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <Link
                       href={item.href}
                       className="font-semibold text-navy hover:underline"
@@ -122,9 +121,9 @@ export default async function OffersPage() {
                       {item.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-mute">{item.typeLabel}</td>
-                  <td className="px-4 py-3 text-mute">{item.detail}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2 text-mute">{item.typeLabel}</td>
+                  <td className="px-3 py-2 text-mute">{item.detail}</td>
+                  <td className="px-3 py-2">
                     <StatusPill active={item.active} />
                   </td>
                 </tr>

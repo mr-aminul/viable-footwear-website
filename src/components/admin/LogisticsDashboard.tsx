@@ -89,12 +89,12 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[420px] text-left text-[13px]">
-                <thead className="border-b border-cloud text-[11px] uppercase tracking-wider text-mute">
+                <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
                   <tr>
-                    <th className="pb-2 font-semibold">Order</th>
-                    <th className="pb-2 font-semibold">Customer</th>
-                    <th className="pb-2 font-semibold">Total</th>
-                    <th className="pb-2 font-semibold">Status</th>
+                    <th className="px-3 py-2 font-semibold">Order</th>
+                    <th className="px-3 py-2 font-semibold">Customer</th>
+                    <th className="px-3 py-2 font-semibold">Total</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,9 +166,6 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
             <h2 className="text-[13px] font-semibold uppercase tracking-wider text-mute">
               Active Pathao shipments
             </h2>
-            <p className="mt-0.5 text-[11px] text-mute">
-              Statuses are cached until you sync from Pathao.
-            </p>
           </div>
           <SyncActivePathaoButton
             orderIds={activeShipments.map((row) => row.id)}
@@ -180,13 +177,13 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
           </p>
         ) : (
           <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead className="border-b border-cloud bg-mist/50 text-[11px] uppercase tracking-wider text-mute">
+            <thead className="border-b border-navy bg-navy text-[11px] uppercase tracking-wider text-white">
               <tr>
-                <th className="px-4 py-3 font-semibold">Order</th>
-                <th className="px-4 py-3 font-semibold">Customer</th>
-                <th className="px-4 py-3 font-semibold">Pathao</th>
-                <th className="px-4 py-3 font-semibold">Total</th>
-                <th className="px-4 py-3 font-semibold">Tracking</th>
+                <th className="px-3 py-2 font-semibold">Order</th>
+                <th className="px-3 py-2 font-semibold">Customer</th>
+                <th className="px-3 py-2 font-semibold">Pathao</th>
+                <th className="px-3 py-2 font-semibold">Total</th>
+                <th className="px-3 py-2 font-semibold">Tracking</th>
               </tr>
             </thead>
             <tbody>
@@ -195,7 +192,7 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
                   key={row.id}
                   className="border-b border-cloud last:border-0"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <Link
                       href={`/admin/orders/${row.id}`}
                       className="font-semibold text-navy hover:underline"
@@ -206,25 +203,25 @@ export function LogisticsDashboard({ data }: { data: LogisticsAnalytics }) {
                       {row.pathaoConsignmentId}
                     </p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <p className="font-medium text-ink">{row.fullName}</p>
                     <p className="text-mute">
                       {row.cityName} · {row.phone}
                     </p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <p className="font-medium text-ink">{row.pathaoStatusLabel}</p>
                     <p className="text-[11px] text-mute">
                       Store: {storeStatusLabel(row.status)}
                     </p>
                   </td>
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-3 py-2 font-medium">
                     {formatPrice(row.total)}
                     <p className="text-[11px] uppercase text-mute">
                       {row.paymentMethod}
                     </p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     {row.trackingUrl ? (
                       <a
                         href={row.trackingUrl}

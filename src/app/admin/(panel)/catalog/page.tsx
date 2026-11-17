@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { AdminProductsBrowser } from '@/components/admin/AdminProductsBrowser'
-import { AdminActionButton } from '@/components/admin/AdminActionButton'
 import {
   AdminButton,
   AdminPageHeader,
   EmptyState,
-  inputClassName,
 } from '@/components/admin/ui'
 import {
   getCategoryOptions,
@@ -61,7 +59,6 @@ export default async function ProductsPage({ searchParams }: Props) {
     <>
       <AdminPageHeader
         title="Products"
-        description="Manage catalog styles — switch layout anytime, click a product to edit."
         actions={
           <>
             <AdminButton href="/admin/catalog/products/new" prefetch={false}>
@@ -80,59 +77,53 @@ export default async function ProductsPage({ searchParams }: Props) {
         }
       />
 
-      <form className="mt-6 flex flex-col gap-3 rounded-2xl border border-cloud bg-white p-4 sm:flex-row sm:items-end">
-        <label className="flex-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Search
-          </span>
-          <input
-            name="q"
-            defaultValue={params.q ?? ''}
-            placeholder="Name or slug"
-            className={`${inputClassName} mt-1`}
-          />
-        </label>
-        <label>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Category
-          </span>
-          <select
-            name="category"
-            defaultValue={params.category ?? ''}
-            className={`${inputClassName} mt-1`}
-          >
-            <option value="">All</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-mute">
-            Status
-          </span>
-          <select
-            name="status"
-            defaultValue={params.status ?? ''}
-            className={`${inputClassName} mt-1`}
-          >
-            <option value="">All</option>
-            <option value="active">Published</option>
-            <option value="inactive">Draft</option>
-          </select>
-        </label>
-        <AdminActionButton type="submit" variant="secondary">
-          Filter
-        </AdminActionButton>
+      <form
+        method="get"
+        className="mt-4 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1"
+      >
+        <input
+          name="q"
+          defaultValue={params.q ?? ''}
+          placeholder="Name or slug"
+          aria-label="Search"
+          className="h-8 w-44 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition placeholder:text-mute focus:border-navy"
+        />
+        <select
+          name="category"
+          defaultValue={params.category ?? ''}
+          aria-label="Category"
+          className="h-8 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition focus:border-navy"
+        >
+          <option value="">Category</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          name="status"
+          defaultValue={params.status ?? ''}
+          aria-label="Status"
+          className="h-8 shrink-0 rounded-lg border border-cloud bg-white px-2.5 text-[12px] text-ink outline-none transition focus:border-navy"
+        >
+          <option value="">Status</option>
+          <option value="active">Published</option>
+          <option value="inactive">Draft</option>
+        </select>
+        <button
+          type="submit"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-navy px-3 text-[12px] font-semibold text-white transition hover:bg-navy-deep"
+        >
+          Apply
+        </button>
       </form>
 
-      <div className="mt-8">
+      <div className="mt-4">
         {products.length === 0 ? (
           <EmptyState
             title="No products yet"
-            description="Create a category, then add your first product with sizes and photos."
+            description="Add a product or use the bulk sheet."
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <AdminButton href="/admin/catalog/products/new" prefetch={false}>

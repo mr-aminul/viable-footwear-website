@@ -10,6 +10,7 @@ export type AdminOrderListRow = Pick<
   | 'order_number'
   | 'status'
   | 'payment_method'
+  | 'channel'
   | 'full_name'
   | 'phone'
   | 'city_name'

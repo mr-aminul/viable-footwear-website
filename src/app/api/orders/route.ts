@@ -428,6 +428,7 @@ export async function POST(request: NextRequest) {
         order_number: orderNumber,
         status: isPrepaid ? 'pending_payment' : 'awaiting_fulfillment',
         payment_method: paymentMethod,
+        channel: 'website',
         email: email || null,
         full_name: fullName,
         phone,

@@ -14,11 +14,10 @@ export default async function BulkProductsPage() {
     <>
       <AdminPageHeader
         title="Bulk add products"
-        description="One row per product. List sizes and colors — we build every size × color variant for you."
         backHref="/admin/catalog"
         backLabel="Back to products"
       />
-      <div className="mt-8">
+      <div className="mt-4">
         <BulkProductsSheet categories={categories} />
       </div>
     </>

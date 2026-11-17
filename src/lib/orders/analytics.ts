@@ -408,6 +408,7 @@ export type OrdersCsvRow = {
   order_number: string
   status: string
   payment_method: string
+  channel: string
   full_name: string
   phone: string
   city_name: string
@@ -426,7 +427,7 @@ export async function listOrdersForCsvExport(
   const { data, error } = await db
     .from('orders')
     .select(
-      'order_number, status, payment_method, full_name, phone, city_name, subtotal, shipping, total, pathao_consignment_id, created_at',
+      'order_number, status, payment_method, channel, full_name, phone, city_name, subtotal, shipping, total, pathao_consignment_id, created_at',
     )
     .gte('created_at', fromIso)
     .lt('created_at', toIso)
@@ -442,6 +443,7 @@ export async function listOrdersForCsvExport(
     order_number: row.order_number,
     status: row.status,
     payment_method: row.payment_method,
+    channel: row.channel ?? 'website',
     full_name: row.full_name,
     phone: row.phone,
     city_name: row.city_name,
@@ -458,6 +460,7 @@ export function ordersToCsv(rows: OrdersCsvRow[]): string {
     'order_number',
     'status',
     'payment_method',
+    'channel',
     'full_name',
     'phone',
     'city_name',
@@ -481,6 +484,7 @@ export function ordersToCsv(rows: OrdersCsvRow[]): string {
         row.order_number,
         row.status,
         row.payment_method,
+        row.channel,
         row.full_name,
         row.phone,
         row.city_name,

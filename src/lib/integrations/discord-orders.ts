@@ -20,6 +20,8 @@ export type DiscordOrderNotification = {
   zoneName: string
   areaName: string
   paymentMethod: string
+  /** Human label when order is not from website checkout. */
+  channel?: string
   items: DiscordOrderItem[]
   subtotal: number
   discount?: number
@@ -70,52 +72,16 @@ function formatBreakdown(order: DiscordOrderNotification) {
   return `Subtotal ${formatPrice(order.subtotal)}${discountPart} · Shipping ${formatPrice(order.shipping)} · **Total ${formatPrice(order.total)}**`
 }
 
-/** Posts a new-order alert to Discord. Does not throw; logs failures. */
-export async function notifyDiscordNewOrder(
-  order: DiscordOrderNotification,
-): Promise<void> {
+async function postDiscordWebhook(body: unknown): Promise<void> {
   const webhookUrl = process.env.DISCORD_ORDERS_WEBHOOK_URL?.trim()
   if (!webhookUrl) return
-
-  const deliveryAddress = formatDeliveryAddress(order)
-  const phoneLines = order.secondaryPhone
-    ? `${order.phone}\nAlt: ${order.secondaryPhone}`
-    : order.phone
-
-  const embed = {
-    title: `New order ${order.orderId}`,
-    color: 0x16a34a,
-    timestamp: new Date().toISOString(),
-    fields: [
-      { name: 'Customer', value: order.fullName || '—', inline: true },
-      { name: 'Total', value: formatPrice(order.total), inline: true },
-      { name: 'Payment', value: paymentLabel(order.paymentMethod), inline: true },
-      { name: 'Email', value: order.email?.trim() || '—', inline: true },
-      { name: 'Phone', value: phoneLines || '—', inline: true },
-      {
-        name: 'Items',
-        value: formatItemsList(order.items),
-        inline: false,
-      },
-      {
-        name: 'Delivery',
-        value: truncateField(deliveryAddress || '—'),
-        inline: false,
-      },
-      {
-        name: 'Breakdown',
-        value: formatBreakdown(order),
-        inline: false,
-      },
-    ],
-  }
 
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
       cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {
@@ -125,6 +91,95 @@ export async function notifyDiscordNewOrder(
   } catch (error) {
     console.error('[Discord] Order webhook error:', error)
   }
+}
+
+function buildOrderEmbed(order: DiscordOrderNotification) {
+  const deliveryAddress = formatDeliveryAddress(order)
+  const phoneLines = order.secondaryPhone
+    ? `${order.phone}\nAlt: ${order.secondaryPhone}`
+    : order.phone
+
+  const fields = [
+    { name: 'Customer', value: order.fullName || '—', inline: true },
+    { name: 'Total', value: formatPrice(order.total), inline: true },
+    { name: 'Payment', value: paymentLabel(order.paymentMethod), inline: true },
+    ...(order.channel
+      ? [{ name: 'Channel', value: order.channel, inline: true }]
+      : []),
+    { name: 'Email', value: order.email?.trim() || '—', inline: true },
+    { name: 'Phone', value: phoneLines || '—', inline: true },
+    {
+      name: 'Items',
+      value: formatItemsList(order.items),
+      inline: false,
+    },
+    {
+      name: 'Delivery',
+      value: truncateField(deliveryAddress || '—'),
+      inline: false,
+    },
+    {
+      name: 'Breakdown',
+      value: formatBreakdown(order),
+      inline: false,
+    },
+  ]
+
+  return {
+    title: `New order ${order.orderId}`,
+    color: 0x16a34a,
+    timestamp: new Date().toISOString(),
+    fields,
+  }
+}
+
+/** Posts a new-order alert to Discord. Does not throw; logs failures. */
+export async function notifyDiscordNewOrder(
+  order: DiscordOrderNotification,
+): Promise<void> {
+  await postDiscordWebhook({ embeds: [buildOrderEmbed(order)] })
+}
+
+/**
+ * One Discord message for a batch of imported / manual orders.
+ * Lists every order in the same embed instead of spamming one webhook each.
+ */
+export async function notifyDiscordBulkOrders(
+  orders: DiscordOrderNotification[],
+): Promise<void> {
+  if (orders.length === 0) return
+  if (orders.length === 1) {
+    await notifyDiscordNewOrder(orders[0]!)
+    return
+  }
+
+  const totalGmv = orders.reduce((sum, order) => sum + Number(order.total || 0), 0)
+  const lines = orders.map((order) => {
+    const channel = order.channel ? ` · ${order.channel}` : ''
+    const itemCount = order.items.reduce((n, item) => n + item.quantity, 0)
+    return `• **${order.orderId}** — ${order.fullName || '—'} · ${formatPrice(order.total)} · ${paymentLabel(order.paymentMethod)}${channel} · ${itemCount} item${itemCount === 1 ? '' : 's'}`
+  })
+
+  const embed = {
+    title: `${orders.length} orders added in bulk`,
+    description: truncateField(lines.join('\n')),
+    color: 0x1a3668,
+    timestamp: new Date().toISOString(),
+    fields: [
+      {
+        name: 'Combined total',
+        value: formatPrice(totalGmv),
+        inline: true,
+      },
+      {
+        name: 'Count',
+        value: String(orders.length),
+        inline: true,
+      },
+    ],
+  }
+
+  await postDiscordWebhook({ embeds: [embed] })
 }
 
 type ServiceClient = ViableDbClient

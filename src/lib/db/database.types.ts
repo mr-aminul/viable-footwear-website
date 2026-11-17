@@ -10,6 +10,14 @@ export type OrderStatus =
   | 'cancelled'
   | 'returned'
 export type PaymentMethod = 'cod' | 'bkash' | 'nagad'
+export type OrderChannel =
+  | 'website'
+  | 'messenger'
+  | 'whatsapp'
+  | 'phone'
+  | 'instagram'
+  | 'walk_in'
+  | 'other'
 
 /** Snapshot of a Pathao consignment archived when Resend reopens the order. */
 export type PathaoHistoryEntry = {
@@ -306,6 +314,7 @@ export interface Database {
           order_number: string
           status: OrderStatus
           payment_method: PaymentMethod
+          channel: OrderChannel
           email: string | null
           full_name: string
           phone: string
@@ -344,6 +353,7 @@ export interface Database {
           order_number: string
           status?: OrderStatus
           payment_method?: PaymentMethod
+          channel?: OrderChannel
           email?: string | null
           full_name: string
           phone: string

@@ -12,11 +12,8 @@ export default async function BackupPage() {
 
   return (
     <>
-      <AdminPageHeader
-        title="Backup"
-        description="Download a copy of your shop data so you are never locked out again. Store the zip on your laptop or a USB drive — not only on this server."
-      />
-      <div className="mt-8">
+      <AdminPageHeader title="Backup" />
+      <div className="mt-4">
         <BackupDownloadPanel />
       </div>
     </>
