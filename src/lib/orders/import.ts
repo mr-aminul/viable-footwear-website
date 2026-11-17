@@ -17,11 +17,17 @@ import {
 import { generateOrderNumber } from '@/lib/orders/order-number'
 import { isPreorderLine } from '@/lib/orders/preorder'
 import { decrementOrderStock } from '@/lib/orders/stock'
-import { parseOrderChannel } from '@/lib/orders/channels'
+import { isShopChannel, parseOrderChannel } from '@/lib/orders/channels'
 import {
   parseOrderItemsText,
   type BulkOrderLineInput,
 } from '@/lib/orders/import-csv'
+import {
+  parseVariantIdToken,
+  pickBestVariantMatch,
+  type ResolveProductHint,
+  type ResolveVariantCandidate,
+} from '@/lib/orders/import-resolve'
 import type {
   BulkOrderRowInput,
   BulkOrderRowResult,
@@ -100,6 +106,42 @@ function parseBool(raw: unknown): boolean {
   return value === '1' || value === 'true' || value === 'yes' || value === 'y'
 }
 
+async function resolveVariantById(
+  db: ViableDbClient,
+  variantId: string,
+  quantity: number,
+): Promise<ResolvedLine | { error: string }> {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return { error: 'Quantity must be a whole number of 1 or more.' }
+  }
+
+  const id = variantId.trim()
+  if (!id) {
+    return { error: 'Each picker line needs a variant.' }
+  }
+
+  const { data, error } = await db
+    .from('product_variants')
+    .select(
+      'id, product_id, size_eu, color, sku, stock, price_override, active, products!inner(id, name, slug, price, weight_kg, active, preorder_enabled)',
+    )
+    .eq('id', id)
+    .eq('active', true)
+    .limit(1)
+
+  if (error) {
+    console.error('[orders import] variant id lookup', error)
+    return { error: 'Could not look up the selected variant.' }
+  }
+
+  const match = ((data ?? []) as unknown as VariantJoin[])[0]
+  if (!match) {
+    return { error: 'Selected variant is missing or inactive. Pick again.' }
+  }
+
+  return toResolvedLine(match, quantity)
+}
+
 async function resolveVariantForLine(
   db: ViableDbClient,
   line: BulkOrderLineInput,
@@ -107,6 +149,12 @@ async function resolveVariantForLine(
   const quantity = line.quantity
   if (!Number.isInteger(quantity) || quantity < 1) {
     return { error: 'Quantity must be a whole number of 1 or more.' }
+  }
+
+  const variantId =
+    line.variantId?.trim() || parseVariantIdToken(line.sku ?? '')
+  if (variantId) {
+    return resolveVariantById(db, variantId, quantity)
   }
 
   const sku = line.sku?.trim()
@@ -153,45 +201,68 @@ async function resolveVariantForLine(
     return { error: `Add a color for "${productKey}".` }
   }
 
-  const slugKey = productKey.toLowerCase()
-  let productIds: string[] = []
-
-  const { data: bySlug } = await db
-    .from('products')
-    .select('id')
-    .eq('active', true)
-    .eq('slug', slugKey)
-    .limit(5)
-
-  if (bySlug && bySlug.length > 0) {
-    productIds = bySlug.map((p) => p.id)
-  } else {
-    const { data: byExactName } = await db
+  // Gather every plausible product (same name ignoring case, or matching slug).
+  // Scoring then picks the only sensible size/color — no silent wrong shoe.
+  const keyLower = productKey.toLowerCase()
+  const [{ data: byName }, { data: bySlug }] = await Promise.all([
+    db
       .from('products')
-      .select('id, name')
+      .select('id, name, slug')
       .eq('active', true)
       .ilike('name', productKey)
-      .limit(8)
+      .limit(20),
+    db
+      .from('products')
+      .select('id, name, slug')
+      .eq('active', true)
+      .eq('slug', keyLower)
+      .limit(5),
+  ])
 
-    const exact =
-      byExactName?.filter(
-        (p) => p.name.trim().toLowerCase() === productKey.toLowerCase(),
-      ) ?? []
-    const candidates = exact.length > 0 ? exact : (byExactName ?? [])
-
-    if (candidates.length === 0) {
-      return {
-        error: `No product named "${productKey}". Use the catalog name, slug, or a SKU.`,
-      }
+  const productsById = new Map<string, ResolveProductHint>()
+  for (const row of byName ?? []) {
+    if (row.name.trim().toLowerCase() === keyLower) {
+      productsById.set(row.id, {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+      })
     }
-    if (candidates.length > 1) {
-      return {
-        error: `Several products match "${productKey}". Use the exact name or a SKU.`,
-      }
-    }
-    productIds = [candidates[0]!.id]
+  }
+  for (const row of bySlug ?? []) {
+    productsById.set(row.id, {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+    })
   }
 
+  // Also pull near-name siblings (Purechill PR, etc.) only when the key is a
+  // prefix of the catalog name — still scored, so weak matches lose.
+  if (productsById.size === 0) {
+    const { data: fuzzy } = await db
+      .from('products')
+      .select('id, name, slug')
+      .eq('active', true)
+      .ilike('name', `%${productKey}%`)
+      .limit(12)
+    for (const row of fuzzy ?? []) {
+      productsById.set(row.id, {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+      })
+    }
+  }
+
+  const products = [...productsById.values()]
+  if (products.length === 0) {
+    return {
+      error: `No product named "${productKey}". Use the catalog name, slug, or a SKU.`,
+    }
+  }
+
+  const productIds = products.map((p) => p.id)
   const { data: variants, error: variantError } = await db
     .from('product_variants')
     .select(
@@ -200,28 +271,49 @@ async function resolveVariantForLine(
     .in('product_id', productIds)
     .eq('active', true)
     .eq('size_eu', sizeEu)
-    .ilike('color', color)
-    .limit(5)
+    .limit(40)
 
   if (variantError) {
     console.error('[orders import] variant lookup', variantError)
     return { error: `Could not look up size/color for "${productKey}".` }
   }
 
-  const matches = (variants ?? []) as unknown as VariantJoin[]
+  const variantRows = (variants ?? []) as unknown as VariantJoin[]
+  const candidates: ResolveVariantCandidate[] = variantRows.map((row) => ({
+    id: row.id,
+    product_id: row.product_id,
+    size_eu: Number(row.size_eu),
+    color: row.color,
+    sku: row.sku,
+  }))
 
-  if (matches.length === 0) {
+  const picked = pickBestVariantMatch({
+    productKey,
+    sizeEu,
+    color,
+    products,
+    variants: candidates,
+  })
+
+  if (!picked.ok && picked.reason === 'none') {
     return {
       error: `No match for "${productKey}" · EU ${sizeEu} · ${color}. Check size and color.`,
     }
   }
-  if (matches.length > 1) {
+  if (!picked.ok) {
     return {
       error: `Several variants match "${productKey}" · EU ${sizeEu} · ${color}. Use a SKU.`,
     }
   }
 
-  return toResolvedLine(matches[0]!, quantity)
+  const winner = variantRows.find((row) => row.id === picked.variant.id)
+  if (!winner) {
+    return {
+      error: `No match for "${productKey}" · EU ${sizeEu} · ${color}. Check size and color.`,
+    }
+  }
+
+  return toResolvedLine(winner, quantity)
 }
 
 function toResolvedLine(
@@ -436,23 +528,8 @@ export async function createImportedOrder(
     return {
       ok: false,
       error:
-        'Channel is required (Messenger, WhatsApp, Phone, Instagram, Walk-in, Other, or Website).',
+        'Channel is required (Messenger, WhatsApp, Phone, Instagram, Shop, Other, or Website).',
     }
-  }
-
-  const fullName = String(row.fullName ?? '').trim()
-  if (fullName.length < 2) {
-    return { ok: false, error: 'Enter the customer full name.' }
-  }
-
-  const email = String(row.email ?? '').trim()
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: 'Email looks invalid.' }
-  }
-
-  const address = String(row.address ?? '').trim()
-  if (address.length < 5) {
-    return { ok: false, error: 'Enter a more detailed delivery address.' }
   }
 
   const phone = normalizePathaoPhone(String(row.phone ?? ''))
@@ -461,6 +538,27 @@ export async function createImportedOrder(
       ok: false,
       error: 'Phone must be an 11-digit BD mobile (e.g. 01712345678).',
     }
+  }
+
+  const shopSale = isShopChannel(channel)
+
+  let fullName = String(row.fullName ?? '').trim()
+  if (shopSale) {
+    fullName = fullName || `Shop · ${phone}`
+  } else if (fullName.length < 2) {
+    return { ok: false, error: 'Enter the customer full name.' }
+  }
+
+  const email = String(row.email ?? '').trim()
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: 'Email looks invalid.' }
+  }
+
+  let address = String(row.address ?? '').trim()
+  if (shopSale) {
+    address = address || 'Shop pickup'
+  } else if (address.length < 5) {
+    return { ok: false, error: 'Enter a more detailed delivery address.' }
   }
 
   const secondaryRaw = String(row.secondaryPhone ?? '').trim()
@@ -474,46 +572,85 @@ export async function createImportedOrder(
     }
   }
 
-  const location = await resolvePathaoLocation({
-    cityName: String(row.cityName ?? ''),
-    zoneName: String(row.zoneName ?? ''),
-    areaName: String(row.areaName ?? ''),
-    cityId: row.cityId,
-    zoneId: row.zoneId,
-    areaId: row.areaId,
-    citiesCache: options?.citiesCache,
-  })
-  if ('error' in location) {
-    return { ok: false, error: location.error }
+  let location: {
+    cityId: number
+    zoneId: number
+    areaId: number | null
+    cityName: string
+    zoneName: string
+    areaName: string
   }
 
-  const combinedAddress = [
-    address,
-    location.areaName,
-    location.zoneName,
-    location.cityName,
-  ]
-    .filter(Boolean)
-    .join(', ')
-  if (combinedAddress.length > PATHAO_ADDRESS_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: `Address is too long for Pathao (${combinedAddress.length} chars, max ${PATHAO_ADDRESS_MAX_LENGTH}).`,
+  if (shopSale) {
+    location = {
+      cityId: 0,
+      zoneId: 0,
+      areaId: null,
+      cityName: 'Shop',
+      zoneName: 'Pickup',
+      areaName: '',
     }
-  }
-
-  const parsedItems = parseOrderItemsText(String(row.items ?? ''))
-  if ('error' in parsedItems) {
-    return { ok: false, error: parsedItems.error }
-  }
-
-  const orderItemsPayload: ResolvedLine[] = []
-  for (const line of parsedItems) {
-    const resolved = await resolveVariantForLine(db, line)
+  } else {
+    const resolved = await resolvePathaoLocation({
+      cityName: String(row.cityName ?? ''),
+      zoneName: String(row.zoneName ?? ''),
+      areaName: String(row.areaName ?? ''),
+      cityId: row.cityId,
+      zoneId: row.zoneId,
+      areaId: row.areaId,
+      citiesCache: options?.citiesCache,
+    })
     if ('error' in resolved) {
       return { ok: false, error: resolved.error }
     }
-    orderItemsPayload.push(resolved)
+    location = resolved
+
+    const combinedAddress = [
+      address,
+      location.areaName,
+      location.zoneName,
+      location.cityName,
+    ]
+      .filter(Boolean)
+      .join(', ')
+    if (combinedAddress.length > PATHAO_ADDRESS_MAX_LENGTH) {
+      return {
+        ok: false,
+        error: `Address is too long for Pathao (${combinedAddress.length} chars, max ${PATHAO_ADDRESS_MAX_LENGTH}).`,
+      }
+    }
+  }
+
+  const orderItemsPayload: ResolvedLine[] = []
+  const pickerLines = (row.variantLines ?? []).filter(
+    (line) => line.variantId?.trim() && Number(line.quantity) > 0,
+  )
+
+  if (pickerLines.length > 0) {
+    for (const line of pickerLines) {
+      const resolved = await resolveVariantById(
+        db,
+        line.variantId,
+        Math.floor(Number(line.quantity)),
+      )
+      if ('error' in resolved) {
+        return { ok: false, error: resolved.error }
+      }
+      orderItemsPayload.push(resolved)
+    }
+  } else {
+    const parsedItems = parseOrderItemsText(String(row.items ?? ''))
+    if ('error' in parsedItems) {
+      return { ok: false, error: parsedItems.error }
+    }
+
+    for (const line of parsedItems) {
+      const resolved = await resolveVariantForLine(db, line)
+      if ('error' in resolved) {
+        return { ok: false, error: resolved.error }
+      }
+      orderItemsPayload.push(resolved)
+    }
   }
 
   const preorderLineCount = orderItemsPayload.filter((i) => i.is_preorder)
@@ -532,11 +669,21 @@ export async function createImportedOrder(
     subtotal += item.unit_price * item.quantity
   }
 
-  const fee = await resolveShippingFee({
-    shipping: row.shipping,
-    cityId: location.cityId,
-    zoneId: location.zoneId,
-  })
+  const fee = shopSale
+    ? {
+        shipping:
+          row.shipping != null &&
+          Number.isFinite(row.shipping) &&
+          row.shipping >= 0
+            ? Math.round(Number(row.shipping))
+            : 0,
+        pathaoDeliveryFee: null as number | null,
+      }
+    : await resolveShippingFee({
+        shipping: row.shipping,
+        cityId: location.cityId,
+        zoneId: location.zoneId,
+      })
 
   const paymentMethod = parsePaymentMethod(row.paymentMethod)
   const { shipping, total } = computeCodCheckoutTotals(subtotal, fee.shipping)

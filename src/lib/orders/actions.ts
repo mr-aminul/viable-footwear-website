@@ -91,7 +91,7 @@ export async function dispatchOrderToPathao(
   const { data: order, error: orderError } = await db
     .from('orders')
     .select(
-      'id, order_number, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id, is_preorder, amount_due',
+      'id, order_number, channel, full_name, phone, secondary_phone, address, city_id, zone_id, area_id, city_name, zone_name, area_name, total, status, payment_method, pathao_consignment_id, is_preorder, amount_due',
     )
     .eq('id', orderId)
     .single()
@@ -106,6 +106,13 @@ export async function dispatchOrderToPathao(
 
   if (order.status === 'cancelled') {
     return { ok: false, error: 'Cancelled orders cannot be sent to Pathao.' }
+  }
+
+  if (order.channel === 'walk_in') {
+    return {
+      ok: false,
+      error: 'Shop orders are pickup-only and cannot be sent to Pathao.',
+    }
   }
 
   const recipientPhone = normalizePathaoPhone(order.phone ?? '')

@@ -8,6 +8,7 @@ import { createManualOrder } from '@/lib/orders/actions'
 import type { OrderImportPickerProduct } from '@/lib/catalog/queries'
 import {
   IMPORTABLE_ORDER_CHANNELS,
+  isShopChannel,
   orderChannelLabel,
 } from '@/lib/orders/channels'
 import {
@@ -53,6 +54,8 @@ export function ManualOrderForm({
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<OrderPickerSelectedLine[]>([])
 
+  const shopSale = isShopChannel(channel)
+
   const {
     cities,
     citiesLoading,
@@ -82,7 +85,13 @@ export function ManualOrderForm({
     setSuccess(null)
 
     const items = orderPickerLinesToItemsText(lines)
-    if (!items) {
+    const variantLines = lines
+      .filter((line) => line.quantity > 0 && line.variantId)
+      .map((line) => ({
+        variantId: line.variantId,
+        quantity: line.quantity,
+      }))
+    if (variantLines.length === 0) {
       setError('Pick at least one product variant.')
       return
     }
@@ -91,22 +100,23 @@ export function ManualOrderForm({
       const result = await createManualOrder({
         key: crypto.randomUUID(),
         channel,
-        fullName,
+        fullName: shopSale ? '' : fullName,
         phone,
-        secondaryPhone,
-        email,
-        address,
-        cityName,
-        zoneName,
-        areaName,
-        cityId: cityId ? Number(cityId) : null,
-        zoneId: zoneId ? Number(zoneId) : null,
-        areaId: areaId ? Number(areaId) : null,
+        secondaryPhone: shopSale ? '' : secondaryPhone,
+        email: shopSale ? '' : email,
+        address: shopSale ? '' : address,
+        cityName: shopSale ? '' : cityName,
+        zoneName: shopSale ? '' : zoneName,
+        areaName: shopSale ? '' : areaName,
+        cityId: shopSale || !cityId ? null : Number(cityId),
+        zoneId: shopSale || !zoneId ? null : Number(zoneId),
+        areaId: shopSale || !areaId ? null : Number(areaId),
         paymentMethod,
         shipping: shipping.trim() ? Number(shipping) : null,
         alreadyPaid,
         notes,
         items,
+        variantLines,
       })
 
       if (!result.ok || !result.data) {
@@ -153,15 +163,6 @@ export function ManualOrderForm({
               <option value="nagad">Nagad</option>
             </select>
           </label>
-          <label className="sm:col-span-2">
-            <span className={labelClassName}>Full name</span>
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={`${fieldClassName} mt-1`}
-              placeholder="Customer full name"
-            />
-          </label>
           <label>
             <span className={labelClassName}>Phone</span>
             <input
@@ -171,113 +172,136 @@ export function ManualOrderForm({
               placeholder="01712345678"
             />
           </label>
-          <label>
-            <span className={labelClassName}>Alt phone</span>
-            <input
-              value={secondaryPhone}
-              onChange={(e) => setSecondaryPhone(e.target.value)}
-              className={`${fieldClassName} mt-1`}
-            />
-          </label>
-          <label className="sm:col-span-2">
-            <span className={labelClassName}>Email</span>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`${fieldClassName} mt-1`}
-              type="email"
-            />
-          </label>
-          <label className="sm:col-span-2 lg:col-span-4">
-            <span className={labelClassName}>Address</span>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className={`${fieldClassName} mt-1`}
-              placeholder="House, road, landmark"
-            />
-          </label>
-          <label>
-            <span className={labelClassName}>City</span>
-            <SearchableSelect
-              value={cityId}
-              disabled={citiesLoading}
-              placeholder={citiesLoading ? 'Loading…' : 'Select city'}
-              searchPlaceholder="Search city…"
-              options={cityOptions}
-              onChange={(next) => {
-                const city = cities.find((item) => String(item.city_id) === next)
-                setCityId(next)
-                setCityName(city?.city_name ?? '')
-                setZoneId('')
-                setZoneName('')
-                setAreaId('')
-                setAreaName('')
-                if (next) void ensureZones(next)
-              }}
-            />
-          </label>
-          <label>
-            <span className={labelClassName}>Zone</span>
-            <SearchableSelect
-              value={zoneId}
-              disabled={!cityId || zoneLoading}
-              placeholder={
-                !cityId
-                  ? 'Select city first'
-                  : zoneLoading
-                    ? 'Loading…'
-                    : 'Select zone'
-              }
-              searchPlaceholder="Search zone…"
-              options={zones.map((zone) => ({
-                value: String(zone.zone_id),
-                label: zone.zone_name,
-              }))}
-              onChange={(next) => {
-                const zone = zones.find((item) => String(item.zone_id) === next)
-                setZoneId(next)
-                setZoneName(zone?.zone_name ?? '')
-                setAreaId('')
-                setAreaName('')
-                if (next) void ensureAreas(next)
-              }}
-            />
-          </label>
-          <label>
-            <span className={labelClassName}>Area</span>
-            <SearchableSelect
-              value={areaId}
-              disabled={!zoneId || areaLoading}
-              placeholder={
-                !zoneId
-                  ? 'Select zone first'
-                  : areaLoading
-                    ? 'Loading…'
-                    : 'Area (optional)'
-              }
-              searchPlaceholder="Search area…"
-              options={areas.map((area) => ({
-                value: String(area.area_id),
-                label: area.area_name,
-              }))}
-              onChange={(next) => {
-                const area = areas.find((item) => String(item.area_id) === next)
-                setAreaId(next)
-                setAreaName(area?.area_name ?? '')
-              }}
-            />
-          </label>
-          <label>
-            <span className={labelClassName}>Shipping ৳</span>
-            <input
-              value={shipping}
-              onChange={(e) => setShipping(e.target.value)}
-              className={`${fieldClassName} mt-1`}
-              inputMode="decimal"
-              placeholder="auto"
-            />
-          </label>
+          {shopSale ? (
+            <p className="flex items-end pb-1 text-[12px] text-mute sm:col-span-2 lg:col-span-1">
+              Shop sales only need the customer mobile number.
+            </p>
+          ) : (
+            <>
+              <label className="sm:col-span-2">
+                <span className={labelClassName}>Full name</span>
+                <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className={`${fieldClassName} mt-1`}
+                  placeholder="Customer full name"
+                />
+              </label>
+              <label>
+                <span className={labelClassName}>Alt phone</span>
+                <input
+                  value={secondaryPhone}
+                  onChange={(e) => setSecondaryPhone(e.target.value)}
+                  className={`${fieldClassName} mt-1`}
+                />
+              </label>
+              <label className="sm:col-span-2">
+                <span className={labelClassName}>Email</span>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`${fieldClassName} mt-1`}
+                  type="email"
+                />
+              </label>
+              <label className="sm:col-span-2 lg:col-span-4">
+                <span className={labelClassName}>Address</span>
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className={`${fieldClassName} mt-1`}
+                  placeholder="House, road, landmark"
+                />
+              </label>
+              <label>
+                <span className={labelClassName}>City</span>
+                <SearchableSelect
+                  value={cityId}
+                  disabled={citiesLoading}
+                  placeholder={citiesLoading ? 'Loading…' : 'Select city'}
+                  searchPlaceholder="Search city…"
+                  options={cityOptions}
+                  onChange={(next) => {
+                    const city = cities.find(
+                      (item) => String(item.city_id) === next,
+                    )
+                    setCityId(next)
+                    setCityName(city?.city_name ?? '')
+                    setZoneId('')
+                    setZoneName('')
+                    setAreaId('')
+                    setAreaName('')
+                    if (next) void ensureZones(next)
+                  }}
+                />
+              </label>
+              <label>
+                <span className={labelClassName}>Zone</span>
+                <SearchableSelect
+                  value={zoneId}
+                  disabled={!cityId || zoneLoading}
+                  placeholder={
+                    !cityId
+                      ? 'Select city first'
+                      : zoneLoading
+                        ? 'Loading…'
+                        : 'Select zone'
+                  }
+                  searchPlaceholder="Search zone…"
+                  options={zones.map((zone) => ({
+                    value: String(zone.zone_id),
+                    label: zone.zone_name,
+                  }))}
+                  onChange={(next) => {
+                    const zone = zones.find(
+                      (item) => String(item.zone_id) === next,
+                    )
+                    setZoneId(next)
+                    setZoneName(zone?.zone_name ?? '')
+                    setAreaId('')
+                    setAreaName('')
+                    if (next) void ensureAreas(next)
+                  }}
+                />
+              </label>
+              <label>
+                <span className={labelClassName}>Area</span>
+                <SearchableSelect
+                  value={areaId}
+                  disabled={!zoneId || areaLoading}
+                  placeholder={
+                    !zoneId
+                      ? 'Select zone first'
+                      : areaLoading
+                        ? 'Loading…'
+                        : 'Area (optional)'
+                  }
+                  searchPlaceholder="Search area…"
+                  options={areas.map((area) => ({
+                    value: String(area.area_id),
+                    label: area.area_name,
+                  }))}
+                  onChange={(next) => {
+                    const area = areas.find(
+                      (item) => String(item.area_id) === next,
+                    )
+                    setAreaId(next)
+                    setAreaName(area?.area_name ?? '')
+                  }}
+                />
+              </label>
+              <label>
+                <span className={labelClassName}>Shipping ৳</span>
+                <input
+                  value={shipping}
+                  onChange={(e) => setShipping(e.target.value)}
+                  className={`${fieldClassName} mt-1`}
+                  inputMode="decimal"
+                  placeholder="auto"
+                />
+              </label>
+            </>
+          )}
           <label className="flex items-end gap-2 pb-1 sm:col-span-2">
             <input
               type="checkbox"

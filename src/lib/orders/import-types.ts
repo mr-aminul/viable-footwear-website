@@ -20,6 +20,11 @@ export type BulkOrderRowInput = {
   notes?: string
   /** Raw items cell, e.g. "Runner | 42 | Black | 1; SKU-ABC x 2" */
   items: string
+  /**
+   * When set (product picker), resolve by variant id instead of re-parsing
+   * name/size/color — avoids slug/name collisions like Purechill vs PURECHILL.
+   */
+  variantLines?: Array<{ variantId: string; quantity: number }>
 }
 
 export type BulkOrderRowResult = {

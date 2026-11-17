@@ -14,6 +14,7 @@ import type {
   PaymentMethod,
 } from '@/lib/db/database.types'
 import type { Database } from '@/lib/db/database.types'
+import { ONLINE_ORDER_CHANNELS } from '@/lib/orders/channels'
 
 type PaymentAttemptRow =
   Database['public']['Tables']['payment_attempts']['Row']
@@ -22,6 +23,8 @@ export type ListOrdersFilters = {
   status?: OrderStatus | ''
   payment?: PaymentMethod | ''
   channel?: OrderChannel | ''
+  /** Aggregated channel filters for Orders stat cards. */
+  channelGroup?: 'online' | 'other' | ''
   city?: string
   from?: string
   to?: string
@@ -61,6 +64,84 @@ export const countUndispatchedOrders = cache(async (): Promise<number> => {
     { revalidate: 30, tags: [ADMIN_ORDERS_BADGE_TAG] },
   )()
 })
+
+export type OrderChannelStats = {
+  total: number
+  toDispatch: number
+  online: number
+  website: number
+  walkIn: number
+  byChannel: Record<OrderChannel, number>
+}
+
+const EMPTY_CHANNEL_COUNTS: Record<OrderChannel, number> = {
+  website: 0,
+  messenger: 0,
+  whatsapp: 0,
+  phone: 0,
+  instagram: 0,
+  walk_in: 0,
+  other: 0,
+}
+
+/** Counts for Orders page stat cards (excludes cancelled). */
+export async function getOrderChannelStats(): Promise<OrderChannelStats> {
+  return unstable_cache(
+    async () => {
+      const db = createServiceClient()
+      const { data, error } = await db
+        .from('orders')
+        .select('channel, status, pathao_consignment_id')
+        .neq('status', 'cancelled')
+        .limit(5000)
+
+      if (error || !data) {
+        console.error('[orders] channel stats', error)
+        return {
+          total: 0,
+          toDispatch: 0,
+          online: 0,
+          website: 0,
+          walkIn: 0,
+          byChannel: { ...EMPTY_CHANNEL_COUNTS },
+        }
+      }
+
+      const byChannel: Record<OrderChannel, number> = {
+        ...EMPTY_CHANNEL_COUNTS,
+      }
+      let toDispatch = 0
+
+      for (const row of data) {
+        const channel = (row.channel ?? 'website') as OrderChannel
+        byChannel[channel] = (byChannel[channel] ?? 0) + 1
+
+        if (
+          !row.pathao_consignment_id &&
+          row.status !== 'pending_payment'
+        ) {
+          toDispatch += 1
+        }
+      }
+
+      const online = ONLINE_ORDER_CHANNELS.reduce(
+        (sum, channel) => sum + (byChannel[channel] ?? 0),
+        0,
+      )
+
+      return {
+        total: data.length,
+        toDispatch,
+        online,
+        website: byChannel.website,
+        walkIn: byChannel.walk_in,
+        byChannel,
+      }
+    },
+    ['admin-order-channel-stats'],
+    { revalidate: 30, tags: [ADMIN_ORDERS_BADGE_TAG] },
+  )()
+}
 
 /** Distinct city names for the orders filter dropdown. */
 export async function listOrderCityNames(): Promise<string[]> {
@@ -114,6 +195,10 @@ export async function listOrders(
   }
   if (filters.channel) {
     query = query.eq('channel', filters.channel)
+  } else if (filters.channelGroup === 'online') {
+    query = query.in('channel', ONLINE_ORDER_CHANNELS)
+  } else if (filters.channelGroup === 'other') {
+    query = query.neq('channel', 'website')
   }
   if (filters.city?.trim()) {
     query = query.eq('city_name', filters.city.trim())

@@ -1,4 +1,5 @@
 import type { BulkOrderRowInput } from '@/lib/orders/import-types'
+import { parseVariantIdToken } from '@/lib/orders/import-resolve'
 
 export const ORDER_IMPORT_CSV_HEADERS = [
   'channel',
@@ -21,6 +22,8 @@ export const ORDER_IMPORT_CSV_HEADERS = [
 ] as const
 
 export type BulkOrderLineInput = {
+  /** Durable picker identity — wins over name/size/color. */
+  variantId?: string
   sku?: string
   product?: string
   sizeEu?: number | null
@@ -40,6 +43,7 @@ function parseBool(raw: unknown): boolean {
  * Parse manager-friendly item text into structured lines.
  *
  * Supported forms (semicolon or newline separated):
+ * - `#variant-uuid x 2` (picker / durable)
  * - `Product Name | 42 | Black | 1`
  * - `SKU-ABC x 2`
  * - `SKU-ABC, 2`
@@ -86,12 +90,18 @@ export function parseOrderItemsText(
 
     const skuMatch = chunk.match(/^(.+?)\s*[x×,]\s*(\d+)\s*$/i)
     if (skuMatch) {
-      const sku = skuMatch[1]!.trim()
+      const token = skuMatch[1]!.trim()
       const quantity = Number(skuMatch[2])
-      if (!sku || !Number.isInteger(quantity) || quantity < 1) {
+      if (!token || !Number.isInteger(quantity) || quantity < 1) {
         return { error: `Could not read item "${chunk}".` }
       }
-      lines.push({ sku, quantity })
+      // Picker writes `#uuid x qty` so identity never depends on product name.
+      const variantId = parseVariantIdToken(token)
+      if (variantId) {
+        lines.push({ variantId, quantity })
+      } else {
+        lines.push({ sku: token, quantity })
+      }
       continue
     }
 

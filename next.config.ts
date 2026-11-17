@@ -10,7 +10,17 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-    // Soft-nav revisits reuse the client RSC cache (mutations still router.refresh).
+  // Old bare slug collided with name lookup for "Purechill" — keep links working.
+  async redirects() {
+    return [
+      {
+        source: '/product/purechill',
+        destination: '/product/purechill-kg',
+        permanent: true,
+      },
+    ]
+  },
+  // Soft-nav revisits reuse the client RSC cache (mutations still router.refresh).
   experimental: {
     staleTimes: {
       dynamic: 30,

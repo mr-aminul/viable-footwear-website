@@ -20,8 +20,13 @@ export function orderPickerLinesToItemsText(
   return lines
     .filter((line) => line.quantity > 0)
     .map((line) => {
+      // Prefer stable identity over name|size|color so twin product names
+      // (Purechill / PURECHILL) cannot resolve to the wrong shoe.
       if (line.sku?.trim()) {
         return `${line.sku.trim()} x ${line.quantity}`
+      }
+      if (line.variantId) {
+        return `#${line.variantId} x ${line.quantity}`
       }
       return `${line.productName} | ${line.sizeEu} | ${line.color} | ${line.quantity}`
     })

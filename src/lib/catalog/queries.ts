@@ -630,6 +630,8 @@ export type OrderImportPickerVariant = {
   id: string
   sizeEu: number
   color: string
+  colorHex: string | null
+  imageUrl: string | null
   stock: number
   sku: string | null
   unitPrice: number
@@ -660,25 +662,38 @@ export function listOrderImportPickerCatalog() {
             .order('name', { ascending: true }),
           admin
             .from('product_media')
-            .select('product_id, storage_path, sort_order')
+            .select(
+              'product_id, storage_path, sort_order, color, color_hex',
+            )
             .eq('media_type', 'image')
             .order('sort_order', { ascending: true }),
           admin
             .from('product_variants')
             .select(
-              'id, product_id, size_eu, color, sku, stock, price_override, active',
+              'id, product_id, size_eu, color, color_hex, sku, stock, price_override, active',
             )
             .eq('active', true)
             .order('size_eu', { ascending: true }),
         ])
 
       const primaryImageByProduct = new Map<string, string>()
+      const colorImageByProduct = new Map<string, string>()
+      const colorHexByProduct = new Map<string, string>()
       for (const row of media ?? []) {
-        if (primaryImageByProduct.has(row.product_id)) continue
-        primaryImageByProduct.set(
-          row.product_id,
-          resolveMediaUrl(row.storage_path, 'image'),
-        )
+        const url = resolveMediaUrl(row.storage_path, 'image')
+        if (!primaryImageByProduct.has(row.product_id)) {
+          primaryImageByProduct.set(row.product_id, url)
+        }
+        const colorName = (row.color ?? '').trim().toLowerCase()
+        if (!colorName) continue
+        const colorKey = `${row.product_id}:${colorName}`
+        if (!colorImageByProduct.has(colorKey)) {
+          colorImageByProduct.set(colorKey, url)
+        }
+        const hex = normalizeColorHex(row.color_hex)
+        if (hex && !colorHexByProduct.has(colorKey)) {
+          colorHexByProduct.set(colorKey, hex)
+        }
       }
 
       const priceByProduct = new Map(
@@ -688,10 +703,17 @@ export function listOrderImportPickerCatalog() {
       for (const row of variants ?? []) {
         const list = variantsByProduct.get(row.product_id) ?? []
         const productPrice = priceByProduct.get(row.product_id) ?? 0
+        const color = (row.color ?? '').trim() || 'Default'
+        const colorKey = `${row.product_id}:${color.toLowerCase()}`
         list.push({
           id: row.id,
           sizeEu: Number(row.size_eu),
-          color: (row.color ?? '').trim() || 'Default',
+          color,
+          colorHex:
+            normalizeColorHex(row.color_hex) ??
+            colorHexByProduct.get(colorKey) ??
+            null,
+          imageUrl: colorImageByProduct.get(colorKey) ?? null,
           stock: Number(row.stock),
           sku: row.sku,
           unitPrice: Number(row.price_override ?? productPrice),
@@ -710,7 +732,7 @@ export function listOrderImportPickerCatalog() {
         }))
         .filter((product) => product.variants.length > 0)
     },
-    ['order-import-picker-catalog'],
+    ['order-import-picker-catalog-v2'],
     { revalidate: 30, tags: ['admin-products'] },
   )()
 }

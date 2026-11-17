@@ -20,6 +20,7 @@ import type { OrderImportPickerProduct } from '@/lib/catalog/queries'
 import type { BulkOrderRowInput } from '@/lib/orders/import-types'
 import {
   IMPORTABLE_ORDER_CHANNELS,
+  isShopChannel,
   orderChannelLabel,
   parseOrderChannel,
 } from '@/lib/orders/channels'
@@ -309,6 +310,12 @@ function applyCellValue(row: SheetRow, column: SheetColumn, raw: string): SheetR
 
 function toBulkInput(row: SheetRow): BulkOrderRowInput {
   const fromPicker = orderPickerLinesToItemsText(row.picker_lines)
+  const variantLines = row.picker_lines
+    .filter((line) => line.quantity > 0 && line.variantId)
+    .map((line) => ({
+      variantId: line.variantId,
+      quantity: line.quantity,
+    }))
   return {
     key: row.key,
     channel: row.channel,
@@ -328,6 +335,7 @@ function toBulkInput(row: SheetRow): BulkOrderRowInput {
     alreadyPaid: row.already_paid,
     notes: row.notes,
     items: fromPicker || row.items,
+    variantLines: variantLines.length > 0 ? variantLines : undefined,
   }
 }
 
@@ -391,11 +399,12 @@ export function BulkOrdersSheet({
 
   const orderCount = useMemo(
     () =>
-      rows.filter(
-        (row) =>
-          row.full_name.trim() &&
-          (row.picker_lines.length > 0 || row.items.trim()),
-      ).length,
+      rows.filter((row) => {
+        const hasItems = row.picker_lines.length > 0 || Boolean(row.items.trim())
+        if (!hasItems) return false
+        if (isShopChannel(row.channel)) return Boolean(row.phone.trim())
+        return Boolean(row.full_name.trim())
+      }).length,
     [rows],
   )
 
@@ -787,8 +796,11 @@ export function BulkOrdersSheet({
 
             <div>
               {rows.map((row, rowIndex) => {
+                const shopSale = isShopChannel(row.channel)
                 const ready = Boolean(
-                  row.full_name.trim() &&
+                  (shopSale
+                    ? row.phone.trim()
+                    : row.full_name.trim()) &&
                     (row.picker_lines.length > 0 || row.items.trim()),
                 )
 
@@ -878,6 +890,16 @@ export function BulkOrdersSheet({
                       }
 
                       if (column.key === 'city_name') {
+                        if (shopSale) {
+                          return (
+                            <div
+                              key={column.key}
+                              className={`${cellShellClassName} px-2 text-[11px] text-mute`}
+                            >
+                              Shop pickup
+                            </div>
+                          )
+                        }
                         return (
                           <div
                             key={column.key}
@@ -917,6 +939,16 @@ export function BulkOrdersSheet({
                       }
 
                       if (column.key === 'zone_name') {
+                        if (shopSale) {
+                          return (
+                            <div
+                              key={column.key}
+                              className={`${cellShellClassName} px-2 text-[11px] text-mute`}
+                            >
+                              —
+                            </div>
+                          )
+                        }
                         const zones = zonesByCity[row.city_id] ?? []
                         const zoneLoading = Boolean(loadingZones[row.city_id])
                         return (
@@ -963,6 +995,16 @@ export function BulkOrdersSheet({
                       }
 
                       if (column.key === 'area_name') {
+                        if (shopSale) {
+                          return (
+                            <div
+                              key={column.key}
+                              className={`${cellShellClassName} px-2 text-[11px] text-mute`}
+                            >
+                              —
+                            </div>
+                          )
+                        }
                         const areas = areasByZone[row.zone_id] ?? []
                         const areaLoading = Boolean(loadingAreas[row.zone_id])
                         return (
@@ -1061,6 +1103,25 @@ export function BulkOrdersSheet({
                                 </option>
                               ))}
                             </select>
+                          </div>
+                        )
+                      }
+
+                      const shopSkip =
+                        shopSale &&
+                        (column.key === 'full_name' ||
+                          column.key === 'secondary_phone' ||
+                          column.key === 'email' ||
+                          column.key === 'address' ||
+                          column.key === 'shipping')
+
+                      if (shopSkip) {
+                        return (
+                          <div
+                            key={column.key}
+                            className={`${cellShellClassName} px-2 text-[11px] text-mute`}
+                          >
+                            {column.key === 'address' ? 'Shop pickup' : '—'}
                           </div>
                         )
                       }

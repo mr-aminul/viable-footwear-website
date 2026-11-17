@@ -10,6 +10,13 @@ export const ORDER_CHANNELS: OrderChannel[] = [
   'other',
 ]
 
+/** Social / chat channels shown as one “Online orders” stat. */
+export const ONLINE_ORDER_CHANNELS: OrderChannel[] = [
+  'messenger',
+  'whatsapp',
+  'instagram',
+]
+
 /** Channels managers typically use when adding offline / social orders. */
 export const IMPORTABLE_ORDER_CHANNELS: OrderChannel[] = [
   'messenger',
@@ -20,6 +27,13 @@ export const IMPORTABLE_ORDER_CHANNELS: OrderChannel[] = [
   'other',
   'website',
 ]
+
+/** In-store / counter sales — customer contact is phone only. */
+export function isShopChannel(
+  channel: OrderChannel | string | null | undefined,
+): boolean {
+  return channel === 'walk_in'
+}
 
 export function orderChannelLabel(channel: OrderChannel | string | null | undefined) {
   switch (channel) {
@@ -34,7 +48,7 @@ export function orderChannelLabel(channel: OrderChannel | string | null | undefi
     case 'instagram':
       return 'Instagram'
     case 'walk_in':
-      return 'Walk-in'
+      return 'Shop'
     case 'other':
       return 'Other'
     default:
